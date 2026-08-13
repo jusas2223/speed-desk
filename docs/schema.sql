@@ -14,3 +14,16 @@ CREATE TABLE assets (
     tipo VARCHAR(50) NOT NULL CHECK (tipo IN ('DESKTOP', 'NOTEBOOK', 'IMPRESSORA', 'REDE')),
     user_id UUID REFERENCES users(id) ON DELETE SET NULL
 );
+-- 3. Criação da tabela de Chamados (Tickets)
+CREATE TABLE tickets (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    titulo VARCHAR(255) NOT NULL,
+    descricao TEXT NOT NULL,
+    status VARCHAR(50) NOT NULL DEFAULT 'RECEBIDO' CHECK (status IN ('RECEBIDO', 'EM_TRIAGEM', 'EM_ATENDIMENTO', 'AGUARDANDO_CLIENTE', 'AGUARDANDO_PECA', 'RESOLVIDO', 'FECHADO')),
+    prioridade VARCHAR(50) NOT NULL CHECK (prioridade IN ('BAIXA', 'NORMAL', 'ALTA', 'CRITICA')),
+    cliente_id UUID NOT NULL REFERENCES users(id),
+    tecnico_id UUID REFERENCES users(id),
+    asset_id UUID REFERENCES assets(id),
+    data_criacao TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    data_atualizacao TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
