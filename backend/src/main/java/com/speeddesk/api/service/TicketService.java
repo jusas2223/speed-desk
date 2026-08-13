@@ -11,6 +11,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 
@@ -24,6 +26,17 @@ public class TicketService {
 
     @Transactional
     public Ticket create(Ticket ticket) {
+        long slaHours = switch (ticket.getPrioridade()) {
+            case CRITICA -> 4;
+            case ALTA -> 24;
+            case NORMAL -> 48;
+            case BAIXA -> 72;
+        };
+
+        OffsetDateTime dataVencimento = OffsetDateTime.now(ZoneOffset.UTC)
+                .plusHours(slaHours);
+        ticket.setDataVencimento(dataVencimento);
+
         return ticketRepository.save(ticket);
     }
 

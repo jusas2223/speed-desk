@@ -69,6 +69,9 @@ public class Ticket {
     @Column(name = "data_atualizacao")
     private OffsetDateTime dataAtualizacao;
 
+    @Column(name = "data_vencimento")
+    private OffsetDateTime dataVencimento;
+
     @PrePersist
     private void prepareForInsert() {
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
