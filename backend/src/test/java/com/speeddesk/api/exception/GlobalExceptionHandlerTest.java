@@ -18,6 +18,25 @@ class GlobalExceptionHandlerTest {
     private final GlobalExceptionHandler exceptionHandler = new GlobalExceptionHandler();
 
     @Test
+    void shouldReturnUnauthorizedForInvalidCredentials() {
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/users/login");
+
+        ResponseEntity<ProblemDetail> response = exceptionHandler.handleInvalidCredentials(
+                new InvalidCredentialsException(),
+                request
+        );
+
+        ProblemDetail problemDetail = response.getBody();
+        assertNotNull(problemDetail);
+        assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode());
+        assertEquals(MediaType.APPLICATION_PROBLEM_JSON, response.getHeaders().getContentType());
+        assertEquals(HttpStatus.UNAUTHORIZED.value(), problemDetail.getStatus());
+        assertEquals("Falha na autenticação", problemDetail.getTitle());
+        assertEquals("E-mail ou senha inválidos", problemDetail.getDetail());
+        assertEquals(URI.create("/api/users/login"), problemDetail.getInstance());
+    }
+
+    @Test
     void shouldReturnProblemDetailForDuplicateEmail() {
         MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/users");
 

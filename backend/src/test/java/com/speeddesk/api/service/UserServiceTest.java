@@ -2,6 +2,7 @@ package com.speeddesk.api.service;
 
 import com.speeddesk.api.entity.User;
 import com.speeddesk.api.exception.DuplicateEmailException;
+import com.speeddesk.api.exception.InvalidCredentialsException;
 import com.speeddesk.api.repository.UserRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -10,6 +11,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -63,5 +65,39 @@ class UserServiceTest {
 
         verify(userRepository).existsByEmail("existing@speeddesk.com");
         verify(userRepository, never()).save(user);
+    }
+
+    @Test
+    void shouldLoginWhenCredentialsAreValid() {
+        User user = org.mockito.Mockito.mock(User.class);
+        when(user.getPassword()).thenReturn("secret");
+        when(userRepository.findByEmail("user@speeddesk.com")).thenReturn(Optional.of(user));
+
+        User result = userService.login(" user@speeddesk.com ", "secret");
+
+        assertSame(user, result);
+        verify(userRepository).findByEmail("user@speeddesk.com");
+    }
+
+    @Test
+    void shouldRejectLoginWhenEmailDoesNotExist() {
+        when(userRepository.findByEmail("missing@speeddesk.com")).thenReturn(Optional.empty());
+
+        assertThrows(
+                InvalidCredentialsException.class,
+                () -> userService.login("missing@speeddesk.com", "secret")
+        );
+    }
+
+    @Test
+    void shouldRejectLoginWhenPasswordIsInvalid() {
+        User user = org.mockito.Mockito.mock(User.class);
+        when(user.getPassword()).thenReturn("correct-password");
+        when(userRepository.findByEmail("user@speeddesk.com")).thenReturn(Optional.of(user));
+
+        assertThrows(
+                InvalidCredentialsException.class,
+                () -> userService.login("user@speeddesk.com", "wrong-password")
+        );
     }
 }

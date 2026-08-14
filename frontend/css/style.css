@@ -1,0 +1,176 @@
+:root {
+    /* Paleta de Cores Corporativas (Modo Claro) */
+    --primary-color: #0f62fe; /* Azul sólido, transmite confiança */
+    --primary-hover: #0043ce;
+    --background-color: #f4f4f4;
+    --surface-color: #ffffff;
+    --text-primary: #161616;
+    --text-secondary: #525252;
+    --border-color: #e0e0e0;
+    --error-color: #da1e28;
+    
+    /* Tipografia e Espaçamento */
+    --font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    --spacing-xs: 0.25rem;
+    --spacing-sm: 0.5rem;
+    --spacing-md: 1rem;
+    --spacing-lg: 1.5rem;
+    --spacing-xl: 2rem;
+    --border-radius: 4px;
+}
+
+/* Suporte Nativo ao Modo Escuro */
+@media (prefers-color-scheme: dark) {
+    :root {
+        --background-color: #161616;
+        --surface-color: #262626;
+        --text-primary: #f4f4f4;
+        --text-secondary: #c6c6c6;
+        --border-color: #393939;
+        --primary-color: #4589ff;
+        --primary-hover: #78a9ff;
+        --error-color: #fa4d56;
+    }
+}
+
+/* Reset Global */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: var(--font-family);
+    background-color: var(--background-color);
+    color: var(--text-primary);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    
+    /* Centraliza o conteúdo (ideal para a tela de login) */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+}
+
+/* Container de Autenticação */
+.auth-container {
+    width: 100%;
+    max-width: 420px;
+    padding: var(--spacing-lg);
+}
+
+.auth-card {
+    background-color: var(--surface-color);
+    border-radius: var(--border-radius);
+    padding: var(--spacing-xl);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.1);
+    border: 1px solid var(--border-color);
+}
+
+.auth-header {
+    text-align: center;
+    margin-bottom: var(--spacing-xl);
+}
+
+.auth-header h1 {
+    font-size: 1.75rem;
+    font-weight: 600;
+    margin-bottom: var(--spacing-xs);
+    color: var(--text-primary);
+    letter-spacing: -0.5px;
+}
+
+.auth-header p {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+}
+
+/* Formulários */
+.form-group {
+    margin-bottom: var(--spacing-lg);
+}
+
+.form-label {
+    display: block;
+    font-size: 0.875rem;
+    font-weight: 500;
+    margin-bottom: var(--spacing-sm);
+    color: var(--text-primary);
+}
+
+.form-control {
+    width: 100%;
+    padding: 0.75rem var(--spacing-md);
+    font-size: 1rem;
+    font-family: inherit;
+    color: var(--text-primary);
+    background-color: var(--surface-color);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.form-control:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(15, 98, 254, 0.15);
+}
+
+.form-control::placeholder {
+    color: var(--text-secondary);
+    opacity: 0.7;
+}
+
+/* Botões */
+.btn {
+    display: inline-block;
+    font-weight: 500;
+    text-align: center;
+    vertical-align: middle;
+    user-select: none;
+    padding: 0.75rem var(--spacing-md);
+    font-size: 1rem;
+    line-height: 1.5;
+    border-radius: var(--border-radius);
+    transition: all 0.2s ease;
+    cursor: pointer;
+    width: 100%;
+    font-family: inherit;
+    border: 1px solid transparent;
+}
+
+.btn-primary {
+    color: #fff;
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+}
+
+.btn-primary:hover:not(:disabled) {
+    background-color: var(--primary-hover);
+    border-color: var(--primary-hover);
+}
+
+.btn-primary:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(15, 98, 254, 0.4);
+}
+
+.btn:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+}
+
+/* Utilitários */
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}

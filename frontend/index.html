@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Speed Desk - Autenticação</title>
+    
+    <!-- Fonte Inter do Google Fonts (Design Moderno/Corporativo) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    
+    <!-- Estilo Global -->
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <main class="auth-container">
+        <section class="auth-card">
+            <header class="auth-header">
+                <h1>Speed Desk</h1>
+                <p>Acesse sua conta para gerenciar atendimentos</p>
+            </header>
+            
+            <form id="loginForm" aria-labelledby="formTitle">
+                <h2 id="formTitle" class="visually-hidden">Formulário de Login</h2>
+                
+                <div class="form-group">
+                    <label for="email" class="form-label">E-mail corporativo</label>
+                    <input 
+                        type="email" 
+                        id="email" 
+                        name="email" 
+                        class="form-control" 
+                        required 
+                        autocomplete="email" 
+                        placeholder="nome@empresa.com.br"
+                    >
+                </div>
+                
+                <div class="form-group">
+                    <label for="password" class="form-label">Senha</label>
+                    <input 
+                        type="password" 
+                        id="password" 
+                        name="password" 
+                        class="form-control" 
+                        required 
+                        autocomplete="current-password" 
+                        placeholder="••••••••"
+                    >
+                </div>
+                
+                <button type="submit" class="btn btn-primary" id="submitBtn">
+                    Entrar no sistema
+                </button>
+            </form>
+        </section>
+    </main>
+
+    <!-- Conectando nosso módulo de API -->
+    <script type="module">
+        import api from './js/api.js';
+
+        const loginForm = document.getElementById('loginForm');
+        const submitBtn = document.getElementById('submitBtn');
+
+        loginForm.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            
+            // Feedback visual de carregamento
+            const originalText = submitBtn.textContent;
+            submitBtn.textContent = 'Autenticando...';
+            submitBtn.disabled = true;
+
+            try {
+                const response = await fetch(`${api.BASE_URL}/users/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ email, password })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    console.log('Sucesso:', data);
+                } else {
+                    console.log('Erro:', data);
+                }
+            } catch (error) {
+                console.log('Erro na requisição:', error);
+            } finally {
+                // Restaura o botão
+                submitBtn.textContent = originalText;
+                submitBtn.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>

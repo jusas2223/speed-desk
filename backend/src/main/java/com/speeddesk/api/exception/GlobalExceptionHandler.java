@@ -13,6 +13,23 @@ import java.net.URI;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    @ExceptionHandler(InvalidCredentialsException.class)
+    public ResponseEntity<ProblemDetail> handleInvalidCredentials(
+            InvalidCredentialsException exception,
+            HttpServletRequest request
+    ) {
+        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
+                HttpStatus.UNAUTHORIZED,
+                exception.getMessage()
+        );
+        problemDetail.setTitle("Falha na autenticação");
+        problemDetail.setInstance(URI.create(request.getRequestURI()));
+
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                .body(problemDetail);
+    }
+
     @ExceptionHandler(DuplicateEmailException.class)
     public ResponseEntity<ProblemDetail> handleDuplicateEmail(
             DuplicateEmailException exception,

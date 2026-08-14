@@ -1,5 +1,7 @@
 package com.speeddesk.api.controller;
 
+import com.speeddesk.api.dto.LoginRequest;
+import com.speeddesk.api.dto.LoginResponse;
 import com.speeddesk.api.entity.User;
 import com.speeddesk.api.service.UserService;
 import lombok.RequiredArgsConstructor;
@@ -29,5 +31,11 @@ public class UserController {
     public ResponseEntity<User> create(@RequestBody User user) {
         User savedUser = userService.create(user);
         return ResponseEntity.status(HttpStatus.CREATED).body(savedUser);
+    }
+
+    @PostMapping("/login")
+    public ResponseEntity<LoginResponse> login(@RequestBody LoginRequest request) {
+        User authenticatedUser = userService.login(request.email(), request.password());
+        return ResponseEntity.ok(LoginResponse.from(authenticatedUser));
     }
 }
