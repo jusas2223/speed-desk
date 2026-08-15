@@ -30,16 +30,16 @@ public class Asset {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @Column(name = "serial_tag", nullable = false, unique = true)
-    private String serialTag;
+    @Column(name = "modelo", nullable = false)
+    private String nome;
 
-    @Column(nullable = false)
-    private String modelo;
-
-    @Column(nullable = false)
+    @Column(name = "tipo", nullable = false)
     private String tipo;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id")
-    private User user;
+    @Column(name = "serial_tag", nullable = false, unique = true)
+    private String numeroSerie;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "user_id", nullable = false)
+    private User cliente;
 }

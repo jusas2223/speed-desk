@@ -47,7 +47,12 @@ public class GlobalExceptionHandler {
                 .body(problemDetail);
     }
 
-    @ExceptionHandler({TicketNotFoundException.class, TechnicianNotFoundException.class})
+    @ExceptionHandler({
+            TicketNotFoundException.class,
+            TechnicianNotFoundException.class,
+            ClientNotFoundException.class,
+            AssetNotFoundException.class
+    })
     public ResponseEntity<ProblemDetail> handleNotFound(
             RuntimeException exception,
             HttpServletRequest request
@@ -60,6 +65,23 @@ public class GlobalExceptionHandler {
         problemDetail.setInstance(URI.create(request.getRequestURI()));
 
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                .body(problemDetail);
+    }
+
+    @ExceptionHandler(InvalidTicketStatusTransitionException.class)
+    public ResponseEntity<ProblemDetail> handleInvalidTicketStatusTransition(
+            InvalidTicketStatusTransitionException exception,
+            HttpServletRequest request
+    ) {
+        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
+                HttpStatus.CONFLICT,
+                exception.getMessage()
+        );
+        problemDetail.setTitle("Transicao de status invalida");
+        problemDetail.setInstance(URI.create(request.getRequestURI()));
+
+        return ResponseEntity.status(HttpStatus.CONFLICT)
                 .contentType(MediaType.APPLICATION_PROBLEM_JSON)
                 .body(problemDetail);
     }

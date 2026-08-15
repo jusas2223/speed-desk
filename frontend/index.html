@@ -88,6 +88,8 @@
                 
                 if (response.ok) {
                     console.log('Sucesso:', data);
+                    localStorage.setItem('user', JSON.stringify(data));
+                    window.location.href = 'dashboard.html';
                 } else {
                     console.log('Erro:', data);
                 }
