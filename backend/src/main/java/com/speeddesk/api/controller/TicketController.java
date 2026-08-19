@@ -1,13 +1,12 @@
 package com.speeddesk.api.controller;
 
 import com.speeddesk.api.dto.TicketRequestDTO;
-import com.speeddesk.api.entity.Ticket;
+import com.speeddesk.api.dto.TicketResponseDTO;
 import com.speeddesk.api.service.TicketService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -23,26 +22,27 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/tickets")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")
 public class TicketController {
 
     private final TicketService ticketService;
 
     @PostMapping
-    public ResponseEntity<Ticket> create(@Valid @RequestBody TicketRequestDTO request) {
-        Ticket savedTicket = ticketService.create(request);
+    public ResponseEntity<TicketResponseDTO> create(
+            @Valid @RequestBody TicketRequestDTO request
+    ) {
+        TicketResponseDTO savedTicket = ticketService.create(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(savedTicket);
     }
 
     @GetMapping
-    public ResponseEntity<List<Ticket>> listAll(
+    public ResponseEntity<List<TicketResponseDTO>> listAll(
             @RequestParam(required = false) UUID clienteId
     ) {
         return ResponseEntity.ok(ticketService.listAll(clienteId));
     }
 
     @PatchMapping("/{ticketId}/assumir/{tecnicoId}")
-    public ResponseEntity<Ticket> assumirTicket(
+    public ResponseEntity<TicketResponseDTO> assumirTicket(
             @PathVariable UUID ticketId,
             @PathVariable UUID tecnicoId
     ) {
@@ -50,7 +50,7 @@ public class TicketController {
     }
 
     @PatchMapping("/{ticketId}/resolver")
-    public ResponseEntity<Ticket> resolverTicket(@PathVariable UUID ticketId) {
+    public ResponseEntity<TicketResponseDTO> resolverTicket(@PathVariable UUID ticketId) {
         return ResponseEntity.ok(ticketService.resolverTicket(ticketId));
     }
 }

@@ -1,33 +1,54 @@
 package com.speeddesk.api.exception;
 
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
+import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.net.URI;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    @ExceptionHandler(InvalidCredentialsException.class)
-    public ResponseEntity<ProblemDetail> handleInvalidCredentials(
-            InvalidCredentialsException exception,
+    @ExceptionHandler({
+            InvalidCredentialsException.class,
+            AuthenticationCredentialsNotFoundException.class
+    })
+    public ResponseEntity<ProblemDetail> handleUnauthorized(
+            RuntimeException exception,
             HttpServletRequest request
     ) {
-        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
+        return response(
                 HttpStatus.UNAUTHORIZED,
-                exception.getMessage()
+                "Falha na autenticação",
+                exception.getMessage(),
+                request
         );
-        problemDetail.setTitle("Falha na autenticação");
-        problemDetail.setInstance(URI.create(request.getRequestURI()));
+    }
 
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .contentType(MediaType.APPLICATION_PROBLEM_JSON)
-                .body(problemDetail);
+    @ExceptionHandler({ForbiddenOperationException.class, AccessDeniedException.class})
+    public ResponseEntity<ProblemDetail> handleForbidden(
+            RuntimeException exception,
+            HttpServletRequest request
+    ) {
+        return response(
+                HttpStatus.FORBIDDEN,
+                "Acesso negado",
+                exception.getMessage(),
+                request
+        );
     }
 
     @ExceptionHandler(DuplicateEmailException.class)
@@ -35,16 +56,12 @@ public class GlobalExceptionHandler {
             DuplicateEmailException exception,
             HttpServletRequest request
     ) {
-        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
+        return response(
                 HttpStatus.CONFLICT,
-                exception.getMessage()
+                "E-mail já cadastrado",
+                exception.getMessage(),
+                request
         );
-        problemDetail.setTitle("E-mail já cadastrado");
-        problemDetail.setInstance(URI.create(request.getRequestURI()));
-
-        return ResponseEntity.status(HttpStatus.CONFLICT)
-                .contentType(MediaType.APPLICATION_PROBLEM_JSON)
-                .body(problemDetail);
     }
 
     @ExceptionHandler({
@@ -57,16 +74,12 @@ public class GlobalExceptionHandler {
             RuntimeException exception,
             HttpServletRequest request
     ) {
-        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
+        return response(
                 HttpStatus.NOT_FOUND,
-                exception.getMessage()
+                "Recurso não encontrado",
+                exception.getMessage(),
+                request
         );
-        problemDetail.setTitle("Recurso não encontrado");
-        problemDetail.setInstance(URI.create(request.getRequestURI()));
-
-        return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .contentType(MediaType.APPLICATION_PROBLEM_JSON)
-                .body(problemDetail);
     }
 
     @ExceptionHandler(InvalidTicketStatusTransitionException.class)
@@ -74,14 +87,102 @@ public class GlobalExceptionHandler {
             InvalidTicketStatusTransitionException exception,
             HttpServletRequest request
     ) {
-        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
+        return response(
                 HttpStatus.CONFLICT,
-                exception.getMessage()
+                "Transição de status inválida",
+                exception.getMessage(),
+                request
         );
-        problemDetail.setTitle("Transicao de status invalida");
-        problemDetail.setInstance(URI.create(request.getRequestURI()));
+    }
 
-        return ResponseEntity.status(HttpStatus.CONFLICT)
+    @ExceptionHandler({InvalidUserRoleException.class, InvalidRequestException.class})
+    public ResponseEntity<ProblemDetail> handleInvalidRequest(
+            RuntimeException exception,
+            HttpServletRequest request
+    ) {
+        return response(
+                HttpStatus.BAD_REQUEST,
+                "Solicitação inválida",
+                exception.getMessage(),
+                request
+        );
+    }
+
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ProblemDetail> handleValidation(
+            MethodArgumentNotValidException exception,
+            HttpServletRequest request
+    ) {
+        Map<String, String> errors = new LinkedHashMap<>();
+        for (FieldError fieldError : exception.getBindingResult().getFieldErrors()) {
+            errors.putIfAbsent(fieldError.getField(), fieldError.getDefaultMessage());
+        }
+
+        ProblemDetail problemDetail = problemDetail(
+                HttpStatus.BAD_REQUEST,
+                "Falha de validação",
+                "Um ou mais campos são inválidos.",
+                request
+        );
+        problemDetail.setProperty("errors", errors);
+        return entity(HttpStatus.BAD_REQUEST, problemDetail);
+    }
+
+    @ExceptionHandler({
+            HttpMessageNotReadableException.class,
+            MethodArgumentTypeMismatchException.class
+    })
+    public ResponseEntity<ProblemDetail> handleUnreadableRequest(
+            Exception exception,
+            HttpServletRequest request
+    ) {
+        return response(
+                HttpStatus.BAD_REQUEST,
+                "Solicitação inválida",
+                "O corpo ou os parâmetros da requisição são inválidos.",
+                request
+        );
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ProblemDetail> handleDataIntegrity(
+            DataIntegrityViolationException exception,
+            HttpServletRequest request
+    ) {
+        return response(
+                HttpStatus.CONFLICT,
+                "Conflito de dados",
+                "A operação conflita com dados já cadastrados.",
+                request
+        );
+    }
+
+    private ResponseEntity<ProblemDetail> response(
+            HttpStatus status,
+            String title,
+            String detail,
+            HttpServletRequest request
+    ) {
+        return entity(status, problemDetail(status, title, detail, request));
+    }
+
+    private ProblemDetail problemDetail(
+            HttpStatus status,
+            String title,
+            String detail,
+            HttpServletRequest request
+    ) {
+        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(status, detail);
+        problemDetail.setTitle(title);
+        problemDetail.setInstance(URI.create(request.getRequestURI()));
+        return problemDetail;
+    }
+
+    private ResponseEntity<ProblemDetail> entity(
+            HttpStatus status,
+            ProblemDetail problemDetail
+    ) {
+        return ResponseEntity.status(status)
                 .contentType(MediaType.APPLICATION_PROBLEM_JSON)
                 .body(problemDetail);
     }

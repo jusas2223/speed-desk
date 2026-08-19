@@ -1,20 +1,25 @@
 package com.speeddesk.api.service;
 
+import com.speeddesk.api.dto.UserCreateRequestDTO;
+import com.speeddesk.api.dto.UserResponseDTO;
 import com.speeddesk.api.entity.User;
+import com.speeddesk.api.entity.UserRole;
 import com.speeddesk.api.exception.DuplicateEmailException;
-import com.speeddesk.api.exception.InvalidCredentialsException;
+import com.speeddesk.api.exception.InvalidRequestException;
 import com.speeddesk.api.repository.UserRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.util.List;
-import java.util.Optional;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -26,78 +31,92 @@ class UserServiceTest {
     @Mock
     private UserRepository userRepository;
 
+    @Mock
+    private PasswordEncoder passwordEncoder;
+
     @InjectMocks
     private UserService userService;
 
     @Test
-    void shouldListAllUsers() {
-        User user = org.mockito.Mockito.mock(User.class);
-        List<User> users = List.of(user);
-        when(userRepository.findAll()).thenReturn(users);
+    void listsOnlyPublicUserData() {
+        User user = User.builder()
+                .id(UUID.randomUUID())
+                .name("Cliente")
+                .email("client@speeddesk.test")
+                .password("stored-secret")
+                .role(UserRole.CLIENTE)
+                .build();
+        when(userRepository.findAll()).thenReturn(List.of(user));
 
-        List<User> result = userService.listAll();
+        List<UserResponseDTO> result = userService.listAll();
 
-        assertEquals(users, result);
-        verify(userRepository).findAll();
+        assertEquals(1, result.size());
+        assertEquals(user.getId(), result.getFirst().id());
+        assertEquals(user.getEmail(), result.getFirst().email());
     }
 
     @Test
-    void shouldCreateUserWhenEmailDoesNotExist() {
-        User user = org.mockito.Mockito.mock(User.class);
-        when(user.getEmail()).thenReturn("user@speeddesk.com");
-        when(userRepository.existsByEmail("user@speeddesk.com")).thenReturn(false);
-        when(userRepository.save(user)).thenReturn(user);
-
-        User result = userService.create(user);
-
-        assertSame(user, result);
-        verify(userRepository).existsByEmail("user@speeddesk.com");
-        verify(userRepository).save(user);
-    }
-
-    @Test
-    void shouldRejectUserWhenEmailAlreadyExists() {
-        User user = org.mockito.Mockito.mock(User.class);
-        when(user.getEmail()).thenReturn("existing@speeddesk.com");
-        when(userRepository.existsByEmail("existing@speeddesk.com")).thenReturn(true);
-
-        assertThrows(DuplicateEmailException.class, () -> userService.create(user));
-
-        verify(userRepository).existsByEmail("existing@speeddesk.com");
-        verify(userRepository, never()).save(user);
-    }
-
-    @Test
-    void shouldLoginWhenCredentialsAreValid() {
-        User user = org.mockito.Mockito.mock(User.class);
-        when(user.getPassword()).thenReturn("secret");
-        when(userRepository.findByEmail("user@speeddesk.com")).thenReturn(Optional.of(user));
-
-        User result = userService.login(" user@speeddesk.com ", "secret");
-
-        assertSame(user, result);
-        verify(userRepository).findByEmail("user@speeddesk.com");
-    }
-
-    @Test
-    void shouldRejectLoginWhenEmailDoesNotExist() {
-        when(userRepository.findByEmail("missing@speeddesk.com")).thenReturn(Optional.empty());
-
-        assertThrows(
-                InvalidCredentialsException.class,
-                () -> userService.login("missing@speeddesk.com", "secret")
+    void createsUserWithNormalizedEmailAndEncodedPassword() {
+        UserCreateRequestDTO request = new UserCreateRequestDTO(
+                "  Técnica  ",
+                "  TECH@SPEEDDESK.TEST  ",
+                "Password-123",
+                UserRole.TECNICO
         );
+        when(userRepository.existsByEmailIgnoreCase("tech@speeddesk.test"))
+                .thenReturn(false);
+        when(passwordEncoder.encode("Password-123")).thenReturn("bcrypt-test-hash");
+        when(userRepository.save(org.mockito.ArgumentMatchers.any(User.class)))
+                .thenAnswer(invocation -> {
+                    User user = invocation.getArgument(0);
+                    user.setId(UUID.randomUUID());
+                    return user;
+                });
+
+        UserResponseDTO result = userService.create(request);
+
+        ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
+        verify(userRepository).save(captor.capture());
+        User saved = captor.getValue();
+        assertEquals("Técnica", saved.getName());
+        assertEquals("tech@speeddesk.test", saved.getEmail());
+        assertEquals("bcrypt-test-hash", saved.getPassword());
+        assertNotEquals(request.password(), saved.getPassword());
+        assertEquals(UserRole.TECNICO, result.role());
     }
 
     @Test
-    void shouldRejectLoginWhenPasswordIsInvalid() {
-        User user = org.mockito.Mockito.mock(User.class);
-        when(user.getPassword()).thenReturn("correct-password");
-        when(userRepository.findByEmail("user@speeddesk.com")).thenReturn(Optional.of(user));
-
-        assertThrows(
-                InvalidCredentialsException.class,
-                () -> userService.login("user@speeddesk.com", "wrong-password")
+    void rejectsCaseInsensitiveDuplicateEmail() {
+        UserCreateRequestDTO request = new UserCreateRequestDTO(
+                "Cliente",
+                "EXISTING@SPEEDDESK.TEST",
+                "Password-123",
+                UserRole.CLIENTE
         );
+        when(userRepository.existsByEmailIgnoreCase("existing@speeddesk.test"))
+                .thenReturn(true);
+
+        assertThrows(DuplicateEmailException.class, () -> userService.create(request));
+
+        verify(passwordEncoder, never()).encode(org.mockito.ArgumentMatchers.anyString());
+        verify(userRepository, never()).save(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void rejectsPasswordAboveBcryptUtf8Limit() {
+        String password = "á".repeat(40);
+        UserCreateRequestDTO request = new UserCreateRequestDTO(
+                "Cliente",
+                "client@speeddesk.test",
+                password,
+                UserRole.CLIENTE
+        );
+        when(userRepository.existsByEmailIgnoreCase("client@speeddesk.test"))
+                .thenReturn(false);
+
+        assertThrows(InvalidRequestException.class, () -> userService.create(request));
+
+        verify(passwordEncoder, never()).encode(org.mockito.ArgumentMatchers.anyString());
+        verify(userRepository, never()).save(org.mockito.ArgumentMatchers.any());
     }
 }

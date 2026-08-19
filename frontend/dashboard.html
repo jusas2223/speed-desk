@@ -4,11 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Painel de Controle - Speed Desk</title>
-    
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-    
+
     <link rel="stylesheet" href="css/style.css">
     <style>
         /* Sobrescrevendo o flex do body que centralizava o login */
@@ -117,7 +117,7 @@
             justify-content: space-between;
             align-items: center;
         }
-        
+
         .col-novos .kanban-column-header { border-color: var(--primary-color); }
         .col-andamento .kanban-column-header { border-color: #f1c21b; }
         .col-concluidos .kanban-column-header { border-color: #24a148; }
@@ -170,8 +170,9 @@
             border-radius: 12px;
             font-weight: 600;
         }
+        .badge.p-critica { background-color: #ffe7e7; color: #da1e28; border: 1px solid #da1e28; }
         .badge.p-alta { background-color: #ffe7e7; color: #da1e28; }
-        .badge.p-media { background-color: #fdf6e3; color: #f1c21b; }
+        .badge.p-normal { background-color: #fdf6e3; color: #f1c21b; }
         .badge.p-baixa { background-color: #e5f6e6; color: #24a148; }
         .badge-status { background-color: var(--border-color); color: var(--text-secondary); }
 
@@ -227,7 +228,7 @@
         <ul class="sidebar-menu">
             <li><a href="dashboard.html" class="active">Painel Kanban</a></li>
             <li><a href="#">Meus Chamados</a></li>
-            <li><a href="assets.html">Meus Equipamentos</a></li>
+            <li id="menuAssets"><a href="assets.html">Meus Equipamentos</a></li>
             <li><a href="#">Configurações</a></li>
         </ul>
         <div style="margin-top: auto;">
@@ -242,14 +243,14 @@
                 <h1>Painel de Controle</h1>
                 <p id="welcomeMessage" style="color: var(--text-secondary); font-size: 0.9rem;">Carregando...</p>
             </div>
-            <div>
+            <div id="headerActions">
                 <button id="btnOpenModal" class="btn btn-primary">+ Abrir Chamado</button>
             </div>
         </header>
 
         <!-- Kanban Board -->
         <div class="kanban-board">
-            
+
             <!-- Coluna Novos -->
             <div class="kanban-column col-novos">
                 <div class="kanban-column-header">
@@ -282,7 +283,7 @@
                     <!-- Cards dinâmicos aqui -->
                 </div>
             </div>
-            
+
         </div>
     </main>
 
@@ -312,14 +313,37 @@
                     <label for="prioridade" class="form-label">Prioridade</label>
                     <select id="prioridade" class="form-control" required>
                         <option value="BAIXA">Baixa</option>
-                        <option value="MEDIA">Média</option>
+                        <option value="NORMAL">Normal</option>
                         <option value="ALTA">Alta</option>
-                        <option value="URGENTE">Urgente</option>
+                        <option value="CRITICA">Crítica</option>
                     </select>
                 </div>
                 <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 2rem;">
                     <button type="button" class="btn" id="btnCancelModal" style="background:none; border:1px solid var(--border-color); color:var(--text-primary); width:auto;">Cancelar</button>
                     <button type="submit" class="btn btn-primary" id="btnSubmitTicket" style="width:auto;">Salvar Chamado</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal Atribuir Técnico (Gerente) -->
+    <div class="modal-overlay" id="assignModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Atribuir Técnico</h2>
+                <button class="modal-close" id="btnCloseAssignModal">&times;</button>
+            </div>
+            <form id="assignForm">
+                <input type="hidden" id="assignTicketId">
+                <div class="form-group">
+                    <label for="technicianSelect" class="form-label">Selecionar Técnico</label>
+                    <select id="technicianSelect" class="form-control" required>
+                        <option value="">Carregando técnicos...</option>
+                    </select>
+                </div>
+                <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 2rem;">
+                    <button type="button" class="btn" id="btnCancelAssignModal" style="background:none; border:1px solid var(--border-color); color:var(--text-primary); width:auto;">Cancelar</button>
+                    <button type="submit" class="btn btn-primary" id="btnSubmitAssign" style="width:auto;" disabled>Confirmar</button>
                 </div>
             </form>
         </div>

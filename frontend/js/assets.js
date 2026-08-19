@@ -1,26 +1,18 @@
-const ASSETS_API_URL = 'http://localhost:8080/api/assets';
+import api from './api.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     // 1. Verificação de Login
-    const userJson = localStorage.getItem('user');
-    if (!userJson) {
-        window.location.href = 'index.html';
-        return;
-    }
+    const session = api.requireAuth();
+    if (!session) return;
 
-    let user;
-    try {
-        user = JSON.parse(userJson);
-    } catch (e) {
-        localStorage.removeItem('user');
-        window.location.href = 'index.html';
+    if (session.role !== 'CLIENTE') {
+        window.location.href = 'dashboard.html';
         return;
     }
 
     // 2. Logout
     document.getElementById('logoutBtn').addEventListener('click', () => {
-        localStorage.removeItem('user');
-        window.location.href = 'index.html';
+        api.logout();
     });
 
     // 3. Referências DOM
@@ -29,16 +21,20 @@ document.addEventListener('DOMContentLoaded', () => {
     // 4. Buscar Equipamentos (GET)
     async function loadAssets() {
         try {
-            // Rota explícita com variável de rota (Path Variable)
-            const response = await fetch(\`\${ASSETS_API_URL}/cliente/\${user.id}\`);
-            
-            if (!response.ok) throw new Error('Falha ao buscar equipamentos.');
-            const assets = await response.json();
-            
+            assetsTableBody.innerHTML = '<tr><td colspan="3" style="padding: 12px; text-align: center;">Carregando equipamentos...</td></tr>';
+            const assets = await api.request(`/assets/cliente/${session.id}`);
             renderAssets(assets);
         } catch (error) {
             console.error('Erro ao carregar equipamentos:', error);
-            assetsTableBody.innerHTML = '<tr><td colspan="3" style="color: var(--error-color);">Não foi possível carregar os equipamentos.</td></tr>';
+
+            assetsTableBody.innerHTML = '';
+            const tr = document.createElement('tr');
+            const td = document.createElement('td');
+            td.colSpan = 3;
+            td.style.color = 'var(--error-color)';
+            td.textContent = 'Não foi possível carregar os equipamentos.';
+            tr.appendChild(td);
+            assetsTableBody.appendChild(tr);
         }
     }
 
@@ -46,18 +42,34 @@ document.addEventListener('DOMContentLoaded', () => {
         assetsTableBody.innerHTML = '';
 
         if (!assets || assets.length === 0) {
-            assetsTableBody.innerHTML = '<tr><td colspan="3">Nenhum equipamento cadastrado.</td></tr>';
+            const tr = document.createElement('tr');
+            const td = document.createElement('td');
+            td.colSpan = 3;
+            td.textContent = 'Nenhum equipamento cadastrado.';
+            tr.appendChild(td);
+            assetsTableBody.appendChild(tr);
             return;
         }
 
         assets.forEach(asset => {
             const tr = document.createElement('tr');
             tr.style.borderBottom = '1px solid var(--border-color)';
-            tr.innerHTML = `
-                <td style="padding: 12px;">${asset.nome || 'Sem Nome'}</td>
-                <td style="padding: 12px;">${asset.tipo || 'N/A'}</td>
-                <td style="padding: 12px;">${asset.numeroSerie || 'N/A'}</td>
-            `;
+
+            const tdNome = document.createElement('td');
+            tdNome.style.padding = '12px';
+            tdNome.textContent = asset.nome || 'Sem Nome';
+            tr.appendChild(tdNome);
+
+            const tdTipo = document.createElement('td');
+            tdTipo.style.padding = '12px';
+            tdTipo.textContent = asset.tipo || 'N/A';
+            tr.appendChild(tdTipo);
+
+            const tdNS = document.createElement('td');
+            tdNS.style.padding = '12px';
+            tdNS.textContent = asset.numeroSerie || 'N/A';
+            tr.appendChild(tdNS);
+
             assetsTableBody.appendChild(tr);
         });
     }
@@ -72,52 +84,49 @@ document.addEventListener('DOMContentLoaded', () => {
     function openModal() { modal.classList.add('active'); }
     function closeModal() { modal.classList.remove('active'); newAssetForm.reset(); }
 
-    btnOpenModal.addEventListener('click', openModal);
-    btnCloseModal.addEventListener('click', closeModal);
-    btnCancelModal.addEventListener('click', closeModal);
-    modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+    if (btnOpenModal) btnOpenModal.addEventListener('click', openModal);
+    if (btnCloseModal) btnCloseModal.addEventListener('click', closeModal);
+    if (btnCancelModal) btnCancelModal.addEventListener('click', closeModal);
+
+    if (modal) {
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) closeModal();
+        });
+    }
 
     // 6. Submeter (POST Novo Equipamento)
-    newAssetForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        
-        const btnSubmit = document.getElementById('btnSubmitAsset');
-        btnSubmit.disabled = true;
-        btnSubmit.textContent = 'Salvando...';
+    if (newAssetForm) {
+        newAssetForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
 
-        const novoEquipamento = {
-            nome: document.getElementById('nome').value.trim(),
-            tipo: document.getElementById('tipo').value.trim(),
-            numeroSerie: document.getElementById('numeroSerie').value.trim(),
-            clienteId: user.id // Mantém como String (UUID completo)
-        };
+            const btnSubmit = document.getElementById('btnSubmitAsset');
+            btnSubmit.disabled = true;
+            btnSubmit.textContent = 'Salvando...';
 
-        console.log("Auditoria Payload Equipamento:", JSON.stringify(novoEquipamento, null, 2));
+            const novoEquipamento = {
+                nome: document.getElementById('nome').value.trim(),
+                tipo: document.getElementById('tipo').value.trim(),
+                numeroSerie: document.getElementById('numeroSerie').value.trim(),
+                clienteId: session.id
+            };
 
-        try {
-            const response = await fetch(ASSETS_API_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(novoEquipamento)
-            });
+            try {
+                await api.request('/assets', {
+                    method: 'POST',
+                    body: JSON.stringify(novoEquipamento)
+                });
 
-            if (!response.ok) {
-                const errData = await response.json().catch(() => ({}));
-                console.error("Dados de Erro do Servidor (Assets):", errData);
-                throw new Error(errData.message || \`Erro HTTP: \${response.status}\`);
+                closeModal();
+                loadAssets();
+            } catch (error) {
+                console.error('Falha ao registrar equipamento:', error);
+                alert(error.message || 'Falha ao registrar equipamento.');
+            } finally {
+                btnSubmit.disabled = false;
+                btnSubmit.textContent = 'Salvar';
             }
-
-            closeModal();
-            loadAssets(); 
-
-        } catch (error) {
-            console.error('Falha ao registrar equipamento:', error);
-            alert('Falha ao registrar equipamento. Verifique o console.');
-        } finally {
-            btnSubmit.disabled = false;
-            btnSubmit.textContent = 'Salvar';
-        }
-    });
+        });
+    }
 
     // Inicializa
     loadAssets();

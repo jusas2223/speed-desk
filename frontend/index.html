@@ -4,12 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Speed Desk - Autenticação</title>
-    
+
     <!-- Fonte Inter do Google Fonts (Design Moderno/Corporativo) -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-    
+
     <!-- Estilo Global -->
     <link rel="stylesheet" href="css/style.css">
 </head>
@@ -20,36 +20,38 @@
                 <h1>Speed Desk</h1>
                 <p>Acesse sua conta para gerenciar atendimentos</p>
             </header>
-            
+
             <form id="loginForm" aria-labelledby="formTitle">
                 <h2 id="formTitle" class="visually-hidden">Formulário de Login</h2>
-                
+
+                <div id="loginError" role="alert" aria-live="polite" style="display: none; color: var(--error-color); margin-bottom: 1rem; padding: 10px; background-color: #ffe6e6; border-radius: 4px; border: 1px solid var(--error-color);"></div>
+
                 <div class="form-group">
                     <label for="email" class="form-label">E-mail corporativo</label>
-                    <input 
-                        type="email" 
-                        id="email" 
-                        name="email" 
-                        class="form-control" 
-                        required 
-                        autocomplete="email" 
+                    <input
+                        type="email"
+                        id="email"
+                        name="email"
+                        class="form-control"
+                        required
+                        autocomplete="email"
                         placeholder="nome@empresa.com.br"
                     >
                 </div>
-                
+
                 <div class="form-group">
                     <label for="password" class="form-label">Senha</label>
-                    <input 
-                        type="password" 
-                        id="password" 
-                        name="password" 
-                        class="form-control" 
-                        required 
-                        autocomplete="current-password" 
+                    <input
+                        type="password"
+                        id="password"
+                        name="password"
+                        class="form-control"
+                        required
+                        autocomplete="current-password"
                         placeholder="••••••••"
                     >
                 </div>
-                
+
                 <button type="submit" class="btn btn-primary" id="submitBtn">
                     Entrar no sistema
                 </button>
@@ -61,40 +63,44 @@
     <script type="module">
         import api from './js/api.js';
 
+        // Redireciona se já estiver autenticado
+        if (api.getSession()) {
+            window.location.href = 'dashboard.html';
+        }
+
         const loginForm = document.getElementById('loginForm');
+        const loginError = document.getElementById('loginError');
         const submitBtn = document.getElementById('submitBtn');
 
         loginForm.addEventListener('submit', async (event) => {
             event.preventDefault();
-            
+
+            // Limpa o erro anterior
+            loginError.style.display = 'none';
+            loginError.textContent = '';
+
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
-            
+
             // Feedback visual de carregamento
             const originalText = submitBtn.textContent;
             submitBtn.textContent = 'Autenticando...';
             submitBtn.disabled = true;
 
             try {
-                const response = await fetch(`${api.BASE_URL}/users/login`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ email, password })
-                });
-                
-                const data = await response.json();
-                
-                if (response.ok) {
-                    console.log('Sucesso:', data);
-                    localStorage.setItem('user', JSON.stringify(data));
-                    window.location.href = 'dashboard.html';
-                } else {
-                    console.log('Erro:', data);
-                }
+                // O método login lança erro em caso de falha HTTP
+                const data = await api.login(email, password);
+
+                // Salva a sessão no sessionStorage usando o método centralizado
+                api.setSession(data);
+                window.location.href = 'dashboard.html';
             } catch (error) {
-                console.log('Erro na requisição:', error);
+                let msg = error.message || 'Credenciais inválidas ou serviço indisponível.';
+                if (error.status === 401) {
+                    msg = 'E-mail corporativo ou senha incorretos.';
+                }
+                loginError.textContent = msg;
+                loginError.style.display = 'block';
             } finally {
                 // Restaura o botão
                 submitBtn.textContent = originalText;

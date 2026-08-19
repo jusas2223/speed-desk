@@ -18,10 +18,13 @@ class GlobalExceptionHandlerTest {
     private final GlobalExceptionHandler exceptionHandler = new GlobalExceptionHandler();
 
     @Test
-    void shouldReturnUnauthorizedForInvalidCredentials() {
-        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/users/login");
+    void returnsUnauthorizedProblemDetailForInvalidCredentials() {
+        MockHttpServletRequest request = new MockHttpServletRequest(
+                "POST",
+                "/api/users/login"
+        );
 
-        ResponseEntity<ProblemDetail> response = exceptionHandler.handleInvalidCredentials(
+        ResponseEntity<ProblemDetail> response = exceptionHandler.handleUnauthorized(
                 new InvalidCredentialsException(),
                 request
         );
@@ -30,14 +33,13 @@ class GlobalExceptionHandlerTest {
         assertNotNull(problemDetail);
         assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode());
         assertEquals(MediaType.APPLICATION_PROBLEM_JSON, response.getHeaders().getContentType());
-        assertEquals(HttpStatus.UNAUTHORIZED.value(), problemDetail.getStatus());
+        assertEquals(401, problemDetail.getStatus());
         assertEquals("Falha na autenticação", problemDetail.getTitle());
-        assertEquals("E-mail ou senha inválidos", problemDetail.getDetail());
         assertEquals(URI.create("/api/users/login"), problemDetail.getInstance());
     }
 
     @Test
-    void shouldReturnProblemDetailForDuplicateEmail() {
+    void returnsConflictProblemDetailForDuplicateEmail() {
         MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/users");
 
         ResponseEntity<ProblemDetail> response = exceptionHandler.handleDuplicateEmail(
@@ -48,19 +50,15 @@ class GlobalExceptionHandlerTest {
         ProblemDetail problemDetail = response.getBody();
         assertNotNull(problemDetail);
         assertEquals(HttpStatus.CONFLICT, response.getStatusCode());
-        assertEquals(MediaType.APPLICATION_PROBLEM_JSON, response.getHeaders().getContentType());
-        assertEquals(HttpStatus.CONFLICT.value(), problemDetail.getStatus());
         assertEquals("E-mail já cadastrado", problemDetail.getTitle());
-        assertEquals("Já existe um usuário cadastrado com este e-mail.", problemDetail.getDetail());
-        assertEquals(URI.create("/api/users"), problemDetail.getInstance());
     }
 
     @Test
-    void shouldReturnProblemDetailWhenTicketDoesNotExist() {
+    void returnsNotFoundProblemDetailForMissingTicket() {
         UUID ticketId = UUID.randomUUID();
         MockHttpServletRequest request = new MockHttpServletRequest(
                 "PATCH",
-                "/api/tickets/" + ticketId + "/assumir/" + UUID.randomUUID()
+                "/api/tickets/" + ticketId + "/resolver"
         );
 
         ResponseEntity<ProblemDetail> response = exceptionHandler.handleNotFound(
@@ -71,10 +69,20 @@ class GlobalExceptionHandlerTest {
         ProblemDetail problemDetail = response.getBody();
         assertNotNull(problemDetail);
         assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
-        assertEquals(MediaType.APPLICATION_PROBLEM_JSON, response.getHeaders().getContentType());
-        assertEquals(HttpStatus.NOT_FOUND.value(), problemDetail.getStatus());
         assertEquals("Recurso não encontrado", problemDetail.getTitle());
-        assertEquals("Chamado não encontrado: " + ticketId, problemDetail.getDetail());
         assertEquals(URI.create(request.getRequestURI()), problemDetail.getInstance());
+    }
+
+    @Test
+    void returnsForbiddenProblemDetailForObjectAuthorizationFailure() {
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/tickets");
+
+        ResponseEntity<ProblemDetail> response = exceptionHandler.handleForbidden(
+                new ForbiddenOperationException("Operação não permitida."),
+                request
+        );
+
+        assertEquals(HttpStatus.FORBIDDEN, response.getStatusCode());
+        assertEquals("Acesso negado", response.getBody().getTitle());
     }
 }

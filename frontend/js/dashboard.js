@@ -1,60 +1,69 @@
-// URL base da API
-const API_URL = 'http://localhost:8080/api/tickets';
+import api from './api.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     // 1. Verificação de Login
-    const userJson = localStorage.getItem('user');
-    if (!userJson) {
-        window.location.href = 'index.html';
-        return;
-    }
+    const session = api.requireAuth();
+    if (!session) return; // requireAuth já redireciona
 
-    let user;
-    try {
-        user = JSON.parse(userJson);
-        const userName = user.nome || user.name || 'Usuário';
-        document.getElementById('welcomeMessage').textContent = `Bem-vindo(a), ${userName}`;
-    } catch (e) {
-        localStorage.removeItem('user');
-        window.location.href = 'index.html';
-        return;
-    }
+    const userName = session.name || 'Usuário';
+    const role = session.role ? session.role.toUpperCase() : 'CLIENTE';
+    document.getElementById('welcomeMessage').textContent = `Bem-vindo(a), ${userName} | Perfil: ${role}`;
 
     // 2. Lógica de Logout
     document.getElementById('logoutBtn').addEventListener('click', () => {
-        localStorage.removeItem('user');
-        window.location.href = 'index.html';
+        api.logout();
     });
 
-    // 3. Referências DOM
+    // 3. Referências DOM e Ocultação de Funcionalidades
     const colNovos = document.getElementById('col-novos-cards');
     const colAndamento = document.getElementById('col-andamento-cards');
     const colConcluidos = document.getElementById('col-concluidos-cards');
-    
+
     const countNovos = document.getElementById('count-novos');
     const countAndamento = document.getElementById('count-andamento');
     const countConcluidos = document.getElementById('count-concluidos');
 
+    const menuAssets = document.getElementById('menuAssets');
+    const headerActions = document.getElementById('headerActions');
+
+    // Esconder botões e menus de acordo com o papel
+    if (role !== 'CLIENTE') {
+        if (menuAssets) menuAssets.style.display = 'none';
+        if (headerActions) headerActions.style.display = 'none';
+    }
+
+    // Referências para Modal de Atribuição (Gerente)
+    const assignModal = document.getElementById('assignModal');
+    const btnCloseAssignModal = document.getElementById('btnCloseAssignModal');
+    const btnCancelAssignModal = document.getElementById('btnCancelAssignModal');
+    const assignForm = document.getElementById('assignForm');
+    const technicianSelect = document.getElementById('technicianSelect');
+    const assignTicketId = document.getElementById('assignTicketId');
+    const btnSubmitAssign = document.getElementById('btnSubmitAssign');
+    let techniciansLoaded = false;
+
+    function syncAssignButtonState() {
+        if (btnSubmitAssign) {
+            btnSubmitAssign.disabled = !technicianSelect.value;
+        }
+    }
+
+    if (technicianSelect) {
+        technicianSelect.addEventListener('change', syncAssignButtonState);
+    }
+
     // 4. Buscar e Renderizar Tickets
     async function loadTickets() {
         try {
-            // Filtragem role-based: Se cliente, busca apenas os dele.
-            // Para TECNICO ou GERENTE/ADMIN, busca todos (ou endpoint apropriado).
-            let url = API_URL;
-            const role = user.role ? user.role.toUpperCase() : 'CLIENTE';
-            if (role === 'CLIENTE') {
-                url += `?clienteId=\${user.id}`;
-            }
-
-            const response = await fetch(url);
-            if (!response.ok) throw new Error('Falha ao buscar chamados da API.');
-            const tickets = await response.json();
-            
+            colNovos.innerHTML = '<div style="padding: 10px; color: var(--text-secondary);">Carregando chamados...</div>';
+            const tickets = await api.request('/tickets');
             renderKanban(tickets);
         } catch (error) {
             console.error('Erro ao carregar tickets:', error);
-            // Fallback visual
-            document.getElementById('dashboardContent').innerHTML = '<p style="color:var(--error-color);">Erro ao carregar painel.</p>';
+            const mainContent = document.querySelector('.main-content');
+            if(mainContent) {
+                 colNovos.textContent = 'Erro ao carregar painel.';
+            }
         }
     }
 
@@ -66,9 +75,34 @@ document.addEventListener('DOMContentLoaded', () => {
 
         let cNovos = 0, cAndamento = 0, cConcluidos = 0;
 
+        if (!tickets || tickets.length === 0) {
+            countNovos.textContent = '0';
+            countAndamento.textContent = '0';
+            countConcluidos.textContent = '0';
+
+            const msgNovos = document.createElement('div');
+            msgNovos.textContent = 'Nenhum chamado encontrado.';
+            msgNovos.style.padding = '10px';
+            msgNovos.style.color = 'var(--text-secondary)';
+            colNovos.appendChild(msgNovos);
+
+            const msgAndamento = document.createElement('div');
+            msgAndamento.textContent = 'Nenhum chamado encontrado.';
+            msgAndamento.style.padding = '10px';
+            msgAndamento.style.color = 'var(--text-secondary)';
+            colAndamento.appendChild(msgAndamento);
+
+            const msgConcluidos = document.createElement('div');
+            msgConcluidos.textContent = 'Nenhum chamado encontrado.';
+            msgConcluidos.style.padding = '10px';
+            msgConcluidos.style.color = 'var(--text-secondary)';
+            colConcluidos.appendChild(msgConcluidos);
+            return;
+        }
+
         tickets.forEach(ticket => {
             const card = createCard(ticket);
-            
+
             if (ticket.status === 'RECEBIDO') {
                 colNovos.appendChild(card);
                 cNovos++;
@@ -79,7 +113,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 colConcluidos.appendChild(card);
                 cConcluidos++;
             } else {
-                // Fallback para status desconhecidos
                 colNovos.appendChild(card);
                 cNovos++;
             }
@@ -94,78 +127,182 @@ document.addEventListener('DOMContentLoaded', () => {
     function createCard(ticket) {
         const div = document.createElement('div');
         div.className = 'ticket-card';
-        
+
         // Determinar cor da badge com base na prioridade
         let priorityClass = 'p-baixa';
         if (ticket.prioridade === 'ALTA') priorityClass = 'p-alta';
-        else if (ticket.prioridade === 'MEDIA') priorityClass = 'p-media';
+        else if (ticket.prioridade === 'NORMAL') priorityClass = 'p-normal';
+        else if (ticket.prioridade === 'CRITICA') priorityClass = 'p-critica';
 
-        // Evita quebrar se cliente for null
-        const clientName = ticket.cliente ? ticket.cliente.nome : (ticket.clienteId ? `Cliente #${ticket.clienteId}` : 'N/A');
-        
-        // Tratar ID e status
-        const role = user.role ? user.role.toUpperCase() : '';
+        const clientName = ticket.cliente ? ticket.cliente.name : (ticket.clienteId ? `Cliente #${ticket.clienteId}` : 'N/A');
+
         const ticketId = ticket.id || '-';
         const ticketStatus = ticket.status || 'NOVO';
 
-        let htmlCard = `
-            <div class="ticket-title">#${ticketId} - ${ticket.titulo}</div>
-            <div class="ticket-client">👤 ${clientName}</div>
-            <div class="ticket-badges">
-                <span class="badge ${priorityClass}">${ticket.prioridade || 'BAIXA'}</span>
-                <span class="badge badge-status">${ticketStatus}</span>
-            </div>
-        `;
+        // Título e ID
+        const titleDiv = document.createElement('div');
+        titleDiv.className = 'ticket-title';
+        titleDiv.textContent = `#${ticketId} - ${ticket.titulo}`;
+        div.appendChild(titleDiv);
+
+        // Cliente
+        const clientDiv = document.createElement('div');
+        clientDiv.className = 'ticket-client';
+        clientDiv.textContent = `👤 ${clientName}`;
+        div.appendChild(clientDiv);
+
+        // Badges
+        const badgesDiv = document.createElement('div');
+        badgesDiv.className = 'ticket-badges';
+
+        const badgePrioridade = document.createElement('span');
+        badgePrioridade.className = `badge ${priorityClass}`;
+        badgePrioridade.textContent = ticket.prioridade || 'BAIXA';
+        badgesDiv.appendChild(badgePrioridade);
+
+        const badgeStatus = document.createElement('span');
+        badgeStatus.className = 'badge badge-status';
+        badgeStatus.textContent = ticketStatus;
+        badgesDiv.appendChild(badgeStatus);
+
+        div.appendChild(badgesDiv);
 
         // Botões dinâmicos role-based
-        if (role === 'TECNICO' || role === 'GERENTE' || role === 'ADMIN') {
+        if (role === 'TECNICO' || role === 'GERENTE') {
             if (ticketStatus === 'RECEBIDO') {
-                htmlCard += `
-                    <button class="btn btn-assumir btn-primary" onclick="assumirChamado('${ticketId}')" style="margin-top: 12px; padding: 6px; font-size: 0.8rem;">
-                        Assumir
-                    </button>
-                `;
+                const btnAssumir = document.createElement('button');
+                btnAssumir.className = 'btn btn-assumir btn-primary';
+                btnAssumir.style = 'margin-top: 12px; padding: 6px; font-size: 0.8rem;';
+                btnAssumir.textContent = role === 'GERENTE' ? 'Atribuir Técnico' : 'Assumir';
+                btnAssumir.addEventListener('click', () => {
+                    if (role === 'GERENTE') {
+                        openAssignModal(ticketId);
+                    } else if (role === 'TECNICO') {
+                        assumirChamado(ticketId);
+                    }
+                });
+                div.appendChild(btnAssumir);
             } else if (ticketStatus === 'EM_ATENDIMENTO') {
-                htmlCard += `
-                    <button class="btn btn-resolver btn-primary" onclick="resolverChamado('${ticketId}')" style="margin-top: 12px; padding: 6px; font-size: 0.8rem; background-color: #24a148; border-color: #24a148;">
-                        Resolver
-                    </button>
-                `;
+                // Para exibir o botão de Resolver, Gerente sempre vê. Técnico vê se for o responsável.
+                const isTecnicoResponsavel = ticket.tecnico && ticket.tecnico.id === session.id;
+
+                if (role === 'GERENTE' || (role === 'TECNICO' && isTecnicoResponsavel)) {
+                    const btnResolver = document.createElement('button');
+                    btnResolver.className = 'btn btn-resolver btn-primary';
+                    btnResolver.style = 'margin-top: 12px; padding: 6px; font-size: 0.8rem; background-color: #24a148; border-color: #24a148;';
+                    btnResolver.textContent = 'Resolver';
+                    btnResolver.addEventListener('click', () => resolverChamado(ticketId));
+                    div.appendChild(btnResolver);
+                }
             }
         }
 
-        div.innerHTML = htmlCard;
         return div;
     }
 
-    // Ações do Kanban globais para os botões inline
-    window.assumirChamado = async (ticketId) => {
+    // Ações do Kanban
+    async function assumirChamado(ticketId) {
+        if (role !== 'TECNICO') return;
         try {
-            const response = await fetch(`${API_URL}/${ticketId}/assumir/${user.id}`, { method: 'PATCH' });
-            if (!response.ok) {
-                const err = await response.json().catch(()=>({}));
-                throw new Error(err.message || 'Erro ao assumir');
-            }
+            await api.request(`/tickets/${ticketId}/assumir/${session.id}`, { method: 'PATCH' });
             loadTickets(); // Recarrega o Kanban
         } catch (error) {
             console.error('Falha no PATCH assumir:', error);
-            alert('Falha ao assumir chamado. Verifique o console.');
+            alert(error.message || 'Falha ao assumir chamado.');
         }
-    };
+    }
 
-    window.resolverChamado = async (ticketId) => {
+    async function resolverChamado(ticketId) {
         try {
-            const response = await fetch(`${API_URL}/${ticketId}/resolver`, { method: 'PATCH' });
-            if (!response.ok) {
-                const err = await response.json().catch(()=>({}));
-                throw new Error(err.message || 'Erro ao resolver');
-            }
+            await api.request(`/tickets/${ticketId}/resolver`, { method: 'PATCH' });
             loadTickets(); // Recarrega o Kanban
         } catch (error) {
             console.error('Falha no PATCH resolver:', error);
-            alert('Falha ao resolver chamado. Verifique o console.');
+            alert(error.message || 'Falha ao resolver chamado.');
         }
-    };
+    }
+
+    // Modal de Atribuição (Gerente)
+    async function openAssignModal(ticketId) {
+        if (role !== 'GERENTE') return;
+
+        assignTicketId.value = ticketId;
+        assignModal.classList.add('active');
+        syncAssignButtonState();
+
+        if (!techniciansLoaded) {
+            try {
+                technicianSelect.innerHTML = '<option value="">Carregando técnicos...</option>';
+                syncAssignButtonState();
+
+                const users = await api.request('/users');
+                const tecnicos = users.filter(u => u.role === 'TECNICO');
+
+                technicianSelect.innerHTML = '';
+
+                if (tecnicos.length === 0) {
+                    technicianSelect.innerHTML = '<option value="">Nenhum técnico disponível</option>';
+                } else {
+                    technicianSelect.innerHTML = '<option value="">Selecione um técnico</option>';
+                    tecnicos.forEach(t => {
+                        const opt = document.createElement('option');
+                        opt.value = t.id;
+                        opt.textContent = `${t.name} (${t.email})`;
+                        technicianSelect.appendChild(opt);
+                    });
+                    techniciansLoaded = true;
+                }
+                syncAssignButtonState();
+            } catch (err) {
+                console.error("Erro ao carregar técnicos:", err);
+                technicianSelect.innerHTML = '<option value="">Erro ao carregar técnicos</option>';
+                syncAssignButtonState();
+            }
+        }
+    }
+
+    function closeAssignModal() {
+        if (assignModal) assignModal.classList.remove('active');
+        if (assignForm) assignForm.reset();
+        syncAssignButtonState();
+    }
+
+    if (btnCloseAssignModal) btnCloseAssignModal.addEventListener('click', closeAssignModal);
+    if (btnCancelAssignModal) btnCancelAssignModal.addEventListener('click', closeAssignModal);
+    if (assignModal) {
+        assignModal.addEventListener('click', (e) => {
+            if (e.target === assignModal) closeAssignModal();
+        });
+    }
+
+    if (assignForm) {
+        assignForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (role !== 'GERENTE') return;
+
+            const tecId = technicianSelect.value;
+            const tId = assignTicketId.value;
+
+            if (!tecId) {
+                alert("Selecione um técnico.");
+                return;
+            }
+
+            btnSubmitAssign.disabled = true;
+            btnSubmitAssign.textContent = 'Atribuindo...';
+
+            try {
+                await api.request(`/tickets/${tId}/assumir/${tecId}`, { method: 'PATCH' });
+                closeAssignModal();
+                loadTickets();
+            } catch (error) {
+                alert(error.message || 'Falha ao atribuir chamado.');
+            } finally {
+                syncAssignButtonState();
+                btnSubmitAssign.textContent = 'Confirmar';
+            }
+        });
+    }
 
     // 5. Lógica do Modal de Novo Chamado
     const modal = document.getElementById('newTicketModal');
@@ -175,95 +312,90 @@ document.addEventListener('DOMContentLoaded', () => {
     const newTicketForm = document.getElementById('newTicketForm');
 
     async function openModal() {
+        if (role !== 'CLIENTE') return;
+
         modal.classList.add('active');
         // Buscar equipamentos do usuário para popular o select
         try {
-            const res = await fetch(\`http://localhost:8080/api/assets/cliente/\${user.id}\`);
             const select = document.getElementById('assetSelect');
+            select.innerHTML = '<option value="">Carregando...</option>';
+
+            const assets = await api.request(`/assets/cliente/${session.id}`);
             select.innerHTML = '<option value="">Nenhum / Não listado</option>'; // Limpa opções antigas
-            
-            if (res.ok) {
-                const assets = await res.json();
-                assets.forEach(a => {
-                    const opt = document.createElement('option');
-                    opt.value = a.id;
-                    opt.textContent = \`\${a.nome} (\${a.numeroSerie || 'Sem NS'})\`;
-                    select.appendChild(opt);
-                });
-            }
+
+            assets.forEach(a => {
+                const opt = document.createElement('option');
+                opt.value = a.id;
+                opt.textContent = `${a.nome} (${a.numeroSerie || 'Sem NS'})`;
+                select.appendChild(opt);
+            });
         } catch (error) {
             console.error('Erro ao buscar equipamentos para o form:', error);
+            const select = document.getElementById('assetSelect');
+            select.innerHTML = '<option value="">Erro ao carregar</option>';
         }
     }
 
     function closeModal() {
-        modal.classList.remove('active');
-        newTicketForm.reset();
+        if (modal) modal.classList.remove('active');
+        if (newTicketForm) newTicketForm.reset();
     }
 
-    btnOpenModal.addEventListener('click', openModal);
-    btnCloseModal.addEventListener('click', closeModal);
-    btnCancelModal.addEventListener('click', closeModal);
+    if (btnOpenModal) btnOpenModal.addEventListener('click', openModal);
+    if (btnCloseModal) btnCloseModal.addEventListener('click', closeModal);
+    if (btnCancelModal) btnCancelModal.addEventListener('click', closeModal);
 
     // Fechar o modal ao clicar na área escura (overlay)
-    modal.addEventListener('click', (e) => {
-        if (e.target === modal) closeModal();
-    });
+    if (modal) {
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) closeModal();
+        });
+    }
 
     // 6. Submeter o formulário (POST Novo Chamado)
-    newTicketForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        
-        const btnSubmit = document.getElementById('btnSubmitTicket');
-        btnSubmit.disabled = true;
-        btnSubmit.textContent = 'Salvando...';
+    if (newTicketForm) {
+        newTicketForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (role !== 'CLIENTE') return;
 
-        const prioridadeBruta = document.getElementById('prioridade').value;
-        // Blindagem: Remove acentos, garante uppercase
-        const prioridadeLimpa = prioridadeBruta.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().trim();
+            const btnSubmit = document.getElementById('btnSubmitTicket');
+            btnSubmit.disabled = true;
+            btnSubmit.textContent = 'Salvando...';
 
-        const assetIdStr = document.getElementById('assetSelect').value;
+            const prioridadeBruta = document.getElementById('prioridade').value;
+            const prioridadeLimpa = prioridadeBruta.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().trim();
+            const assetIdStr = document.getElementById('assetSelect').value;
 
-        const novoChamado = {
-            titulo: document.getElementById('titulo').value,
-            descricao: document.getElementById('descricao').value,
-            prioridade: prioridadeLimpa,
-            clienteId: user.id // Mantém como String (UUID completo)
-        };
+            const novoChamado = {
+                titulo: document.getElementById('titulo').value,
+                descricao: document.getElementById('descricao').value,
+                prioridade: prioridadeLimpa,
+                clienteId: session.id
+            };
 
-        if (assetIdStr) {
-            novoChamado.assetId = assetIdStr; // Adiciona o vínculo do equipamento se existir
-        }
-
-        console.log("Auditoria Payload Novo Chamado:", JSON.stringify(novoChamado, null, 2));
-
-        try {
-            const response = await fetch(API_URL, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(novoChamado)
-            });
-
-            if (!response.ok) {
-                const errData = await response.json().catch(() => ({}));
-                console.error("Dados de Erro do Servidor:", errData);
-                throw new Error(errData.message || `Erro HTTP: ${response.status}`);
+            if (assetIdStr) {
+                novoChamado.assetId = assetIdStr;
+            } else {
+                novoChamado.assetId = null;
             }
 
-            // Se der sucesso, fecha o modal e recarrega a lista
-            closeModal();
-            loadTickets(); 
+            try {
+                await api.request('/tickets', {
+                    method: 'POST',
+                    body: JSON.stringify(novoChamado)
+                });
 
-        } catch (error) {
-            console.error('Erro na requisição ao servidor:', error);
-        } finally {
-            // Restaura o botão
-            btnSubmit.disabled = false;
-            btnSubmit.textContent = 'Salvar Chamado';
-        }
-    });
+                closeModal();
+                loadTickets();
+            } catch (error) {
+                console.error('Erro na requisição ao servidor:', error);
+                alert(error.message || 'Erro ao criar chamado.');
+            } finally {
+                btnSubmit.disabled = false;
+                btnSubmit.textContent = 'Salvar Chamado';
+            }
+        });
+    }
 
     // Inicia buscando os dados assim que a página estiver pronta
     loadTickets();

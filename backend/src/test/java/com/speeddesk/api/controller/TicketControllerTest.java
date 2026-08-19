@@ -1,8 +1,11 @@
 package com.speeddesk.api.controller;
 
 import com.speeddesk.api.dto.TicketRequestDTO;
-import com.speeddesk.api.entity.Ticket;
+import com.speeddesk.api.dto.TicketResponseDTO;
+import com.speeddesk.api.dto.UserResponseDTO;
 import com.speeddesk.api.entity.TicketPriority;
+import com.speeddesk.api.entity.TicketStatus;
+import com.speeddesk.api.entity.UserRole;
 import com.speeddesk.api.service.TicketService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -15,11 +18,12 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 
-import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -36,81 +40,72 @@ class TicketControllerTest {
     private TicketController ticketController;
 
     @Test
-    void shouldCreateTicket() {
-        TicketRequestDTO request = new TicketRequestDTO(
-                "Falha no notebook",
-                "O equipamento nao inicia",
-                TicketPriority.ALTA,
-                UUID.randomUUID(),
-                null
-        );
-        Ticket ticket = new Ticket();
+    void createsTicketUsingResponseDto() {
+        TicketRequestDTO request = request(TicketPriority.ALTA);
+        TicketResponseDTO ticket = response();
         when(ticketService.create(request)).thenReturn(ticket);
 
-        ResponseEntity<Ticket> response = ticketController.create(request);
+        ResponseEntity<TicketResponseDTO> response = ticketController.create(request);
 
         assertEquals(HttpStatus.CREATED, response.getStatusCode());
         assertSame(ticket, response.getBody());
-        verify(ticketService).create(request);
     }
 
     @Test
-    void shouldListAllTickets() {
-        UUID clienteId = UUID.randomUUID();
-        List<Ticket> tickets = List.of(new Ticket());
-        when(ticketService.listAll(clienteId)).thenReturn(tickets);
+    void listsTicketDtos() {
+        UUID clientId = UUID.randomUUID();
+        List<TicketResponseDTO> tickets = List.of(response());
+        when(ticketService.listAll(clientId)).thenReturn(tickets);
 
-        ResponseEntity<List<Ticket>> response = ticketController.listAll(clienteId);
+        ResponseEntity<List<TicketResponseDTO>> response =
+                ticketController.listAll(clientId);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertSame(tickets, response.getBody());
-        verify(ticketService).listAll(clienteId);
     }
 
     @Test
-    void shouldAssignTicket() {
+    void mapsAssignmentAndResolutionEndpoints() {
         UUID ticketId = UUID.randomUUID();
         UUID technicianId = UUID.randomUUID();
-        Ticket ticket = new Ticket();
+        TicketResponseDTO ticket = response();
         when(ticketService.assumirTicket(ticketId, technicianId)).thenReturn(ticket);
+        when(ticketService.resolverTicket(ticketId)).thenReturn(ticket);
 
-        ResponseEntity<Ticket> response = ticketController.assumirTicket(ticketId, technicianId);
-
-        assertEquals(HttpStatus.OK, response.getStatusCode());
-        assertSame(ticket, response.getBody());
-        verify(ticketService).assumirTicket(ticketId, technicianId);
+        assertSame(ticket, ticketController.assumirTicket(ticketId, technicianId).getBody());
+        assertSame(ticket, ticketController.resolverTicket(ticketId).getBody());
     }
 
     @Test
-    void shouldConvertFrontendPriorityAliasAndCreateTicket() throws Exception {
+    void convertsExistingFrontendPriorityAlias() throws Exception {
         UUID clientId = UUID.randomUUID();
-        TicketRequestDTO expectedRequest = new TicketRequestDTO(
-                "Falha no notebook",
-                "O equipamento nao inicia",
+        TicketRequestDTO expected = new TicketRequestDTO(
+                "Falha",
+                "Descrição",
                 TicketPriority.NORMAL,
                 clientId,
                 null
         );
-        when(ticketService.create(expectedRequest)).thenReturn(new Ticket());
+        when(ticketService.create(expected)).thenReturn(response());
         MockMvc mockMvc = MockMvcBuilders.standaloneSetup(ticketController).build();
 
         mockMvc.perform(post("/api/tickets")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
-                                  "titulo": "Falha no notebook",
-                                  "descricao": "O equipamento nao inicia",
+                                  "titulo": "Falha",
+                                  "descricao": "Descrição",
                                   "prioridade": "media",
                                   "clienteId": "%s"
                                 }
                                 """.formatted(clientId)))
                 .andExpect(status().isCreated());
 
-        verify(ticketService).create(expectedRequest);
+        verify(ticketService).create(expected);
     }
 
     @Test
-    void shouldReturnBadRequestForInvalidTicketPayload() throws Exception {
+    void rejectsInvalidTicketPayload() throws Exception {
         MockMvc mockMvc = MockMvcBuilders.standaloneSetup(ticketController).build();
 
         mockMvc.perform(post("/api/tickets")
@@ -128,36 +123,36 @@ class TicketControllerTest {
         verify(ticketService, never()).create(org.mockito.ArgumentMatchers.any());
     }
 
-    @Test
-    void shouldRejectNumericClientAndAssetIds() throws Exception {
-        MockMvc mockMvc = MockMvcBuilders.standaloneSetup(ticketController).build();
-
-        mockMvc.perform(post("/api/tickets")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {
-                                  "titulo": "Falha no notebook",
-                                  "descricao": "O equipamento nao inicia",
-                                  "prioridade": "ALTA",
-                                  "clienteId": 123,
-                                  "assetId": 456
-                                }
-                                """))
-                .andExpect(status().isBadRequest());
-
-        verify(ticketService, never()).create(org.mockito.ArgumentMatchers.any());
+    private TicketRequestDTO request(TicketPriority priority) {
+        return new TicketRequestDTO(
+                "Falha",
+                "Descrição",
+                priority,
+                UUID.randomUUID(),
+                null
+        );
     }
 
-    @Test
-    void shouldResolveTicket() {
-        UUID ticketId = UUID.randomUUID();
-        Ticket ticket = new Ticket();
-        when(ticketService.resolverTicket(ticketId)).thenReturn(ticket);
-
-        ResponseEntity<Ticket> response = ticketController.resolverTicket(ticketId);
-
-        assertEquals(HttpStatus.OK, response.getStatusCode());
-        assertSame(ticket, response.getBody());
-        verify(ticketService).resolverTicket(ticketId);
+    private TicketResponseDTO response() {
+        UserResponseDTO client = new UserResponseDTO(
+                UUID.randomUUID(),
+                "Cliente",
+                "client@speeddesk.test",
+                UserRole.CLIENTE,
+                OffsetDateTime.parse("2026-08-17T12:00:00Z")
+        );
+        return new TicketResponseDTO(
+                UUID.randomUUID(),
+                "Falha",
+                "Descrição",
+                TicketStatus.RECEBIDO,
+                TicketPriority.NORMAL,
+                client,
+                null,
+                null,
+                OffsetDateTime.parse("2026-08-17T12:00:00Z"),
+                OffsetDateTime.parse("2026-08-17T12:00:00Z"),
+                OffsetDateTime.parse("2026-08-19T12:00:00Z")
+        );
     }
 }

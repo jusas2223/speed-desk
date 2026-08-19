@@ -1,24 +1,29 @@
 package com.speeddesk.api.service;
 
 import com.speeddesk.api.dto.TicketRequestDTO;
+import com.speeddesk.api.dto.TicketResponseDTO;
 import com.speeddesk.api.entity.Asset;
 import com.speeddesk.api.entity.Ticket;
 import com.speeddesk.api.entity.TicketStatus;
 import com.speeddesk.api.entity.User;
+import com.speeddesk.api.entity.UserRole;
 import com.speeddesk.api.exception.AssetNotFoundException;
 import com.speeddesk.api.exception.ClientNotFoundException;
+import com.speeddesk.api.exception.ForbiddenOperationException;
 import com.speeddesk.api.exception.InvalidTicketStatusTransitionException;
+import com.speeddesk.api.exception.InvalidUserRoleException;
 import com.speeddesk.api.exception.TechnicianNotFoundException;
 import com.speeddesk.api.exception.TicketNotFoundException;
 import com.speeddesk.api.repository.AssetRepository;
 import com.speeddesk.api.repository.TicketRepository;
 import com.speeddesk.api.repository.UserRepository;
+import com.speeddesk.api.security.AuthorizationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 
@@ -30,16 +35,25 @@ public class TicketService {
     private final TicketRepository ticketRepository;
     private final UserRepository userRepository;
     private final AssetRepository assetRepository;
+    private final AuthorizationService authorizationService;
+    private final Clock clock;
 
     @Transactional
-    public Ticket create(TicketRequestDTO request) {
-        User cliente = userRepository.findById(request.clienteId())
-                .orElseThrow(() -> new ClientNotFoundException(request.clienteId()));
+    public TicketResponseDTO create(TicketRequestDTO request) {
+        UUID clientId = authorizationService.clientTarget(request.clienteId());
+        User cliente = userRepository.findById(clientId)
+                .orElseThrow(() -> new ClientNotFoundException(clientId));
+        requireRole(cliente, UserRole.CLIENTE);
 
         Asset asset = request.assetId() == null
                 ? null
                 : assetRepository.findById(request.assetId())
                         .orElseThrow(() -> new AssetNotFoundException(request.assetId()));
+        if (asset != null && !asset.getCliente().getId().equals(clientId)) {
+            throw new ForbiddenOperationException(
+                    "O ativo informado não pertence ao cliente do chamado."
+            );
+        }
 
         long slaHours = switch (request.prioridade()) {
             case CRITICA -> 4;
@@ -49,26 +63,32 @@ public class TicketService {
         };
 
         Ticket ticket = Ticket.builder()
-                .titulo(request.titulo())
-                .descricao(request.descricao())
+                .titulo(request.titulo().trim())
+                .descricao(request.descricao().trim())
                 .prioridade(request.prioridade())
                 .status(TicketStatus.RECEBIDO)
                 .cliente(cliente)
                 .asset(asset)
-                .dataVencimento(OffsetDateTime.now(ZoneOffset.UTC).plusHours(slaHours))
+                .dataVencimento(OffsetDateTime.now(clock).plusHours(slaHours))
                 .build();
 
-        return ticketRepository.save(ticket);
+        return TicketResponseDTO.from(ticketRepository.save(ticket));
     }
 
-    public List<Ticket> listAll(UUID clienteId) {
-        return clienteId == null
+    public List<TicketResponseDTO> listAll(UUID clienteId) {
+        UUID effectiveClientId = authorizationService.clientScope(clienteId);
+        List<Ticket> tickets = effectiveClientId == null
                 ? ticketRepository.findAllByOrderByDataCriacaoDesc()
-                : ticketRepository.findAllByCliente_IdOrderByDataCriacaoDesc(clienteId);
+                : ticketRepository.findAllByCliente_IdOrderByDataCriacaoDesc(effectiveClientId);
+
+        return tickets.stream()
+                .map(TicketResponseDTO::from)
+                .toList();
     }
 
     @Transactional
-    public Ticket assumirTicket(UUID ticketId, UUID tecnicoId) {
+    public TicketResponseDTO assumirTicket(UUID ticketId, UUID tecnicoId) {
+        authorizationService.requireCanAssignTo(tecnicoId);
         Ticket ticket = ticketRepository.findById(ticketId)
                 .orElseThrow(() -> new TicketNotFoundException(ticketId));
 
@@ -82,17 +102,19 @@ public class TicketService {
 
         User tecnico = userRepository.findById(tecnicoId)
                 .orElseThrow(() -> new TechnicianNotFoundException(tecnicoId));
+        requireRole(tecnico, UserRole.TECNICO);
 
         ticket.setTecnico(tecnico);
         ticket.setStatus(TicketStatus.EM_ATENDIMENTO);
 
-        return ticketRepository.save(ticket);
+        return TicketResponseDTO.from(ticketRepository.save(ticket));
     }
 
     @Transactional
-    public Ticket resolverTicket(UUID ticketId) {
+    public TicketResponseDTO resolverTicket(UUID ticketId) {
         Ticket ticket = ticketRepository.findById(ticketId)
                 .orElseThrow(() -> new TicketNotFoundException(ticketId));
+        authorizationService.requireCanResolve(ticket);
 
         if (ticket.getStatus() != TicketStatus.EM_ATENDIMENTO) {
             throw new InvalidTicketStatusTransitionException(
@@ -103,6 +125,12 @@ public class TicketService {
         }
 
         ticket.setStatus(TicketStatus.RESOLVIDO);
-        return ticketRepository.save(ticket);
+        return TicketResponseDTO.from(ticketRepository.save(ticket));
+    }
+
+    private void requireRole(User user, UserRole expectedRole) {
+        if (user.getRole() != expectedRole) {
+            throw new InvalidUserRoleException(user.getId(), expectedRole);
+        }
     }
 }

@@ -2,8 +2,11 @@ package com.speeddesk.api.controller;
 
 import com.speeddesk.api.dto.LoginRequest;
 import com.speeddesk.api.dto.LoginResponse;
-import com.speeddesk.api.entity.User;
+import com.speeddesk.api.dto.UserCreateRequestDTO;
+import com.speeddesk.api.dto.UserResponseDTO;
+import com.speeddesk.api.service.AuthenticationService;
 import com.speeddesk.api.service.UserService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -21,21 +24,23 @@ import java.util.List;
 public class UserController {
 
     private final UserService userService;
+    private final AuthenticationService authenticationService;
 
     @GetMapping
-    public ResponseEntity<List<User>> listAll() {
+    public ResponseEntity<List<UserResponseDTO>> listAll() {
         return ResponseEntity.ok(userService.listAll());
     }
 
     @PostMapping
-    public ResponseEntity<User> create(@RequestBody User user) {
-        User savedUser = userService.create(user);
+    public ResponseEntity<UserResponseDTO> create(
+            @Valid @RequestBody UserCreateRequestDTO request
+    ) {
+        UserResponseDTO savedUser = userService.create(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(savedUser);
     }
 
     @PostMapping("/login")
-    public ResponseEntity<LoginResponse> login(@RequestBody LoginRequest request) {
-        User authenticatedUser = userService.login(request.email(), request.password());
-        return ResponseEntity.ok(LoginResponse.from(authenticatedUser));
+    public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
+        return ResponseEntity.ok(authenticationService.login(request));
     }
 }
