@@ -35,15 +35,15 @@ O backend também valida a assinatura, o emissor, a expiração e as claims obri
 
 | Perfil | Permissões implementadas |
 | --- | --- |
-| `CLIENTE` | Lista, cria e acessa somente os próprios chamados e ativos. Não pode assumir ou resolver chamados nem listar ou criar usuários. |
-| `TECNICO` | Lista chamados e ativos de clientes, pode criar recursos para um cliente, assumir um chamado `RECEBIDO` somente em seu próprio nome e resolver apenas o chamado `EM_ATENDIMENTO` atribuído a ele. Não pode listar ou criar usuários. |
-| `GERENTE` | Lista e cria usuários, consulta e cria recursos para clientes, atribui chamados recebidos a usuários `TECNICO` e pode resolver chamados em atendimento. |
+| `CLIENTE` | Lista, cria e acessa somente os próprios chamados e ativos. Pode consultar categorias ativas. Não pode assumir ou resolver chamados nem administrar usuários, organizações ou categorias. |
+| `TECNICO` | Lista chamados e ativos de clientes, consulta categorias ativas, pode criar recursos para um cliente, assumir um chamado `RECEBIDO` somente em seu próprio nome e resolver apenas o chamado `EM_ATENDIMENTO` atribuído a ele. Não pode administrar usuários, organizações ou categorias. |
+| `GERENTE` | Lista e cria usuários, organizações e categorias, consulta e cria recursos para clientes, atribui chamados recebidos a usuários `TECNICO` e pode resolver chamados em atendimento. |
 
-O vínculo de um ativo ou chamado sempre exige um usuário com role `CLIENTE`. Um ativo informado na abertura do chamado precisa pertencer ao mesmo cliente. As respostas usam DTOs e não expõem hashes de senha nem entidades JPA internas.
+O vínculo de um ativo ou chamado sempre exige um usuário com role `CLIENTE`. Um ativo informado na abertura do chamado precisa pertencer ao mesmo cliente. Apenas usuários `CLIENTE` podem receber uma organização, e esse agrupamento não altera as regras de proprietário nem concede acesso aos dados de outro cliente. Categorias precisam estar ativas e ter o mesmo tipo do chamado. As respostas usam DTOs e não expõem hashes de senha nem entidades JPA internas.
 
 ## RLS e Data API do Supabase
 
-As tabelas remotas estão com RLS habilitado e sem policies, mantendo bloqueado o acesso pela Data API. A API Spring continua sendo a única porta de entrada da aplicação e acessa o PostgreSQL pela conexão JDBC configurada no backend. O acesso direto ao Supabase pelo frontend permanece como decisão futura do bloco de ambiente; antes de aprová-lo, será necessário definir policies específicas. Nenhuma chave `service_role` deve ser exposta no navegador.
+As tabelas remotas existentes estão com RLS habilitado e sem policies, mantendo bloqueado o acesso pela Data API. O schema de referência habilita RLS também em `organizations` e `ticket_categories`, mas essas definições novas não foram aplicadas ao Supabase remoto e permanecem pendentes de revisão. A API Spring continua sendo a única porta de entrada da aplicação e acessa o PostgreSQL pela conexão JDBC configurada no backend. O acesso direto ao Supabase pelo frontend permanece como decisão futura do bloco de ambiente; antes de aprová-lo, será necessário definir policies específicas. Nenhuma chave `service_role` deve ser exposta no navegador.
 
 ## Desenvolvimento offline com o perfil `localdev`
 
@@ -61,7 +61,7 @@ $env:SPEEDDESK_CORS_ALLOWED_ORIGINS="http://127.0.0.1:5500,http://localhost:5500
 
 As variáveis `SPEEDDESK_DB_URL`, `SPEEDDESK_DB_USERNAME` e `SPEEDDESK_DB_PASSWORD` não são necessárias nesse perfil. O PostgreSQL hospedado no Supabase continua sendo o banco oficial dos ambientes padrão e remoto; o H2 não substitui nem altera esse banco.
 
-Na primeira execução com a tabela `users` vazia, são criadas estas contas locais de demonstração:
+O seeder idempotente cria apenas as contas locais ausentes:
 
 | Perfil | E-mail | Senha |
 | --- | --- | --- |
@@ -69,7 +69,7 @@ Na primeira execução com a tabela `users` vazia, são criadas estas contas loc
 | `TECNICO` | `tecnico@speeddesk.local` | `SpeedDesk@123` |
 | `CLIENTE` | `cliente@speeddesk.local` | `SpeedDesk@123` |
 
-As senhas são persistidas com o `PasswordEncoder` da aplicação. Reiniciar o backend não duplica nem sobrescreve usuários existentes.
+Quando ausentes, a organização `Empresa Demonstração` e uma categoria para cada tipo de chamado são criadas ativas. Registros existentes são preservados sem reativação. A conta do cliente local só recebe o vínculo administrativo quando sua role atual é `CLIENTE` e ainda não possui organização. As senhas são persistidas com o `PasswordEncoder` da aplicação. Reiniciar o backend não duplica nem sobrescreve usuários existentes.
 
 ## Senhas persistidas
 

@@ -1,12 +1,16 @@
 package com.speeddesk.api.integration;
 
 import com.speeddesk.api.entity.Asset;
+import com.speeddesk.api.entity.TicketCategory;
 import com.speeddesk.api.entity.Ticket;
 import com.speeddesk.api.entity.TicketPriority;
 import com.speeddesk.api.entity.TicketStatus;
+import com.speeddesk.api.entity.TicketType;
 import com.speeddesk.api.entity.User;
 import com.speeddesk.api.entity.UserRole;
 import com.speeddesk.api.repository.AssetRepository;
+import com.speeddesk.api.repository.OrganizationRepository;
+import com.speeddesk.api.repository.TicketCategoryRepository;
 import com.speeddesk.api.repository.TicketRepository;
 import com.speeddesk.api.repository.UserRepository;
 import com.speeddesk.api.security.JwtService;
@@ -52,6 +56,12 @@ class AuthorizationIntegrationTest {
     private AssetRepository assetRepository;
 
     @Autowired
+    private TicketCategoryRepository ticketCategoryRepository;
+
+    @Autowired
+    private OrganizationRepository organizationRepository;
+
+    @Autowired
     private PasswordEncoder passwordEncoder;
 
     @Autowired
@@ -70,6 +80,8 @@ class AuthorizationIntegrationTest {
         ticketRepository.deleteAllInBatch();
         assetRepository.deleteAllInBatch();
         userRepository.deleteAllInBatch();
+        ticketCategoryRepository.deleteAllInBatch();
+        organizationRepository.deleteAllInBatch();
 
         clientA = saveUser("Cliente A", "client-a@speeddesk.test", UserRole.CLIENTE);
         clientB = saveUser("Cliente B", "client-b@speeddesk.test", UserRole.CLIENTE);
@@ -150,7 +162,9 @@ class AuthorizationIntegrationTest {
                         .content(ticketBody("Meu chamado", clientA, assetA)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.cliente.id").value(clientA.getId().toString()))
-                .andExpect(jsonPath("$.status").value("RECEBIDO"));
+                .andExpect(jsonPath("$.status").value("RECEBIDO"))
+                .andExpect(jsonPath("$.ticketType").value("GERAL"))
+                .andExpect(jsonPath("$.category").doesNotExist());
     }
 
     @Test
@@ -372,6 +386,113 @@ class AuthorizationIntegrationTest {
                 .andExpect(jsonPath("$.errors.clienteId").exists());
     }
 
+    @Test
+    void createsHardwareAndSoftwareTicketsWithCompatibleSafeCategoryDtos()
+            throws Exception {
+        TicketCategory hardware = saveCategory(
+                "Falha de equipamento",
+                TicketType.HARDWARE,
+                true
+        );
+        TicketCategory software = saveCategory(
+                "Erro de software",
+                TicketType.SOFTWARE,
+                true
+        );
+
+        mockMvc.perform(post("/api/tickets")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(clientA))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(typedTicketBody(
+                                "Falha física",
+                                clientA,
+                                TicketType.HARDWARE,
+                                hardware.getId()
+                        )))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.ticketType").value("HARDWARE"))
+                .andExpect(jsonPath("$.category.id")
+                        .value(hardware.getId().toString()))
+                .andExpect(jsonPath("$.category.name").value("Falha de equipamento"))
+                .andExpect(jsonPath("$.category.ticketType").value("HARDWARE"))
+                .andExpect(jsonPath("$.category.active").value(true))
+                .andExpect(jsonPath("$.category.createdAt").isNotEmpty())
+                .andExpect(jsonPath("$.category.hibernateLazyInitializer").doesNotExist())
+                .andExpect(jsonPath("$.category.tickets").doesNotExist());
+
+        mockMvc.perform(post("/api/tickets")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(clientA))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(typedTicketBody(
+                                "Falha lógica",
+                                clientA,
+                                TicketType.SOFTWARE,
+                                software.getId()
+                        )))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.ticketType").value("SOFTWARE"))
+                .andExpect(jsonPath("$.category.id")
+                        .value(software.getId().toString()));
+    }
+
+    @Test
+    void rejectsCategoryIncompatibleWithTicketType() throws Exception {
+        TicketCategory software = saveCategory(
+                "Erro de software",
+                TicketType.SOFTWARE,
+                true
+        );
+
+        mockMvc.perform(post("/api/tickets")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(clientA))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(typedTicketBody(
+                                "Tipo incompatível",
+                                clientA,
+                                TicketType.HARDWARE,
+                                software.getId()
+                        )))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(
+                        MediaType.APPLICATION_PROBLEM_JSON));
+    }
+
+    @Test
+    void rejectsInactiveTicketCategory() throws Exception {
+        TicketCategory inactive = saveCategory(
+                "Hardware inativo",
+                TicketType.HARDWARE,
+                false
+        );
+
+        mockMvc.perform(post("/api/tickets")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(clientA))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(typedTicketBody(
+                                "Categoria inativa",
+                                clientA,
+                                TicketType.HARDWARE,
+                                inactive.getId()
+                        )))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void returnsNotFoundForMissingTicketCategory() throws Exception {
+        mockMvc.perform(post("/api/tickets")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(clientA))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(typedTicketBody(
+                                "Categoria ausente",
+                                clientA,
+                                TicketType.SOFTWARE,
+                                java.util.UUID.randomUUID()
+                        )))
+                .andExpect(status().isNotFound())
+                .andExpect(content().contentTypeCompatibleWith(
+                        MediaType.APPLICATION_PROBLEM_JSON));
+    }
+
     private User saveUser(String name, String email, UserRole role) {
         return userRepository.saveAndFlush(User.builder()
                 .name(name)
@@ -409,6 +530,18 @@ class AuthorizationIntegrationTest {
                 .build());
     }
 
+    private TicketCategory saveCategory(
+            String name,
+            TicketType ticketType,
+            boolean active
+    ) {
+        return ticketCategoryRepository.saveAndFlush(TicketCategory.builder()
+                .name(name)
+                .ticketType(ticketType)
+                .active(active)
+                .build());
+    }
+
     private String bearer(User user) {
         return "Bearer " + jwtService.issue(user).value();
     }
@@ -436,5 +569,23 @@ class AuthorizationIntegrationTest {
                   "clienteId": "%s"%s
                 }
                 """.formatted(title, client.getId(), assetField);
+    }
+
+    private String typedTicketBody(
+            String title,
+            User client,
+            TicketType ticketType,
+            java.util.UUID categoryId
+    ) {
+        return """
+                {
+                  "titulo": "%s",
+                  "descricao": "Descrição de teste",
+                  "prioridade": "ALTA",
+                  "clienteId": "%s",
+                  "ticketType": "%s",
+                  "categoryId": "%s"
+                }
+                """.formatted(title, client.getId(), ticketType, categoryId);
     }
 }

@@ -1,6 +1,7 @@
 package com.speeddesk.api.dto;
 
 import com.speeddesk.api.entity.TicketPriority;
+import com.speeddesk.api.entity.TicketType;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -22,6 +23,19 @@ public record TicketRequestDTO(
         @NotNull(message = "O clienteId e obrigatorio")
         UUID clienteId,
 
-        UUID assetId
+        UUID assetId,
+
+        TicketType ticketType,
+
+        UUID categoryId
 ) {
+    public TicketRequestDTO(
+            String titulo,
+            String descricao,
+            TicketPriority prioridade,
+            UUID clienteId,
+            UUID assetId
+    ) {
+        this(titulo, descricao, prioridade, clienteId, assetId, null, null);
+    }
 }

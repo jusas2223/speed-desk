@@ -4,13 +4,19 @@ import com.speeddesk.api.dto.TicketRequestDTO;
 import com.speeddesk.api.dto.TicketResponseDTO;
 import com.speeddesk.api.entity.Asset;
 import com.speeddesk.api.entity.Ticket;
+import com.speeddesk.api.entity.TicketCategory;
 import com.speeddesk.api.entity.TicketPriority;
 import com.speeddesk.api.entity.TicketStatus;
+import com.speeddesk.api.entity.TicketType;
 import com.speeddesk.api.entity.User;
 import com.speeddesk.api.entity.UserRole;
+import com.speeddesk.api.exception.InactiveTicketCategoryException;
 import com.speeddesk.api.exception.InvalidTicketStatusTransitionException;
 import com.speeddesk.api.exception.InvalidUserRoleException;
+import com.speeddesk.api.exception.TicketCategoryNotFoundException;
+import com.speeddesk.api.exception.TicketCategoryTypeMismatchException;
 import com.speeddesk.api.repository.AssetRepository;
+import com.speeddesk.api.repository.TicketCategoryRepository;
 import com.speeddesk.api.repository.TicketRepository;
 import com.speeddesk.api.repository.UserRepository;
 import com.speeddesk.api.security.AuthorizationService;
@@ -18,6 +24,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.time.Clock;
@@ -30,6 +37,7 @@ import java.util.UUID;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -44,6 +52,7 @@ class TicketServiceTest {
     private TicketRepository ticketRepository;
     private UserRepository userRepository;
     private AssetRepository assetRepository;
+    private TicketCategoryRepository ticketCategoryRepository;
     private AuthorizationService authorizationService;
     private TicketService ticketService;
 
@@ -52,11 +61,13 @@ class TicketServiceTest {
         ticketRepository = mock(TicketRepository.class);
         userRepository = mock(UserRepository.class);
         assetRepository = mock(AssetRepository.class);
+        ticketCategoryRepository = mock(TicketCategoryRepository.class);
         authorizationService = mock(AuthorizationService.class);
         ticketService = new TicketService(
                 ticketRepository,
                 userRepository,
                 assetRepository,
+                ticketCategoryRepository,
                 authorizationService,
                 Clock.fixed(NOW, ZoneOffset.UTC)
         );
@@ -83,6 +94,8 @@ class TicketServiceTest {
 
         assertEquals(priority, result.prioridade());
         assertEquals(TicketStatus.RECEBIDO, result.status());
+        assertEquals(TicketType.GERAL, result.ticketType());
+        assertNull(result.category());
         assertEquals(
                 OffsetDateTime.ofInstant(NOW, ZoneOffset.UTC).plusHours(expectedHours),
                 result.dataVencimento()
@@ -156,6 +169,109 @@ class TicketServiceTest {
         verify(userRepository, never()).findById(technicianId);
     }
 
+    @ParameterizedTest
+    @EnumSource(value = TicketType.class, names = {"HARDWARE", "SOFTWARE"})
+    void createsTypedTicketWithCompatibleCategory(TicketType ticketType) {
+        UUID clientId = UUID.randomUUID();
+        UUID categoryId = UUID.randomUUID();
+        User client = client(clientId);
+        TicketCategory category = TicketCategory.builder()
+                .id(categoryId)
+                .name("Categoria " + ticketType)
+                .ticketType(ticketType)
+                .active(true)
+                .build();
+        TicketRequestDTO request = new TicketRequestDTO(
+                "Falha",
+                "Descrição",
+                TicketPriority.NORMAL,
+                clientId,
+                null,
+                ticketType,
+                categoryId
+        );
+        when(authorizationService.clientTarget(clientId)).thenReturn(clientId);
+        when(userRepository.findById(clientId)).thenReturn(Optional.of(client));
+        when(ticketCategoryRepository.findById(categoryId))
+                .thenReturn(Optional.of(category));
+        when(ticketRepository.save(any(Ticket.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        TicketResponseDTO result = ticketService.create(request);
+
+        assertEquals(ticketType, result.ticketType());
+        assertEquals(categoryId, result.category().id());
+        assertEquals(ticketType, result.category().ticketType());
+        assertEquals("Categoria " + ticketType, result.category().name());
+    }
+
+    @Test
+    void rejectsCategoryFromAnotherTicketType() {
+        UUID clientId = UUID.randomUUID();
+        UUID categoryId = UUID.randomUUID();
+        TicketRequestDTO request = requestWithCategory(
+                clientId,
+                categoryId,
+                TicketType.HARDWARE
+        );
+        when(authorizationService.clientTarget(clientId)).thenReturn(clientId);
+        when(userRepository.findById(clientId)).thenReturn(Optional.of(client(clientId)));
+        when(ticketCategoryRepository.findById(categoryId)).thenReturn(Optional.of(
+                category(categoryId, TicketType.SOFTWARE, true)
+        ));
+
+        assertThrows(
+                TicketCategoryTypeMismatchException.class,
+                () -> ticketService.create(request)
+        );
+
+        verify(ticketRepository, never()).save(any());
+    }
+
+    @Test
+    void rejectsInactiveCategory() {
+        UUID clientId = UUID.randomUUID();
+        UUID categoryId = UUID.randomUUID();
+        TicketRequestDTO request = requestWithCategory(
+                clientId,
+                categoryId,
+                TicketType.SOFTWARE
+        );
+        when(authorizationService.clientTarget(clientId)).thenReturn(clientId);
+        when(userRepository.findById(clientId)).thenReturn(Optional.of(client(clientId)));
+        when(ticketCategoryRepository.findById(categoryId)).thenReturn(Optional.of(
+                category(categoryId, TicketType.SOFTWARE, false)
+        ));
+
+        assertThrows(
+                InactiveTicketCategoryException.class,
+                () -> ticketService.create(request)
+        );
+
+        verify(ticketRepository, never()).save(any());
+    }
+
+    @Test
+    void rejectsMissingCategory() {
+        UUID clientId = UUID.randomUUID();
+        UUID categoryId = UUID.randomUUID();
+        TicketRequestDTO request = requestWithCategory(
+                clientId,
+                categoryId,
+                TicketType.HARDWARE
+        );
+        when(authorizationService.clientTarget(clientId)).thenReturn(clientId);
+        when(userRepository.findById(clientId)).thenReturn(Optional.of(client(clientId)));
+        when(ticketCategoryRepository.findById(categoryId)).thenReturn(Optional.empty());
+
+        assertThrows(
+                TicketCategoryNotFoundException.class,
+                () -> ticketService.create(request)
+        );
+
+        verify(ticketRepository, never()).save(any());
+    }
+
     private static Stream<Arguments> slaCases() {
         return Stream.of(
                 Arguments.of(TicketPriority.BAIXA, 72L),
@@ -171,6 +287,31 @@ class TicketServiceTest {
                 .name("Cliente")
                 .email(id + "@speeddesk.test")
                 .role(UserRole.CLIENTE)
+                .build();
+    }
+
+    private TicketRequestDTO requestWithCategory(
+            UUID clientId,
+            UUID categoryId,
+            TicketType ticketType
+    ) {
+        return new TicketRequestDTO(
+                "Falha",
+                "Descrição",
+                TicketPriority.NORMAL,
+                clientId,
+                null,
+                ticketType,
+                categoryId
+        );
+    }
+
+    private TicketCategory category(UUID id, TicketType ticketType, boolean active) {
+        return TicketCategory.builder()
+                .id(id)
+                .name("Categoria")
+                .ticketType(ticketType)
+                .active(active)
                 .build();
     }
 }

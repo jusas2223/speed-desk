@@ -51,6 +51,20 @@ public class Ticket {
     @Column(nullable = false, length = 50)
     private TicketPriority prioridade;
 
+    @Enumerated(EnumType.STRING)
+    @Column(
+            name = "tipo_chamado",
+            nullable = false,
+            length = 50,
+            columnDefinition = "varchar(50) default 'GERAL'"
+    )
+    @Builder.Default
+    private TicketType ticketType = TicketType.GERAL;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "category_id")
+    private TicketCategory category;
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "cliente_id", nullable = false)
     private User cliente;
@@ -78,6 +92,9 @@ public class Ticket {
 
         if (status == null) {
             status = TicketStatus.RECEBIDO;
+        }
+        if (ticketType == null) {
+            ticketType = TicketType.GERAL;
         }
         if (dataCriacao == null) {
             dataCriacao = now;

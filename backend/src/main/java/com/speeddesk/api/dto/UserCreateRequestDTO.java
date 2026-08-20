@@ -7,6 +7,8 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
+import java.util.UUID;
+
 public record UserCreateRequestDTO(
         @NotBlank(message = "O nome é obrigatório")
         @Size(max = 255, message = "O nome deve possuir no máximo 255 caracteres")
@@ -26,10 +28,21 @@ public record UserCreateRequestDTO(
         String password,
 
         @NotNull(message = "A role é obrigatória")
-        UserRole role
+        UserRole role,
+
+        UUID organizationId
 ) {
     public UserCreateRequestDTO {
         name = name == null ? null : name.trim();
         email = EmailNormalizer.normalize(email);
+    }
+
+    public UserCreateRequestDTO(
+            String name,
+            String email,
+            String password,
+            UserRole role
+    ) {
+        this(name, email, password, role, null);
     }
 }

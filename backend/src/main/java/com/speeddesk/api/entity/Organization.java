@@ -1,16 +1,10 @@
 package com.speeddesk.api.entity;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
@@ -24,46 +18,30 @@ import java.time.ZoneOffset;
 import java.util.UUID;
 
 @Entity
-@Table(name = "users")
+@Table(name = "organizations")
 @Getter
 @Setter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class User {
+public class Organization {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @Column(name = "nome", nullable = false)
+    @Column(name = "nome", nullable = false, length = 255)
     private String name;
 
-    @Column(nullable = false, unique = true)
-    private String email;
-
-    @Column(name = "senha", nullable = false)
-    @JsonIgnore
-    private String password;
-
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 50)
+    @Column(name = "ativo", nullable = false, columnDefinition = "boolean default true")
     @Builder.Default
-    private UserRole role = UserRole.CLIENTE;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "organization_id")
-    private Organization organization;
+    private boolean active = true;
 
     @Column(name = "data_criacao", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
 
     @PrePersist
     private void prepareForInsert() {
-        if (role == null) {
-            role = UserRole.CLIENTE;
-        }
-
         if (createdAt == null) {
             createdAt = OffsetDateTime.now(ZoneOffset.UTC);
         }

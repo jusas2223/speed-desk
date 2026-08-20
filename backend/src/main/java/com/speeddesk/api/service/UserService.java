@@ -2,9 +2,15 @@ package com.speeddesk.api.service;
 
 import com.speeddesk.api.dto.UserCreateRequestDTO;
 import com.speeddesk.api.dto.UserResponseDTO;
+import com.speeddesk.api.entity.Organization;
 import com.speeddesk.api.entity.User;
+import com.speeddesk.api.entity.UserRole;
 import com.speeddesk.api.exception.DuplicateEmailException;
+import com.speeddesk.api.exception.InactiveOrganizationException;
 import com.speeddesk.api.exception.InvalidRequestException;
+import com.speeddesk.api.exception.InvalidOrganizationAssignmentException;
+import com.speeddesk.api.exception.OrganizationNotFoundException;
+import com.speeddesk.api.repository.OrganizationRepository;
 import com.speeddesk.api.repository.UserRepository;
 import com.speeddesk.api.util.EmailNormalizer;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +27,7 @@ import java.util.List;
 public class UserService {
 
     private final UserRepository userRepository;
+    private final OrganizationRepository organizationRepository;
     private final PasswordEncoder passwordEncoder;
 
     public List<UserResponseDTO> listAll() {
@@ -42,13 +49,34 @@ public class UserService {
             );
         }
 
+        Organization organization = resolveOrganization(request);
+
         User user = User.builder()
                 .name(request.name().trim())
                 .email(normalizedEmail)
                 .password(passwordEncoder.encode(request.password()))
                 .role(request.role())
+                .organization(organization)
                 .build();
 
         return UserResponseDTO.from(userRepository.save(user));
+    }
+
+    private Organization resolveOrganization(UserCreateRequestDTO request) {
+        if (request.organizationId() == null) {
+            return null;
+        }
+        if (request.role() != UserRole.CLIENTE) {
+            throw new InvalidOrganizationAssignmentException();
+        }
+
+        Organization organization = organizationRepository.findById(request.organizationId())
+                .orElseThrow(() -> new OrganizationNotFoundException(
+                        request.organizationId()
+                ));
+        if (!organization.isActive()) {
+            throw new InactiveOrganizationException(organization.getId());
+        }
+        return organization;
     }
 }

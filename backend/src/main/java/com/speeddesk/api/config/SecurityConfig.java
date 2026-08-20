@@ -68,6 +68,22 @@ public class SecurityConfig {
                         .hasAuthority(authority(UserRole.GERENTE))
                         .requestMatchers(HttpMethod.POST, "/api/users")
                         .hasAuthority(authority(UserRole.GERENTE))
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/organizations"
+                        ).hasAuthority(authority(UserRole.GERENTE))
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/organizations"
+                        ).hasAuthority(authority(UserRole.GERENTE))
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/ticket-categories"
+                        ).hasAuthority(authority(UserRole.GERENTE))
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/ticket-categories"
+                        ).authenticated()
                         .requestMatchers("/api/**").authenticated()
                         .anyRequest().denyAll())
                 .exceptionHandling(exceptions -> exceptions

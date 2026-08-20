@@ -4,7 +4,7 @@ Speed Desk é uma aplicação web de service desk para registrar ativos, abrir c
 
 ## Estado atual
 
-O projeto está em uma versão funcional de estabilização. Login, sessão web, autorização por perfil, gestão básica de usuários, ativos e chamados, persistência local offline e integração frontend/backend estão implementados e cobertos por testes automatizados no backend.
+O projeto está em uma versão funcional de estabilização. Login, sessão web, autorização por perfil, gestão básica de usuários, ativos e chamados, persistência local offline e integração frontend/backend estão implementados e cobertos por testes automatizados no backend. O backend também possui organizações administrativas, categorias configuráveis e tipos de chamado; as telas para configurar organizações e categorias serão criadas posteriormente.
 
 ## Tecnologias
 
@@ -44,7 +44,7 @@ O navegador se comunica somente com a API. A API autentica o JWT, aplica as regr
 
 | Perfil | Comportamento atual |
 | --- | --- |
-| `CLIENTE` | Visualiza e cadastra os próprios ativos e chamados. Não acessa recursos de outro cliente. |
+| `CLIENTE` | Visualiza e cadastra os próprios ativos e chamados. Pode estar vinculado administrativamente a uma organização, sem compartilhar dados com outros clientes. Não acessa recursos de outro cliente. |
 | `TECNICO` | Visualiza chamados e ativos de clientes, pode criar recursos para clientes, assumir chamados em seu próprio nome e resolver os que estiverem atribuídos a ele. |
 | `GERENTE` | Gerencia usuários, consulta e cria recursos para clientes, atribui chamados a técnicos e pode resolver chamados em atendimento. |
 
@@ -56,14 +56,16 @@ O navegador se comunica somente com a API. A API autentica o JWT, aplica as regr
 - senhas BCrypt, normalização de e-mail e migração controlada de senhas legadas;
 - autorização de recursos conforme `CLIENTE`, `TECNICO` e `GERENTE`;
 - cadastro e consulta de ativos por cliente;
-- abertura de chamados com prioridade, ativo opcional e prazo calculado por SLA;
+- cadastro e consulta de organizações administrativas no backend;
+- cadastro e consulta de categorias ativas de chamado no backend;
+- abertura de chamados dos tipos `GERAL`, `HARDWARE` e `SOFTWARE`, com categoria e ativo opcionais, prioridade e prazo calculado por SLA;
 - painel Kanban com chamados recebidos, em atendimento e concluídos;
 - autoatribuição de chamado pelo técnico e atribuição pelo gerente;
 - resolução por técnico responsável ou gerente;
 - respostas de erro no formato `ProblemDetail` e validação de entrada;
 - perfil `localdev` com H2 persistente e dados locais de demonstração.
 
-Os status canônicos são `RECEBIDO`, `EM_TRIAGEM`, `EM_ATENDIMENTO`, `AGUARDANDO_CLIENTE`, `AGUARDANDO_PECA`, `RESOLVIDO` e `FECHADO`. As prioridades são `BAIXA`, `NORMAL`, `ALTA` e `CRITICA`.
+Os status canônicos são `RECEBIDO`, `EM_TRIAGEM`, `EM_ATENDIMENTO`, `AGUARDANDO_CLIENTE`, `AGUARDANDO_PECA`, `RESOLVIDO` e `FECHADO`. As prioridades são `BAIXA`, `NORMAL`, `ALTA` e `CRITICA`. Os tipos de chamado são `GERAL`, `HARDWARE` e `SOFTWARE`; requests antigos sem tipo continuam sendo tratados como `GERAL`.
 
 ## Endpoints atuais
 
@@ -73,11 +75,15 @@ Todos os endpoints abaixo usam o prefixo `http://localhost:8080/api` durante o d
 | --- | --- | --- |
 | `POST` | `/users/login` | Público. Autentica e devolve o JWT e os dados públicos do usuário. |
 | `GET` | `/users` | Somente `GERENTE`. Lista usuários sem expor senhas. |
-| `POST` | `/users` | Somente `GERENTE`. Cria usuário com senha codificada. |
+| `POST` | `/users` | Somente `GERENTE`. Cria usuário com senha codificada e organização opcional apenas para `CLIENTE`. |
+| `GET` | `/organizations` | Somente `GERENTE`. Lista organizações por nome. |
+| `POST` | `/organizations` | Somente `GERENTE`. Cria uma organização administrativa. |
+| `GET` | `/ticket-categories` | Qualquer usuário autenticado. Lista categorias ativas por nome. |
+| `POST` | `/ticket-categories` | Somente `GERENTE`. Cria uma categoria para um tipo de chamado. |
 | `GET` | `/assets/cliente/{clienteId}` | Autenticado. Cliente acessa somente os próprios ativos; técnico e gerente podem consultar clientes. |
 | `POST` | `/assets` | Autenticado. Cria ativo vinculado a um usuário `CLIENTE`, respeitando o escopo de acesso. |
 | `GET` | `/tickets` | Autenticado. Aceita `clienteId` opcional; cliente é sempre limitado aos próprios chamados. |
-| `POST` | `/tickets` | Autenticado. Abre chamado para um usuário `CLIENTE`, com ativo opcional do mesmo cliente. |
+| `POST` | `/tickets` | Autenticado. Abre chamado para um usuário `CLIENTE`, com tipo, categoria compatível e ativo do mesmo cliente opcionais. |
 | `PATCH` | `/tickets/{ticketId}/assumir/{tecnicoId}` | Técnico assume em nome próprio ou gerente atribui a um técnico. |
 | `PATCH` | `/tickets/{ticketId}/resolver` | Técnico atribuído ou gerente resolve chamado em atendimento. |
 
@@ -116,13 +122,15 @@ O banco será salvo em `backend/.speeddesk-local/`. O H2 Console permanece desab
 
 ### Contas locais de demonstração
 
-As contas abaixo são criadas apenas quando o perfil `localdev` encontra a tabela de usuários vazia:
+O seeder verifica cada registro individualmente e cria apenas os dados locais ausentes:
 
 | Perfil | E-mail | Senha |
 | --- | --- | --- |
 | `GERENTE` | `gerente@speeddesk.local` | `SpeedDesk@123` |
 | `TECNICO` | `tecnico@speeddesk.local` | `SpeedDesk@123` |
 | `CLIENTE` | `cliente@speeddesk.local` | `SpeedDesk@123` |
+
+Quando ausentes, são criadas ativas a organização `Empresa Demonstração` e as categorias `Solicitação geral` (`GERAL`), `Falha de equipamento` (`HARDWARE`) e `Erro de software` (`SOFTWARE`). Registros existentes são preservados sem reativação. `cliente@speeddesk.local` só é vinculado à organização quando sua role atual é `CLIENTE` e ainda não possui vínculo. Dados, roles e senhas de usuários existentes não são sobrescritos.
 
 ## Servir o frontend
 
@@ -178,6 +186,7 @@ As decisões definitivas sobre separação de ambientes, publicação do fronten
 ## Roadmap
 
 - definir a estratégia final de ambientes e implantação;
+- criar as interfaces visuais de configuração de organizações e categorias;
 - ampliar a validação automatizada da experiência do frontend;
 - evoluir o fluxo operacional de chamados a partir do uso real, sem comprometer a base estabilizada.
 

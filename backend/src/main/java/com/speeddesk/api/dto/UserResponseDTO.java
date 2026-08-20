@@ -11,6 +11,7 @@ public record UserResponseDTO(
         String name,
         String email,
         UserRole role,
+        OrganizationResponseDTO organization,
         OffsetDateTime createdAt
 ) {
     public static UserResponseDTO from(User user) {
@@ -19,7 +20,20 @@ public record UserResponseDTO(
                 user.getName(),
                 user.getEmail(),
                 user.getRole(),
+                user.getOrganization() == null
+                        ? null
+                        : OrganizationResponseDTO.from(user.getOrganization()),
                 user.getCreatedAt()
         );
+    }
+
+    public UserResponseDTO(
+            UUID id,
+            String name,
+            String email,
+            UserRole role,
+            OffsetDateTime createdAt
+    ) {
+        this(id, name, email, role, null, createdAt);
     }
 }

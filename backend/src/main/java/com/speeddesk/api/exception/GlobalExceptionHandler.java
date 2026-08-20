@@ -64,11 +64,39 @@ public class GlobalExceptionHandler {
         );
     }
 
+    @ExceptionHandler(DuplicateOrganizationException.class)
+    public ResponseEntity<ProblemDetail> handleDuplicateOrganization(
+            DuplicateOrganizationException exception,
+            HttpServletRequest request
+    ) {
+        return response(
+                HttpStatus.CONFLICT,
+                "Organização já cadastrada",
+                exception.getMessage(),
+                request
+        );
+    }
+
+    @ExceptionHandler(DuplicateTicketCategoryException.class)
+    public ResponseEntity<ProblemDetail> handleDuplicateTicketCategory(
+            DuplicateTicketCategoryException exception,
+            HttpServletRequest request
+    ) {
+        return response(
+                HttpStatus.CONFLICT,
+                "Categoria já cadastrada",
+                exception.getMessage(),
+                request
+        );
+    }
+
     @ExceptionHandler({
             TicketNotFoundException.class,
             TechnicianNotFoundException.class,
             ClientNotFoundException.class,
-            AssetNotFoundException.class
+            AssetNotFoundException.class,
+            OrganizationNotFoundException.class,
+            TicketCategoryNotFoundException.class
     })
     public ResponseEntity<ProblemDetail> handleNotFound(
             RuntimeException exception,

@@ -2,9 +2,12 @@ package com.speeddesk.api.integration;
 
 import com.speeddesk.api.config.JwtProperties;
 import com.speeddesk.api.dto.LoginResponse;
+import com.speeddesk.api.entity.Organization;
 import com.speeddesk.api.entity.User;
 import com.speeddesk.api.entity.UserRole;
 import com.speeddesk.api.repository.AssetRepository;
+import com.speeddesk.api.repository.OrganizationRepository;
+import com.speeddesk.api.repository.TicketCategoryRepository;
 import com.speeddesk.api.repository.TicketRepository;
 import com.speeddesk.api.repository.UserRepository;
 import com.speeddesk.api.security.JwtService;
@@ -36,6 +39,7 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
@@ -65,6 +69,12 @@ class AuthenticationSecurityIntegrationTest {
     private AssetRepository assetRepository;
 
     @Autowired
+    private OrganizationRepository organizationRepository;
+
+    @Autowired
+    private TicketCategoryRepository ticketCategoryRepository;
+
+    @Autowired
     private PasswordEncoder passwordEncoder;
 
     @Autowired
@@ -90,6 +100,8 @@ class AuthenticationSecurityIntegrationTest {
         ticketRepository.deleteAllInBatch();
         assetRepository.deleteAllInBatch();
         userRepository.deleteAllInBatch();
+        ticketCategoryRepository.deleteAllInBatch();
+        organizationRepository.deleteAllInBatch();
     }
 
     @Test
@@ -112,6 +124,7 @@ class AuthenticationSecurityIntegrationTest {
                 .andExpect(jsonPath("$.accessToken").isNotEmpty())
                 .andExpect(jsonPath("$.tokenType").value("Bearer"))
                 .andExpect(jsonPath("$.expiresIn").value(3600))
+                .andExpect(jsonPath("$.organization").doesNotExist())
                 .andExpect(jsonPath("$.password").doesNotExist())
                 .andReturn();
 
@@ -312,6 +325,148 @@ class AuthenticationSecurityIntegrationTest {
                         HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN,
                         "http://localhost:5500"
                 ));
+    }
+
+    @Test
+    void managerCreatesClientWithActiveOrganizationAndSafeResponse() throws Exception {
+        User manager = saveUser("Gerente", "manager@speeddesk.test", UserRole.GERENTE);
+        Organization organization = organizationRepository.saveAndFlush(
+                Organization.builder()
+                        .name("Empresa Cliente")
+                        .active(true)
+                        .build()
+        );
+
+        mockMvc.perform(post("/api/users")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(manager))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "name":"Cliente com empresa",
+                                  "email":"client-with-org@speeddesk.test",
+                                  "password":"New-password-123",
+                                  "role":"CLIENTE",
+                                  "organizationId":"%s"
+                                }
+                                """.formatted(organization.getId())))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.organization.id")
+                        .value(organization.getId().toString()))
+                .andExpect(jsonPath("$.organization.name").value("Empresa Cliente"))
+                .andExpect(jsonPath("$.organization.active").value(true))
+                .andExpect(jsonPath("$.organization.createdAt").isNotEmpty())
+                .andExpect(jsonPath("$.organization.hibernateLazyInitializer")
+                        .doesNotExist())
+                .andExpect(jsonPath("$.organization.users").doesNotExist())
+                .andExpect(jsonPath("$.password").doesNotExist());
+
+        User created = userRepository.findByEmailIgnoreCase(
+                "client-with-org@speeddesk.test"
+        ).orElseThrow();
+        assertEquals(organization.getId(), created.getOrganization().getId());
+    }
+
+    @Test
+    void managerStillCreatesClientWithoutOrganization() throws Exception {
+        User manager = saveUser("Gerente", "manager@speeddesk.test", UserRole.GERENTE);
+
+        mockMvc.perform(post("/api/users")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(manager))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "name":"Cliente sem empresa",
+                                  "email":"client-without-org@speeddesk.test",
+                                  "password":"New-password-123",
+                                  "role":"CLIENTE"
+                                }
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.organization").doesNotExist());
+
+        User created = userRepository.findByEmailIgnoreCase(
+                "client-without-org@speeddesk.test"
+        ).orElseThrow();
+        assertNull(created.getOrganization());
+    }
+
+    @Test
+    void rejectsOrganizationForManagerAndTechnicianUsers() throws Exception {
+        User manager = saveUser("Gerente", "manager@speeddesk.test", UserRole.GERENTE);
+        Organization organization = organizationRepository.saveAndFlush(
+                Organization.builder()
+                        .name("Empresa")
+                        .active(true)
+                        .build()
+        );
+
+        for (UserRole role : new UserRole[]{UserRole.GERENTE, UserRole.TECNICO}) {
+            mockMvc.perform(post("/api/users")
+                            .header(HttpHeaders.AUTHORIZATION, bearer(manager))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {
+                                      "name":"Usuário inválido",
+                                      "email":"%s@speeddesk.test",
+                                      "password":"New-password-123",
+                                      "role":"%s",
+                                      "organizationId":"%s"
+                                    }
+                                    """.formatted(
+                                            role.name().toLowerCase(),
+                                            role,
+                                            organization.getId()
+                                    )))
+                    .andExpect(status().isBadRequest());
+        }
+    }
+
+    @Test
+    void returnsNotFoundForMissingOrganization() throws Exception {
+        User manager = saveUser("Gerente", "manager@speeddesk.test", UserRole.GERENTE);
+
+        mockMvc.perform(post("/api/users")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(manager))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "name":"Cliente",
+                                  "email":"missing-org@speeddesk.test",
+                                  "password":"New-password-123",
+                                  "role":"CLIENTE",
+                                  "organizationId":"%s"
+                                }
+                                """.formatted(UUID.randomUUID())))
+                .andExpect(status().isNotFound())
+                .andExpect(content().contentTypeCompatibleWith(
+                        MediaType.APPLICATION_PROBLEM_JSON));
+    }
+
+    @Test
+    void rejectsInactiveOrganization() throws Exception {
+        User manager = saveUser("Gerente", "manager@speeddesk.test", UserRole.GERENTE);
+        Organization organization = organizationRepository.saveAndFlush(
+                Organization.builder()
+                        .name("Empresa Inativa")
+                        .active(false)
+                        .build()
+        );
+
+        mockMvc.perform(post("/api/users")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(manager))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "name":"Cliente",
+                                  "email":"inactive-org@speeddesk.test",
+                                  "password":"New-password-123",
+                                  "role":"CLIENTE",
+                                  "organizationId":"%s"
+                                }
+                                """.formatted(organization.getId())))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(
+                        MediaType.APPLICATION_PROBLEM_JSON));
     }
 
     private User saveUser(String name, String email, UserRole role) {

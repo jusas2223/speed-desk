@@ -4,7 +4,9 @@ import com.speeddesk.api.dto.TicketRequestDTO;
 import com.speeddesk.api.dto.TicketResponseDTO;
 import com.speeddesk.api.entity.Asset;
 import com.speeddesk.api.entity.Ticket;
+import com.speeddesk.api.entity.TicketCategory;
 import com.speeddesk.api.entity.TicketStatus;
+import com.speeddesk.api.entity.TicketType;
 import com.speeddesk.api.entity.User;
 import com.speeddesk.api.entity.UserRole;
 import com.speeddesk.api.exception.AssetNotFoundException;
@@ -12,9 +14,13 @@ import com.speeddesk.api.exception.ClientNotFoundException;
 import com.speeddesk.api.exception.ForbiddenOperationException;
 import com.speeddesk.api.exception.InvalidTicketStatusTransitionException;
 import com.speeddesk.api.exception.InvalidUserRoleException;
+import com.speeddesk.api.exception.InactiveTicketCategoryException;
 import com.speeddesk.api.exception.TechnicianNotFoundException;
+import com.speeddesk.api.exception.TicketCategoryNotFoundException;
+import com.speeddesk.api.exception.TicketCategoryTypeMismatchException;
 import com.speeddesk.api.exception.TicketNotFoundException;
 import com.speeddesk.api.repository.AssetRepository;
+import com.speeddesk.api.repository.TicketCategoryRepository;
 import com.speeddesk.api.repository.TicketRepository;
 import com.speeddesk.api.repository.UserRepository;
 import com.speeddesk.api.security.AuthorizationService;
@@ -35,6 +41,7 @@ public class TicketService {
     private final TicketRepository ticketRepository;
     private final UserRepository userRepository;
     private final AssetRepository assetRepository;
+    private final TicketCategoryRepository ticketCategoryRepository;
     private final AuthorizationService authorizationService;
     private final Clock clock;
 
@@ -55,6 +62,11 @@ public class TicketService {
             );
         }
 
+        TicketType ticketType = request.ticketType() == null
+                ? TicketType.GERAL
+                : request.ticketType();
+        TicketCategory category = resolveCategory(request.categoryId(), ticketType);
+
         long slaHours = switch (request.prioridade()) {
             case CRITICA -> 4;
             case ALTA -> 24;
@@ -67,12 +79,34 @@ public class TicketService {
                 .descricao(request.descricao().trim())
                 .prioridade(request.prioridade())
                 .status(TicketStatus.RECEBIDO)
+                .ticketType(ticketType)
+                .category(category)
                 .cliente(cliente)
                 .asset(asset)
                 .dataVencimento(OffsetDateTime.now(clock).plusHours(slaHours))
                 .build();
 
         return TicketResponseDTO.from(ticketRepository.save(ticket));
+    }
+
+    private TicketCategory resolveCategory(UUID categoryId, TicketType ticketType) {
+        if (categoryId == null) {
+            return null;
+        }
+
+        TicketCategory category = ticketCategoryRepository.findById(categoryId)
+                .orElseThrow(() -> new TicketCategoryNotFoundException(categoryId));
+        if (!category.isActive()) {
+            throw new InactiveTicketCategoryException(categoryId);
+        }
+        if (category.getTicketType() != ticketType) {
+            throw new TicketCategoryTypeMismatchException(
+                    categoryId,
+                    category.getTicketType(),
+                    ticketType
+            );
+        }
+        return category;
     }
 
     public List<TicketResponseDTO> listAll(UUID clienteId) {
