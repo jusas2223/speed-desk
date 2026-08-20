@@ -1,5 +1,11 @@
 import api from './api.js';
 
+const TICKET_TYPE_LABELS = Object.freeze({
+    GERAL: 'Geral',
+    HARDWARE: 'Hardware',
+    SOFTWARE: 'Software'
+});
+
 document.addEventListener('DOMContentLoaded', () => {
     // 1. Verificação de Login
     const session = api.requireAuth();
@@ -24,12 +30,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const countConcluidos = document.getElementById('count-concluidos');
 
     const menuAssets = document.getElementById('menuAssets');
+    const menuSettings = document.getElementById('menuSettings');
     const headerActions = document.getElementById('headerActions');
 
     // Esconder botões e menus de acordo com o papel
     if (role !== 'CLIENTE') {
         if (menuAssets) menuAssets.style.display = 'none';
         if (headerActions) headerActions.style.display = 'none';
+    }
+
+    if (menuSettings) {
+        menuSettings.hidden = role !== 'GERENTE';
     }
 
     // Referências para Modal de Atribuição (Gerente)
@@ -165,7 +176,20 @@ document.addEventListener('DOMContentLoaded', () => {
         badgeStatus.textContent = ticketStatus;
         badgesDiv.appendChild(badgeStatus);
 
+        const ticketType = ticket.ticketType || 'GERAL';
+        const badgeTicketType = document.createElement('span');
+        badgeTicketType.className = 'badge badge-ticket-type';
+        badgeTicketType.textContent = TICKET_TYPE_LABELS[ticketType] || ticketType;
+        badgesDiv.appendChild(badgeTicketType);
+
         div.appendChild(badgesDiv);
+
+        if (ticket.category && ticket.category.name) {
+            const categoryDiv = document.createElement('div');
+            categoryDiv.className = 'ticket-category';
+            categoryDiv.textContent = `Categoria: ${ticket.category.name}`;
+            div.appendChild(categoryDiv);
+        }
 
         // Botões dinâmicos role-based
         if (role === 'TECNICO' || role === 'GERENTE') {
@@ -310,40 +334,150 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnCloseModal = document.getElementById('btnCloseModal');
     const btnCancelModal = document.getElementById('btnCancelModal');
     const newTicketForm = document.getElementById('newTicketForm');
+    const btnSubmitTicket = document.getElementById('btnSubmitTicket');
+    const assetSelect = document.getElementById('assetSelect');
+    const ticketTypeSelect = document.getElementById('ticketType');
+    const categorySelect = document.getElementById('categorySelect');
+    const categoryStatus = document.getElementById('categoryStatus');
 
-    async function openModal() {
+    let ticketCategories = [];
+    let ticketCategoriesReady = false;
+    let ticketCategoriesLoading = false;
+
+    function createSelectOption(value, label) {
+        const option = document.createElement('option');
+        option.value = value;
+        option.textContent = label;
+        return option;
+    }
+
+    function setCategoryStatus(message, isError = false) {
+        categoryStatus.textContent = message;
+        categoryStatus.classList.toggle('error', isError);
+    }
+
+    function resetCategoryOptions(disabled = true) {
+        categorySelect.replaceChildren(createSelectOption('', 'Sem categoria'));
+        categorySelect.value = '';
+        categorySelect.disabled = disabled;
+    }
+
+    function renderCategoryOptions() {
+        const selectedCategoryId = categorySelect.value;
+        const selectedType = ticketTypeSelect.value || 'GERAL';
+        const compatibleCategories = ticketCategories.filter(category => (
+            category
+            && category.active !== false
+            && category.ticketType === selectedType
+        ));
+
+        const options = [createSelectOption('', 'Sem categoria')];
+        compatibleCategories.forEach(category => {
+            options.push(createSelectOption(category.id, category.name));
+        });
+
+        categorySelect.replaceChildren(...options);
+        categorySelect.disabled = false;
+
+        const selectionRemainsCompatible = compatibleCategories.some(category => (
+            category.id === selectedCategoryId
+        ));
+        categorySelect.value = selectionRemainsCompatible ? selectedCategoryId : '';
+
+        if (compatibleCategories.length === 0) {
+            setCategoryStatus('Nenhuma categoria ativa disponível para este tipo.');
+        } else {
+            setCategoryStatus('');
+        }
+    }
+
+    async function loadTicketCategories() {
+        if (ticketCategoriesLoading) return;
+
+        ticketCategoriesLoading = true;
+        ticketCategoriesReady = false;
+        resetCategoryOptions(true);
+        setCategoryStatus('Carregando categorias...');
+
+        try {
+            const categories = await api.request('/ticket-categories');
+            ticketCategories = Array.isArray(categories) ? categories : [];
+            ticketCategoriesReady = true;
+            renderCategoryOptions();
+        } catch (error) {
+            console.error('Erro ao carregar categorias para o chamado:', error);
+            ticketCategories = [];
+            resetCategoryOptions(true);
+            setCategoryStatus(
+                'Não foi possível carregar as categorias. Você ainda pode abrir o chamado sem categoria.',
+                true
+            );
+        } finally {
+            ticketCategoriesLoading = false;
+        }
+    }
+
+    async function loadAssetsForTicket() {
+        assetSelect.disabled = true;
+        assetSelect.replaceChildren(createSelectOption('', 'Carregando...'));
+
+        try {
+            const assets = await api.request(`/assets/cliente/${session.id}`);
+            const options = [createSelectOption('', 'Nenhum / Não listado')];
+
+            if (Array.isArray(assets)) {
+                assets.forEach(asset => {
+                    options.push(createSelectOption(
+                        asset.id,
+                        `${asset.nome} (${asset.numeroSerie || 'Sem NS'})`
+                    ));
+                });
+            }
+
+            assetSelect.replaceChildren(...options);
+        } catch (error) {
+            console.error('Erro ao buscar equipamentos para o formulário:', error);
+            assetSelect.replaceChildren(createSelectOption('', 'Nenhum / Não listado'));
+        } finally {
+            assetSelect.disabled = false;
+        }
+    }
+
+    function openModal() {
         if (role !== 'CLIENTE') return;
 
         modal.classList.add('active');
-        // Buscar equipamentos do usuário para popular o select
-        try {
-            const select = document.getElementById('assetSelect');
-            select.innerHTML = '<option value="">Carregando...</option>';
-
-            const assets = await api.request(`/assets/cliente/${session.id}`);
-            select.innerHTML = '<option value="">Nenhum / Não listado</option>'; // Limpa opções antigas
-
-            assets.forEach(a => {
-                const opt = document.createElement('option');
-                opt.value = a.id;
-                opt.textContent = `${a.nome} (${a.numeroSerie || 'Sem NS'})`;
-                select.appendChild(opt);
-            });
-        } catch (error) {
-            console.error('Erro ao buscar equipamentos para o form:', error);
-            const select = document.getElementById('assetSelect');
-            select.innerHTML = '<option value="">Erro ao carregar</option>';
-        }
+        loadAssetsForTicket();
+        loadTicketCategories();
     }
 
     function closeModal() {
         if (modal) modal.classList.remove('active');
-        if (newTicketForm) newTicketForm.reset();
+        if (newTicketForm) {
+            newTicketForm.reset();
+            ticketTypeSelect.value = 'GERAL';
+        }
+
+        if (ticketCategoriesReady) {
+            renderCategoryOptions();
+        } else {
+            resetCategoryOptions(true);
+            setCategoryStatus('');
+        }
     }
 
     if (btnOpenModal) btnOpenModal.addEventListener('click', openModal);
     if (btnCloseModal) btnCloseModal.addEventListener('click', closeModal);
     if (btnCancelModal) btnCancelModal.addEventListener('click', closeModal);
+    if (ticketTypeSelect) {
+        ticketTypeSelect.addEventListener('change', () => {
+            if (ticketCategoriesReady) {
+                renderCategoryOptions();
+            } else {
+                resetCategoryOptions(true);
+            }
+        });
+    }
 
     // Fechar o modal ao clicar na área escura (overlay)
     if (modal) {
@@ -358,25 +492,25 @@ document.addEventListener('DOMContentLoaded', () => {
             e.preventDefault();
             if (role !== 'CLIENTE') return;
 
-            const btnSubmit = document.getElementById('btnSubmitTicket');
-            btnSubmit.disabled = true;
-            btnSubmit.textContent = 'Salvando...';
+            btnSubmitTicket.disabled = true;
+            btnSubmitTicket.textContent = 'Salvando...';
 
             const prioridadeBruta = document.getElementById('prioridade').value;
             const prioridadeLimpa = prioridadeBruta.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().trim();
-            const assetIdStr = document.getElementById('assetSelect').value;
+            const assetId = assetSelect.value;
+            const categoryId = categorySelect.disabled ? '' : categorySelect.value;
 
             const novoChamado = {
                 titulo: document.getElementById('titulo').value,
                 descricao: document.getElementById('descricao').value,
                 prioridade: prioridadeLimpa,
-                clienteId: session.id
+                clienteId: session.id,
+                assetId: assetId || null,
+                ticketType: ticketTypeSelect.value || 'GERAL'
             };
 
-            if (assetIdStr) {
-                novoChamado.assetId = assetIdStr;
-            } else {
-                novoChamado.assetId = null;
+            if (categoryId) {
+                novoChamado.categoryId = categoryId;
             }
 
             try {
@@ -386,13 +520,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
 
                 closeModal();
-                loadTickets();
+                await loadTickets();
             } catch (error) {
                 console.error('Erro na requisição ao servidor:', error);
                 alert(error.message || 'Erro ao criar chamado.');
             } finally {
-                btnSubmit.disabled = false;
-                btnSubmit.textContent = 'Salvar Chamado';
+                btnSubmitTicket.disabled = false;
+                btnSubmitTicket.textContent = 'Salvar Chamado';
             }
         });
     }
