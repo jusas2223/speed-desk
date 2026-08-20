@@ -4,7 +4,7 @@ Speed Desk é uma aplicação web de service desk para registrar ativos, abrir c
 
 ## Estado atual
 
-O projeto está em uma versão funcional de estabilização. Login, sessão web, autorização por perfil, gestão básica de usuários, ativos e chamados, persistência local offline e integração frontend/backend estão implementados e cobertos por testes automatizados no backend. O backend também possui organizações administrativas, categorias configuráveis e tipos de chamado; as telas para configurar organizações e categorias serão criadas posteriormente.
+O projeto está em uma versão funcional de estabilização. Login, sessão web, autorização por perfil, gestão básica de usuários, ativos e chamados, persistência local offline e integração frontend/backend estão implementados e cobertos por testes automatizados no backend. Organizações, categorias e tipos de chamado também estão integrados ao backend e ao frontend administrativo.
 
 ## Tecnologias
 
@@ -56,8 +56,8 @@ O navegador se comunica somente com a API. A API autentica o JWT, aplica as regr
 - senhas BCrypt, normalização de e-mail e migração controlada de senhas legadas;
 - autorização de recursos conforme `CLIENTE`, `TECNICO` e `GERENTE`;
 - cadastro e consulta de ativos por cliente;
-- cadastro e consulta de organizações administrativas no backend;
-- cadastro e consulta de categorias ativas de chamado no backend;
+- cadastro e consulta de organizações administrativas no backend e no frontend do gerente;
+- cadastro e consulta de categorias ativas no backend e no frontend do gerente;
 - abertura de chamados dos tipos `GERAL`, `HARDWARE` e `SOFTWARE`, com categoria e ativo opcionais, prioridade e prazo calculado por SLA;
 - painel Kanban com chamados recebidos, em atendimento e concluídos;
 - autoatribuição de chamado pelo técnico e atribuição pelo gerente;
@@ -185,9 +185,9 @@ As decisões definitivas sobre separação de ambientes, publicação do fronten
 
 ## Roadmap
 
-- definir a estratégia final de ambientes e implantação;
-- criar as interfaces visuais de configuração de organizações e categorias;
-- ampliar a validação automatizada da experiência do frontend;
-- evoluir o fluxo operacional de chamados a partir do uso real, sem comprometer a base estabilizada.
+- consolidar o núcleo completo de chamados, usuários, ativos, SLA e comentários;
+- adicionar os fluxos especializados de hardware e software;
+- implementar notificações, incidentes, exportações, tempo real, PWA e IA;
+- definir a estratégia final de ambientes e sincronizar o schema remoto de forma controlada.
 
-Detalhes de segurança e operação local estão em [`docs/backend-security.md`](docs/backend-security.md).
+O escopo completo, as exclusões e a ordem dos macroblocos estão em [`docs/product-roadmap.md`](docs/product-roadmap.md). A divisão fixa entre mentor, Codex e Antigravity está em [`docs/development-workflow.md`](docs/development-workflow.md). Detalhes de segurança e operação local estão em [`docs/backend-security.md`](docs/backend-security.md).
