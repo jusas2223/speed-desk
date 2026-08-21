@@ -58,13 +58,14 @@ class UserServiceTest {
                 .password("stored-secret")
                 .role(UserRole.CLIENTE)
                 .build();
-        when(userRepository.findAll()).thenReturn(List.of(user));
+        when(userRepository.findAllByOrderByNameAsc()).thenReturn(List.of(user));
 
         List<UserResponseDTO> result = userService.listAll();
 
         assertEquals(1, result.size());
         assertEquals(user.getId(), result.getFirst().id());
         assertEquals(user.getEmail(), result.getFirst().email());
+        verify(userRepository).findAllByOrderByNameAsc();
     }
 
     @Test

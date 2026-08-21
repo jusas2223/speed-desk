@@ -31,7 +31,7 @@ public class UserService {
     private final PasswordEncoder passwordEncoder;
 
     public List<UserResponseDTO> listAll() {
-        return userRepository.findAll().stream()
+        return userRepository.findAllByOrderByNameAsc().stream()
                 .map(UserResponseDTO::from)
                 .toList();
     }

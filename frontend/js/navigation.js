@@ -60,7 +60,7 @@ const MENU_ITEMS = Object.freeze({
             pages: ['chamados.html', 'chamado.html'],
             count: true
         },
-        { label: 'Usuários', icon: 'users', future: true },
+        { label: 'Usuários', icon: 'users', href: 'usuarios.html', page: 'usuarios.html' },
         { label: 'Ativos', icon: 'asset', future: true },
         { label: 'Incidentes', icon: 'incident', future: true },
         { label: 'Relatórios', icon: 'report', future: true },

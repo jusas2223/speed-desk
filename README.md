@@ -4,7 +4,7 @@ Speed Desk é uma aplicação web de service desk para registrar ativos, abrir c
 
 ## Estado atual
 
-O projeto está em uma versão funcional de evolução. Login, sessão web, autorização por perfil, gestão básica de usuários, ativos e chamados, persistência local offline e integração frontend/backend estão implementados e cobertos por testes automatizados no backend. O frontend possui identidade visual responsiva, temas claro e escuro, navegação específica por perfil e uma área dedicada de chamados com consulta individual protegida. Organizações, categorias e tipos de chamado também estão integrados ao backend e ao frontend administrativo.
+O projeto está em uma versão funcional de evolução. Login, sessão web, autorização por perfil, gestão de usuários, ativos e chamados, persistência local offline e integração frontend/backend estão implementados e cobertos por testes automatizados no backend. O frontend possui identidade visual responsiva, temas claro e escuro, navegação específica por perfil, área dedicada de chamados e diretório administrativo de usuários. Organizações, categorias e tipos de chamado também estão integrados ao backend e ao frontend administrativo.
 
 ## Tecnologias
 
@@ -55,6 +55,7 @@ O navegador se comunica somente com a API. A API autentica o JWT, aplica as regr
 - expiração, logout e tratamento de respostas `401` e `403`;
 - senhas BCrypt, normalização de e-mail e migração controlada de senhas legadas;
 - autorização de recursos conforme `CLIENTE`, `TECNICO` e `GERENTE`;
+- tela exclusiva do gerente para listar, buscar, filtrar e criar usuários com vínculo opcional de clientes a organizações;
 - cadastro e consulta de ativos por cliente;
 - cadastro e consulta de organizações administrativas no backend e no frontend do gerente;
 - cadastro e consulta de categorias ativas no backend e no frontend do gerente;
@@ -77,7 +78,7 @@ Todos os endpoints abaixo usam o prefixo `http://localhost:8080/api` durante o d
 | Método | Rota | Acesso e finalidade |
 | --- | --- | --- |
 | `POST` | `/users/login` | Público. Autentica e devolve o JWT e os dados públicos do usuário. |
-| `GET` | `/users` | Somente `GERENTE`. Lista usuários sem expor senhas. |
+| `GET` | `/users` | Somente `GERENTE`. Lista usuários em ordem alfabética sem expor senhas. |
 | `POST` | `/users` | Somente `GERENTE`. Cria usuário com senha codificada e organização opcional apenas para `CLIENTE`. |
 | `GET` | `/organizations` | Somente `GERENTE`. Lista organizações por nome. |
 | `POST` | `/organizations` | Somente `GERENTE`. Cria uma organização administrativa. |

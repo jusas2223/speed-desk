@@ -37,9 +37,13 @@ O backend também valida a assinatura, o emissor, a expiração e as claims obri
 | --- | --- |
 | `CLIENTE` | Lista, filtra, cria e consulta individualmente somente os próprios chamados e ativos. Pode consultar categorias ativas. Não pode assumir ou resolver chamados nem administrar usuários, organizações ou categorias. |
 | `TECNICO` | Lista, filtra e consulta individualmente chamados e ativos de clientes, consulta categorias ativas, pode criar recursos para um cliente, assumir um chamado `RECEBIDO` somente em seu próprio nome e resolver apenas o chamado `EM_ATENDIMENTO` atribuído a ele. Não pode administrar usuários, organizações ou categorias. |
-| `GERENTE` | Lista e cria usuários, organizações e categorias, consulta e cria recursos para clientes, consulta qualquer chamado existente, atribui chamados recebidos a usuários `TECNICO` e pode resolver chamados em atendimento. |
+| `GERENTE` | Lista usuários em ordem alfabética e cria contas pela tela administrativa, gerencia organizações e categorias básicas, consulta e cria recursos para clientes, consulta qualquer chamado existente, atribui chamados recebidos a usuários `TECNICO` e pode resolver chamados em atendimento. |
 
 O vínculo de um ativo ou chamado sempre exige um usuário com role `CLIENTE`. Um ativo informado na abertura do chamado precisa pertencer ao mesmo cliente. Apenas usuários `CLIENTE` podem receber uma organização, e esse agrupamento não altera as regras de proprietário nem concede acesso aos dados de outro cliente. Categorias precisam estar ativas e ter o mesmo tipo do chamado. As respostas usam DTOs e não expõem hashes de senha nem entidades JPA internas.
+
+### Gestão administrativa de usuários
+
+`GET /api/users` e `POST /api/users` são exclusivos de `GERENTE`. A listagem retorna apenas `UserResponseDTO`, ordenado por nome, e o cadastro recebe um DTO dedicado. E-mails são normalizados antes da verificação de duplicidade, senhas respeitam o limite do BCrypt em UTF-8 e são codificadas antes da persistência. A organização é opcional para `CLIENTE` e rejeitada para `TECNICO` ou `GERENTE`. A página `usuarios.html` repete as validações úteis para experiência de uso, mas o backend permanece como autoridade de segurança.
 
 ### Consulta de chamados por UUID e filtros
 
@@ -51,7 +55,7 @@ Os filtros de listagem e a busca textual são aplicados somente depois que o esc
 
 As tabelas remotas existentes estão com RLS habilitado e sem policies, mantendo bloqueado o acesso pela Data API. O schema de referência habilita RLS também em `organizations` e `ticket_categories`, mas essas definições novas não foram aplicadas ao Supabase remoto e permanecem pendentes de revisão. A API Spring continua sendo a única porta de entrada da aplicação e acessa o PostgreSQL pela conexão JDBC configurada no backend. O acesso direto ao Supabase pelo frontend está fora do escopo aprovado. Nenhuma chave `service_role` deve ser exposta no navegador.
 
-O bloco `T1–T3` não alterou schema, RLS, grants, Data API nem o banco remoto.
+Os blocos `T1–T3` e `U1–U2/ORG2` não alteraram schema, RLS, grants, Data API nem o banco remoto.
 
 ## Desenvolvimento offline com o perfil `localdev`
 

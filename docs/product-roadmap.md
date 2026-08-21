@@ -8,7 +8,8 @@ Este arquivo é a fonte de verdade do escopo escolhido. Ele separa o que já exi
 
 - autenticação JWT, sessão web, BCrypt e autorização por `CLIENTE`, `TECNICO` e `GERENTE`;
 - perfil `localdev` com H2 e dados de demonstração idempotentes;
-- cadastro e consulta básicos de usuários pelo backend;
+- gestão administrativa de usuários com listagem, busca, filtros e criação protegida;
+- vínculo opcional de clientes a organizações integrado ao frontend;
 - cadastro e consulta básicos de ativos;
 - abertura, lista completa, busca, filtros, detalhe protegido, atribuição e resolução básicas de chamados;
 - prioridades, prazo básico de SLA, tipos `GERAL`, `HARDWARE` e `SOFTWARE`;
@@ -16,7 +17,7 @@ Este arquivo é a fonte de verdade do escopo escolhido. Ele separa o que já exi
 - página administrativa de organizações e categorias;
 - seleção e exibição de tipo e categoria no frontend;
 - identidade visual completa com temas claro e escuro, fundo de velocidade e componentes responsivos;
-- shell compartilhado de navegação por perfil, opções futuras desabilitadas e telas integradas de login, painel, ativos e configurações;
+- shell compartilhado de navegação por perfil, opções futuras desabilitadas e telas integradas de login, painel, usuários, ativos e configurações;
 - área dedicada de chamados e consulta detalhada por UUID com autorização de proprietário;
 - testes automatizados do backend e integração frontend/backend validada localmente.
 
@@ -24,14 +25,11 @@ Este arquivo é a fonte de verdade do escopo escolhido. Ele separa o que já exi
 
 | Código | Item | O que ainda falta |
 | --- | --- | --- |
-| `CFG2` | Configurações do gerente | Ampliar para usuários, regras de SLA e demais parâmetros futuros. |
+| `CFG2` | Configurações do gerente | Usuários, organizações e categorias estão integrados; faltam regras de SLA e demais parâmetros futuros. |
 | `T4` | Transições controladas | Existem atribuição e resolução; faltam as demais transições e regras. |
 | `T6` | Prazo de SLA | O prazo é calculado, mas falta exposição completa, risco e pausa. |
 | `T7` | Categorias | Cadastro e uso básico prontos; edição/ativação não fazem parte do escopo atual. |
-| `U1` | Gestão de usuários | Backend lista usuários; falta a tela administrativa. |
-| `U2` | Criação de usuários | Backend cria; falta a experiência completa no frontend. |
 | `ORG1` | Organizações | Cadastro e listagem básicos implementados. |
-| `ORG2` | Usuários por organização | Vínculo existe no backend; falta integrá-lo à gestão de usuários. |
 
 ## Macroblocos restantes, na ordem recomendada
 
@@ -60,13 +58,13 @@ Este arquivo é a fonte de verdade do escopo escolhido. Ele separa o que já exi
 
 - `CFG1` configurações pessoais;
 - `CFG2` configurações do gerente;
-- `U1` tela de usuários;
-- `U2` criação pelo gerente;
+- `U1` tela de usuários — concluído;
+- `U2` criação pelo gerente — concluído;
 - `U3` edição;
 - `U4` ativar/desativar;
 - `U5` troca autenticada de senha;
 - `U6` recuperação de senha;
-- concluir `ORG2` no frontend.
+- `ORG2` vínculo de usuários a organizações no frontend — concluído.
 
 ### 4. Gestão completa de ativos
 
