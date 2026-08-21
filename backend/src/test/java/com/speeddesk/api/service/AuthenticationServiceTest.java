@@ -114,6 +114,23 @@ class AuthenticationServiceTest {
         verify(jwtService, never()).issue(user);
     }
 
+    @Test
+    void inactiveAccountCannotLogin() {
+        User user = user(passwordEncoder.encode("Password-123"));
+        user.setActive(false);
+        when(userRepository.findByEmailIgnoreCase("user@speeddesk.test"))
+                .thenReturn(Optional.of(user));
+
+        assertThrows(
+                InvalidCredentialsException.class,
+                () -> authenticationService.login(
+                        new LoginRequest("user@speeddesk.test", "Password-123")
+                )
+        );
+
+        verify(jwtService, never()).issue(user);
+    }
+
     private User user(String storedPassword) {
         return User.builder()
                 .id(UUID.randomUUID())

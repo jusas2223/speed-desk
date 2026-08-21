@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Redefinição segura de senha do Speed Desk.">
+    <title>Redefinir senha — Speed Desk</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css?v=20260821.4">
+    <script>
+        (() => {
+            const savedTheme = localStorage.getItem('speeddesk-theme');
+            const preferredTheme = savedTheme === 'light' || savedTheme === 'dark'
+                ? savedTheme
+                : (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+            document.documentElement.dataset.theme = preferredTheme;
+            document.documentElement.style.colorScheme = preferredTheme;
+        })();
+    </script>
+</head>
+<body>
+    <div class="velocity-background" aria-hidden="true"><div class="velocity-lines"></div></div>
+    <main class="login-page">
+        <section class="login-brand-panel" aria-labelledby="resetBrandHeadline">
+            <a class="brand-lockup" href="index.html" aria-label="Speed Desk — página de login">
+                <img class="brand-mark" src="assets/logo.svg" alt="">
+                <span class="brand-copy"><span class="brand-name">Speed <span class="brand-name-accent">Desk</span></span><span class="brand-tagline">Suporte em movimento.</span></span>
+            </a>
+            <div class="login-message">
+                <h1 id="resetBrandHeadline">Recupere seu acesso com segurança.</h1>
+                <p>Use o código temporário fornecido pelo gerente responsável pelo sistema.</p>
+            </div>
+            <div class="login-highlights" aria-label="Características da recuperação">
+                <span class="login-highlight"><span class="login-highlight-dot" aria-hidden="true"></span>Uso único</span>
+                <span class="login-highlight"><span class="login-highlight-dot" aria-hidden="true"></span>Validade limitada</span>
+            </div>
+        </section>
+
+        <section class="login-form-panel" aria-labelledby="resetFormTitle">
+            <div class="login-theme-control">
+                <button id="toggleThemeBtn" class="icon-button" type="button" aria-label="Alternar tema claro e escuro">
+                    <svg class="icon theme-icon theme-icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M2 12h2M20 12h2"></path></svg>
+                    <svg class="icon theme-icon theme-icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+                </button>
+            </div>
+            <div class="auth-container">
+                <header class="auth-header"><h2 id="resetFormTitle">Redefinir senha</h2><p>Informe o código e escolha uma nova senha.</p></header>
+                <div id="resetFeedback" class="login-error" role="alert" aria-live="assertive" hidden></div>
+                <form id="resetPasswordForm" class="login-form" novalidate>
+                    <div class="form-group">
+                        <label for="resetToken" class="form-label">Código de recuperação</label>
+                        <input id="resetToken" class="form-control" type="text" maxlength="200" autocomplete="one-time-code" placeholder="Cole o código recebido" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="resetNewPassword" class="form-label">Nova senha</label>
+                        <input id="resetNewPassword" class="form-control" type="password" minlength="8" maxlength="72" autocomplete="new-password" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="resetConfirmPassword" class="form-label">Confirmar nova senha</label>
+                        <input id="resetConfirmPassword" class="form-control" type="password" minlength="8" maxlength="72" autocomplete="new-password" required>
+                    </div>
+                    <button id="resetSubmit" class="btn btn-primary login-submit" type="submit">Redefinir senha</button>
+                </form>
+                <p class="login-security-note"><a class="auth-back-link" href="index.html">Voltar para o login</a></p>
+            </div>
+        </section>
+    </main>
+    <script type="module" src="js/redefinir-senha.js?v=20260821.2"></script>
+</body>
+</html>

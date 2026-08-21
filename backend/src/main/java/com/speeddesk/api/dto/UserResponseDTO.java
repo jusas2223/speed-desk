@@ -12,6 +12,7 @@ public record UserResponseDTO(
         String email,
         UserRole role,
         OrganizationResponseDTO organization,
+        boolean active,
         OffsetDateTime createdAt
 ) {
     public static UserResponseDTO from(User user) {
@@ -23,6 +24,7 @@ public record UserResponseDTO(
                 user.getOrganization() == null
                         ? null
                         : OrganizationResponseDTO.from(user.getOrganization()),
+                user.isActive(),
                 user.getCreatedAt()
         );
     }
@@ -34,6 +36,17 @@ public record UserResponseDTO(
             UserRole role,
             OffsetDateTime createdAt
     ) {
-        this(id, name, email, role, null, createdAt);
+        this(id, name, email, role, null, true, createdAt);
+    }
+
+    public UserResponseDTO(
+            UUID id,
+            String name,
+            String email,
+            UserRole role,
+            OrganizationResponseDTO organization,
+            OffsetDateTime createdAt
+    ) {
+        this(id, name, email, role, organization, true, createdAt);
     }
 }

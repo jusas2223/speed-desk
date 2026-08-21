@@ -9,4 +9,6 @@ import java.util.UUID;
 public interface AssetRepository extends JpaRepository<Asset, UUID> {
 
     List<Asset> findAllByCliente_Id(UUID clienteId);
+
+    boolean existsByCliente_Id(UUID clienteId);
 }

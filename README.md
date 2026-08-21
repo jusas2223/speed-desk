@@ -4,7 +4,7 @@ Speed Desk é uma aplicação web de service desk para registrar ativos, abrir c
 
 ## Estado atual
 
-O projeto está em uma versão funcional de evolução. Login, sessão web, autorização por perfil, gestão de usuários, ativos e chamados, persistência local offline e integração frontend/backend estão implementados e cobertos por testes automatizados no backend. O frontend possui identidade visual responsiva, temas claro e escuro, navegação específica por perfil, área dedicada de chamados e diretório administrativo de usuários. Organizações, categorias e tipos de chamado também estão integrados ao backend e ao frontend administrativo.
+O projeto está em uma versão funcional de evolução. Login, sessão web, autorização por perfil, ciclo administrativo de usuários, configurações pessoais, ativos e chamados, persistência local offline e integração frontend/backend estão implementados e cobertos por testes automatizados no backend. O frontend possui identidade visual responsiva, temas claro e escuro, navegação específica por perfil, área dedicada de chamados, perfil pessoal e diretório administrativo de usuários. Organizações, categorias e tipos de chamado também estão integrados ao backend e ao frontend administrativo.
 
 ## Tecnologias
 
@@ -55,7 +55,11 @@ O navegador se comunica somente com a API. A API autentica o JWT, aplica as regr
 - expiração, logout e tratamento de respostas `401` e `403`;
 - senhas BCrypt, normalização de e-mail e migração controlada de senhas legadas;
 - autorização de recursos conforme `CLIENTE`, `TECNICO` e `GERENTE`;
-- tela exclusiva do gerente para listar, buscar, filtrar e criar usuários com vínculo opcional de clientes a organizações;
+- tela exclusiva do gerente para listar, buscar, filtrar, criar, editar, ativar e desativar usuários com vínculo opcional de clientes a organizações;
+- bloqueio imediato de tokens quando a conta é desativada ou sua role é alterada;
+- perfil pessoal autenticado para consultar e atualizar nome e e-mail;
+- troca de senha mediante confirmação da senha atual;
+- recuperação manual de senha por token temporário emitido pelo gerente, sem envio por e-mail;
 - cadastro e consulta de ativos por cliente;
 - cadastro e consulta de organizações administrativas no backend e no frontend do gerente;
 - cadastro e consulta de categorias ativas no backend e no frontend do gerente;
@@ -80,6 +84,13 @@ Todos os endpoints abaixo usam o prefixo `http://localhost:8080/api` durante o d
 | `POST` | `/users/login` | Público. Autentica e devolve o JWT e os dados públicos do usuário. |
 | `GET` | `/users` | Somente `GERENTE`. Lista usuários em ordem alfabética sem expor senhas. |
 | `POST` | `/users` | Somente `GERENTE`. Cria usuário com senha codificada e organização opcional apenas para `CLIENTE`. |
+| `PUT` | `/users/{userId}` | Somente `GERENTE`. Edita nome, e-mail, role e vínculo compatível com organização. |
+| `PATCH` | `/users/{userId}/status` | Somente `GERENTE`. Ativa ou desativa uma conta com salvaguardas administrativas. |
+| `POST` | `/users/{userId}/password-reset` | Somente `GERENTE`. Emite uma credencial temporária de recuperação para entrega manual ao usuário. |
+| `GET` | `/account/profile` | Autenticado. Consulta os dados públicos da própria conta. |
+| `PUT` | `/account/profile` | Autenticado. Atualiza nome e e-mail da própria conta. |
+| `POST` | `/account/password/change` | Autenticado. Troca a senha depois de validar a senha atual. |
+| `POST` | `/account/password-reset/confirm` | Público. Consome uma única vez o token temporário e define uma nova senha. |
 | `GET` | `/organizations` | Somente `GERENTE`. Lista organizações por nome. |
 | `POST` | `/organizations` | Somente `GERENTE`. Cria uma organização administrativa. |
 | `GET` | `/ticket-categories` | Qualquer usuário autenticado. Lista categorias ativas por nome. |
@@ -157,6 +168,7 @@ O perfil padrão usa PostgreSQL e exige configuração externa. Os exemplos abai
 | `SPEEDDESK_JWT_SECRET` | Chave HMAC com pelo menos 32 bytes | `replace-with-a-random-32-byte-minimum-secret` |
 | `SPEEDDESK_JWT_EXPIRATION_SECONDS` | Validade do token; padrão de 3600 segundos | `3600` |
 | `SPEEDDESK_CORS_ALLOWED_ORIGINS` | Origens permitidas, separadas por vírgula | `http://127.0.0.1:5500,http://localhost:5500` |
+| `SPEEDDESK_PASSWORD_RESET_EXPIRATION_MINUTES` | Validade da recuperação manual; padrão de 30 e intervalo aceito de 5 a 1440 minutos | `30` |
 
 Nenhuma credencial real deve ser adicionada aos arquivos do projeto.
 

@@ -4,6 +4,10 @@ import com.speeddesk.api.dto.LoginRequest;
 import com.speeddesk.api.dto.LoginResponse;
 import com.speeddesk.api.dto.UserCreateRequestDTO;
 import com.speeddesk.api.dto.UserResponseDTO;
+import com.speeddesk.api.dto.UserStatusUpdateRequestDTO;
+import com.speeddesk.api.dto.UserUpdateRequestDTO;
+import com.speeddesk.api.dto.PasswordResetIssueResponseDTO;
+import com.speeddesk.api.service.AccountService;
 import com.speeddesk.api.entity.UserRole;
 import com.speeddesk.api.service.AuthenticationService;
 import com.speeddesk.api.service.UserService;
@@ -32,6 +36,9 @@ class UserControllerTest {
 
     @Mock
     private AuthenticationService authenticationService;
+
+    @Mock
+    private AccountService accountService;
 
     @InjectMocks
     private UserController userController;
@@ -87,6 +94,61 @@ class UserControllerTest {
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertSame(loginResponse, response.getBody());
         verify(authenticationService).login(request);
+    }
+
+    @Test
+    void updatesUserFromDedicatedRequestDto() {
+        UUID userId = UUID.randomUUID();
+        UserUpdateRequestDTO request = new UserUpdateRequestDTO(
+                "Usuário atualizado",
+                "updated@speeddesk.test",
+                UserRole.TECNICO,
+                null
+        );
+        UserResponseDTO updated = userResponse(UserRole.TECNICO);
+        when(userService.update(userId, request)).thenReturn(updated);
+
+        ResponseEntity<UserResponseDTO> response = userController.update(userId, request);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertSame(updated, response.getBody());
+        verify(userService).update(userId, request);
+    }
+
+    @Test
+    void updatesUserStatus() {
+        UUID userId = UUID.randomUUID();
+        UserStatusUpdateRequestDTO request = new UserStatusUpdateRequestDTO(false);
+        UserResponseDTO updated = userResponse(UserRole.CLIENTE);
+        when(userService.updateStatus(userId, request)).thenReturn(updated);
+
+        ResponseEntity<UserResponseDTO> response = userController.updateStatus(
+                userId,
+                request
+        );
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertSame(updated, response.getBody());
+        verify(userService).updateStatus(userId, request);
+    }
+
+    @Test
+    void issuesManualPasswordResetToken() {
+        UUID userId = UUID.randomUUID();
+        PasswordResetIssueResponseDTO issued = new PasswordResetIssueResponseDTO(
+                userId,
+                "Usuário",
+                "one-time-token",
+                OffsetDateTime.parse("2026-08-17T12:30:00Z")
+        );
+        when(accountService.issuePasswordReset(userId)).thenReturn(issued);
+
+        ResponseEntity<PasswordResetIssueResponseDTO> response =
+                userController.issuePasswordReset(userId);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertSame(issued, response.getBody());
+        verify(accountService).issuePasswordReset(userId);
     }
 
     private UserResponseDTO userResponse(UserRole role) {

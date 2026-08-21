@@ -8,7 +8,9 @@ Este arquivo é a fonte de verdade do escopo escolhido. Ele separa o que já exi
 
 - autenticação JWT, sessão web, BCrypt e autorização por `CLIENTE`, `TECNICO` e `GERENTE`;
 - perfil `localdev` com H2 e dados de demonstração idempotentes;
-- gestão administrativa de usuários com listagem, busca, filtros e criação protegida;
+- gestão administrativa de usuários com listagem, busca, filtros, criação, edição e ativação/desativação protegidas;
+- configurações pessoais com consulta e edição de perfil e troca autenticada de senha;
+- recuperação de senha por token temporário emitido pelo gerente para entrega manual;
 - vínculo opcional de clientes a organizações integrado ao frontend;
 - cadastro e consulta básicos de ativos;
 - abertura, lista completa, busca, filtros, detalhe protegido, atribuição e resolução básicas de chamados;
@@ -56,14 +58,14 @@ Este arquivo é a fonte de verdade do escopo escolhido. Ele separa o que já exi
 
 ### 3. Gestão de usuários e configurações
 
-- `CFG1` configurações pessoais;
+- `CFG1` configurações pessoais — concluído;
 - `CFG2` configurações do gerente;
 - `U1` tela de usuários — concluído;
 - `U2` criação pelo gerente — concluído;
-- `U3` edição;
-- `U4` ativar/desativar;
-- `U5` troca autenticada de senha;
-- `U6` recuperação de senha;
+- `U3` edição — concluído;
+- `U4` ativar/desativar — concluído;
+- `U5` troca autenticada de senha — concluído;
+- `U6` recuperação manual de senha — concluído, sem e-mail conforme o escopo;
 - `ORG2` vínculo de usuários a organizações no frontend — concluído.
 
 ### 4. Gestão completa de ativos
@@ -127,7 +129,7 @@ Nem toda funcionalidade deve virar um item de menu. A navegação planejada ser�
 - **Painel**;
 - **Chamados**: lista, filtros, busca e detalhes;
 - **Notificações**;
-- **Meu perfil**: dados pessoais e troca de senha;
+- **Meu perfil**: dados pessoais e troca de senha — implementado;
 - **Assistente IA** quando o módulo estiver disponível.
 
 ### Cliente

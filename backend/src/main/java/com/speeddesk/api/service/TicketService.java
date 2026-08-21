@@ -16,6 +16,7 @@ import com.speeddesk.api.exception.ForbiddenOperationException;
 import com.speeddesk.api.exception.InvalidTicketStatusTransitionException;
 import com.speeddesk.api.exception.InvalidUserRoleException;
 import com.speeddesk.api.exception.InactiveTicketCategoryException;
+import com.speeddesk.api.exception.InactiveUserException;
 import com.speeddesk.api.exception.TechnicianNotFoundException;
 import com.speeddesk.api.exception.TicketCategoryNotFoundException;
 import com.speeddesk.api.exception.TicketCategoryTypeMismatchException;
@@ -54,6 +55,7 @@ public class TicketService {
         User cliente = userRepository.findById(clientId)
                 .orElseThrow(() -> new ClientNotFoundException(clientId));
         requireRole(cliente, UserRole.CLIENTE);
+        requireActive(cliente);
 
         Asset asset = request.assetId() == null
                 ? null
@@ -195,6 +197,7 @@ public class TicketService {
         User tecnico = userRepository.findById(tecnicoId)
                 .orElseThrow(() -> new TechnicianNotFoundException(tecnicoId));
         requireRole(tecnico, UserRole.TECNICO);
+        requireActive(tecnico);
 
         ticket.setTecnico(tecnico);
         ticket.setStatus(TicketStatus.EM_ATENDIMENTO);
@@ -223,6 +226,12 @@ public class TicketService {
     private void requireRole(User user, UserRole expectedRole) {
         if (user.getRole() != expectedRole) {
             throw new InvalidUserRoleException(user.getId(), expectedRole);
+        }
+    }
+
+    private void requireActive(User user) {
+        if (!user.isActive()) {
+            throw new InactiveUserException(user.getId());
         }
     }
 

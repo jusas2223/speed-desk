@@ -18,6 +18,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.ColumnDefault;
 
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -54,6 +55,11 @@ public class User {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "organization_id")
     private Organization organization;
+
+    @Column(name = "ativo", nullable = false)
+    @ColumnDefault("true")
+    @Builder.Default
+    private boolean active = true;
 
     @Column(name = "data_criacao", nullable = false, updatable = false)
     private OffsetDateTime createdAt;

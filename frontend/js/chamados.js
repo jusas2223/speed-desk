@@ -236,9 +236,11 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const response = await api.request('/users');
             if (Array.isArray(response)) {
-                response.filter(user => user.role === 'TECNICO').forEach(technician => {
-                    state.technicians.set(technician.id, technician);
-                });
+                response
+                    .filter(user => user.role === 'TECNICO' && user.active !== false)
+                    .forEach(technician => {
+                        state.technicians.set(technician.id, technician);
+                    });
                 renderTechnicianOptions();
             }
         } catch (error) {

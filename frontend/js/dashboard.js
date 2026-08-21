@@ -557,7 +557,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const users = await api.request('/users');
             const technicians = Array.isArray(users)
-                ? users.filter(user => user.role === 'TECNICO')
+                ? users.filter(user => user.role === 'TECNICO' && user.active !== false)
                 : [];
 
             const options = [new Option('Selecione um técnico', '')];

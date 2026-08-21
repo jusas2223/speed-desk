@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Perfil e segurança da conta Speed Desk.">
+    <title>Meu perfil — Speed Desk</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css?v=20260821.4">
+    <script>
+        (() => {
+            const savedTheme = localStorage.getItem('speeddesk-theme');
+            const preferredTheme = savedTheme === 'light' || savedTheme === 'dark'
+                ? savedTheme
+                : (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+            document.documentElement.dataset.theme = preferredTheme;
+            document.documentElement.style.colorScheme = preferredTheme;
+        })();
+    </script>
+</head>
+<body>
+    <div class="velocity-background" aria-hidden="true"><div class="velocity-lines"></div></div>
+
+    <div class="app-shell">
+        <aside class="sidebar" id="sidebar-container"></aside>
+
+        <div class="main-column">
+            <header class="topbar">
+                <div class="topbar-start">
+                    <button id="mobileMenuBtn" class="icon-button mobile-menu-button" type="button" aria-label="Abrir menu" aria-expanded="false">
+                        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"></path></svg>
+                    </button>
+                    <div class="topbar-context">
+                        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 21a8 8 0 0 0-16 0"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                        <span>Meu perfil</span>
+                    </div>
+                </div>
+
+                <div class="topbar-actions">
+                    <button id="toggleThemeBtn" class="icon-button" type="button" aria-label="Alternar tema claro e escuro">
+                        <svg class="icon theme-icon theme-icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.66 6.34l1.41-1.41"></path></svg>
+                        <svg class="icon theme-icon theme-icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+                    </button>
+                    <div class="topbar-profile">
+                        <span class="user-avatar" data-topbar-avatar></span>
+                        <span class="topbar-user-copy">
+                            <span class="topbar-user-name" data-topbar-name>Usuário</span>
+                            <span class="topbar-user-status">Sessão ativa</span>
+                        </span>
+                    </div>
+                </div>
+            </header>
+
+            <main class="content">
+                <header class="page-heading">
+                    <div class="page-heading-main">
+                        <div class="page-title-row">
+                            <h1 class="page-title">Meu perfil</h1>
+                            <span id="profileRoleBadge" class="live-badge">Carregando</span>
+                        </div>
+                        <p class="page-description">Mantenha seus dados pessoais, preferência visual e senha atualizados.</p>
+                    </div>
+                </header>
+
+                <div id="profileStatus" class="list-status loading" role="status" aria-live="polite">Carregando perfil...</div>
+
+                <div class="profile-layout" hidden>
+                    <section class="page-card profile-summary-card" aria-labelledby="profileSummaryTitle">
+                        <div class="profile-hero">
+                            <span id="profileAvatar" class="profile-avatar" aria-hidden="true"></span>
+                            <div>
+                                <h2 id="profileSummaryTitle">Sua conta</h2>
+                                <strong id="profileDisplayName">Usuário</strong>
+                                <span id="profileDisplayEmail">email@exemplo.com</span>
+                            </div>
+                        </div>
+                        <dl class="profile-facts">
+                            <div><dt>Perfil</dt><dd id="profileDisplayRole">—</dd></div>
+                            <div><dt>Organização</dt><dd id="profileDisplayOrganization">—</dd></div>
+                            <div><dt>Conta criada</dt><dd id="profileCreatedAt">—</dd></div>
+                            <div><dt>Status</dt><dd><span class="status-pill active">Ativa</span></dd></div>
+                        </dl>
+                        <div class="profile-theme-note">
+                            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M2 12h2M20 12h2"></path></svg>
+                            <span>O tema claro ou escuro fica salvo neste navegador.</span>
+                        </div>
+                    </section>
+
+                    <div class="profile-forms">
+                        <section class="page-card" aria-labelledby="personalDataTitle">
+                            <header class="page-card-header">
+                                <div><h2 id="personalDataTitle">Dados pessoais</h2><p>Essas informações aparecem nos chamados e atendimentos.</p></div>
+                            </header>
+                            <form id="profileForm" class="profile-form" novalidate>
+                                <div class="form-group">
+                                    <label for="profileName" class="form-label">Nome completo</label>
+                                    <input id="profileName" class="form-control" type="text" maxlength="255" autocomplete="name" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="profileEmail" class="form-label">E-mail</label>
+                                    <input id="profileEmail" class="form-control" type="email" maxlength="255" autocomplete="email" required>
+                                </div>
+                                <div id="profileFeedback" class="feedback" role="alert" aria-live="assertive" hidden></div>
+                                <button id="profileSubmit" class="btn btn-primary" type="submit">Salvar dados pessoais</button>
+                            </form>
+                        </section>
+
+                        <section class="page-card" aria-labelledby="passwordTitle">
+                            <header class="page-card-header">
+                                <div><h2 id="passwordTitle">Alterar senha</h2><p>Confirme a senha atual antes de definir uma nova.</p></div>
+                            </header>
+                            <form id="passwordForm" class="profile-form" novalidate>
+                                <div class="form-group">
+                                    <label for="currentPassword" class="form-label">Senha atual</label>
+                                    <input id="currentPassword" class="form-control" type="password" maxlength="72" autocomplete="current-password" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="newPassword" class="form-label">Nova senha</label>
+                                    <input id="newPassword" class="form-control" type="password" minlength="8" maxlength="72" autocomplete="new-password" required>
+                                    <p class="form-help">Entre 8 e 72 caracteres e no máximo 72 bytes em UTF-8.</p>
+                                </div>
+                                <div class="form-group">
+                                    <label for="confirmPassword" class="form-label">Confirmar nova senha</label>
+                                    <input id="confirmPassword" class="form-control" type="password" minlength="8" maxlength="72" autocomplete="new-password" required>
+                                </div>
+                                <div id="passwordFeedback" class="feedback" role="alert" aria-live="assertive" hidden></div>
+                                <button id="passwordSubmit" class="btn btn-secondary" type="submit">Alterar minha senha</button>
+                            </form>
+                        </section>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script type="module" src="js/navigation.js?v=20260821.2"></script>
+    <script type="module" src="js/perfil.js?v=20260821.2"></script>
+</body>
+</html>

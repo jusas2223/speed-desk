@@ -70,7 +70,7 @@ const MENU_ITEMS = Object.freeze({
 
 const ACCOUNT_ITEMS = Object.freeze([
     { label: 'Notificações', icon: 'bell', future: true },
-    { label: 'Meu perfil', icon: 'profile', future: true },
+    { label: 'Meu perfil', icon: 'profile', href: 'perfil.html', page: 'perfil.html' },
     { label: 'Assistente IA', icon: 'bot', future: true },
     { label: 'Sair', icon: 'logout', logout: true }
 ]);
@@ -228,7 +228,17 @@ function populateTopbar(session) {
     document.querySelectorAll('[data-topbar-name]').forEach(element => {
         element.textContent = session.name;
     });
+    document.querySelectorAll('[data-session-avatar]').forEach(element => {
+        element.textContent = getInitials(session.name);
+    });
+    document.querySelectorAll('[data-session-name]').forEach(element => {
+        element.textContent = session.name;
+    });
 }
+
+window.addEventListener('speeddesk:session-updated', event => {
+    if (event.detail) populateTopbar(event.detail);
+});
 
 export function updateTicketNavigationCount(value) {
     sessionStorage.setItem(TICKET_COUNT_STORAGE_KEY, String(value));

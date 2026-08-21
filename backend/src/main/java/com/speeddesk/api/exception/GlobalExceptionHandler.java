@@ -95,6 +95,7 @@ public class GlobalExceptionHandler {
             TechnicianNotFoundException.class,
             ClientNotFoundException.class,
             AssetNotFoundException.class,
+            UserNotFoundException.class,
             OrganizationNotFoundException.class,
             TicketCategoryNotFoundException.class
     })
@@ -105,6 +106,19 @@ public class GlobalExceptionHandler {
         return response(
                 HttpStatus.NOT_FOUND,
                 "Recurso não encontrado",
+                exception.getMessage(),
+                request
+        );
+    }
+
+    @ExceptionHandler({LastActiveManagerException.class, UserRoleChangeConflictException.class})
+    public ResponseEntity<ProblemDetail> handleBusinessConflict(
+            RuntimeException exception,
+            HttpServletRequest request
+    ) {
+        return response(
+                HttpStatus.CONFLICT,
+                "Regra de negócio conflitante",
                 exception.getMessage(),
                 request
         );

@@ -6,6 +6,7 @@ import com.speeddesk.api.entity.Asset;
 import com.speeddesk.api.entity.User;
 import com.speeddesk.api.entity.UserRole;
 import com.speeddesk.api.exception.InvalidUserRoleException;
+import com.speeddesk.api.exception.InactiveUserException;
 import com.speeddesk.api.repository.AssetRepository;
 import com.speeddesk.api.repository.UserRepository;
 import com.speeddesk.api.security.AuthorizationService;
@@ -86,6 +87,25 @@ class AssetServiceTest {
         when(userRepository.findById(technicianId)).thenReturn(Optional.of(technician));
 
         assertThrows(InvalidUserRoleException.class, () -> assetService.create(request));
+
+        verify(assetRepository, never()).save(any());
+    }
+
+    @Test
+    void rejectsInactiveClientAsAssetOwner() {
+        UUID clientId = UUID.randomUUID();
+        AssetRequestDTO request = new AssetRequestDTO(
+                "Notebook",
+                "NOTEBOOK",
+                "SN-456",
+                clientId
+        );
+        User client = client(clientId);
+        client.setActive(false);
+        when(authorizationService.clientTarget(clientId)).thenReturn(clientId);
+        when(userRepository.findById(clientId)).thenReturn(Optional.of(client));
+
+        assertThrows(InactiveUserException.class, () -> assetService.create(request));
 
         verify(assetRepository, never()).save(any());
     }

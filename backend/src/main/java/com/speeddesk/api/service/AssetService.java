@@ -7,6 +7,7 @@ import com.speeddesk.api.entity.User;
 import com.speeddesk.api.entity.UserRole;
 import com.speeddesk.api.exception.ClientNotFoundException;
 import com.speeddesk.api.exception.InvalidUserRoleException;
+import com.speeddesk.api.exception.InactiveUserException;
 import com.speeddesk.api.repository.AssetRepository;
 import com.speeddesk.api.repository.UserRepository;
 import com.speeddesk.api.security.AuthorizationService;
@@ -32,6 +33,7 @@ public class AssetService {
         User cliente = userRepository.findById(clientId)
                 .orElseThrow(() -> new ClientNotFoundException(clientId));
         requireClientRole(cliente);
+        requireActive(cliente);
 
         Asset asset = Asset.builder()
                 .nome(request.nome().trim())
@@ -54,6 +56,12 @@ public class AssetService {
     private void requireClientRole(User user) {
         if (user.getRole() != UserRole.CLIENTE) {
             throw new InvalidUserRoleException(user.getId(), UserRole.CLIENTE);
+        }
+    }
+
+    private void requireActive(User user) {
+        if (!user.isActive()) {
+            throw new InactiveUserException(user.getId());
         }
     }
 }

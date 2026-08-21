@@ -5,6 +5,7 @@ import com.speeddesk.api.entity.User;
 import com.speeddesk.api.entity.UserRole;
 import com.speeddesk.api.repository.AssetRepository;
 import com.speeddesk.api.repository.OrganizationRepository;
+import com.speeddesk.api.repository.PasswordResetTokenRepository;
 import com.speeddesk.api.repository.TicketCategoryRepository;
 import com.speeddesk.api.repository.TicketRepository;
 import com.speeddesk.api.repository.UserRepository;
@@ -40,6 +41,9 @@ class OrganizationIntegrationTest {
     private OrganizationRepository organizationRepository;
 
     @Autowired
+    private PasswordResetTokenRepository passwordResetTokenRepository;
+
+    @Autowired
     private TicketCategoryRepository ticketCategoryRepository;
 
     @Autowired
@@ -61,6 +65,7 @@ class OrganizationIntegrationTest {
     void cleanDatabase() {
         ticketRepository.deleteAllInBatch();
         assetRepository.deleteAllInBatch();
+        passwordResetTokenRepository.deleteAllInBatch();
         userRepository.deleteAllInBatch();
         ticketCategoryRepository.deleteAllInBatch();
         organizationRepository.deleteAllInBatch();

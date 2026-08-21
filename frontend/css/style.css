@@ -334,6 +334,17 @@ html[data-theme="light"] .velocity-lines {
     color: var(--success);
 }
 
+.btn-danger {
+    border-color: rgba(255, 72, 119, 0.28);
+    background: var(--danger-soft);
+    color: var(--danger);
+}
+
+.btn-danger:hover:not(:disabled) {
+    border-color: rgba(255, 72, 119, 0.5);
+    background: rgba(255, 72, 119, 0.16);
+}
+
 .btn-compact {
     min-height: 34px;
     padding: 8px 12px;
@@ -621,13 +632,22 @@ textarea.form-control {
 }
 
 .forgot-password {
+    display: inline-flex;
+    align-items: center;
     border: 0;
     background: transparent;
     color: var(--brand-accent);
-    cursor: not-allowed;
+    cursor: pointer;
     font-size: 13px;
     font-weight: 700;
-    opacity: 0.76;
+    text-decoration: none;
+    transition: color 160ms ease, opacity 160ms ease;
+}
+
+.forgot-password:hover {
+    color: var(--brand-primary);
+    text-decoration: underline;
+    text-underline-offset: 3px;
 }
 
 .login-submit {
@@ -647,6 +667,12 @@ textarea.form-control {
     font-size: 13px;
 }
 
+.login-error.success {
+    border-color: rgba(16, 217, 166, 0.35);
+    background: var(--success-soft);
+    color: var(--success);
+}
+
 .login-security-note {
     display: flex;
     align-items: center;
@@ -655,6 +681,18 @@ textarea.form-control {
     margin-top: 42px;
     color: var(--text-secondary);
     font-size: 12px;
+}
+
+.auth-back-link {
+    color: var(--brand-accent);
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.auth-back-link:hover {
+    color: var(--brand-primary);
+    text-decoration: underline;
+    text-underline-offset: 3px;
 }
 
 /* Internal app */
@@ -1964,6 +2002,16 @@ textarea.form-control {
     border-top: 1px solid var(--border);
 }
 
+.modal-description {
+    color: var(--text-secondary);
+    font-size: 11px;
+    line-height: 1.65;
+}
+
+.modal-content-compact {
+    width: min(100%, 460px);
+}
+
 .toast-region {
     position: fixed;
     right: 22px;
@@ -2495,6 +2543,150 @@ textarea.form-control {
     margin-top: 8px;
 }
 
+/* Account profile */
+.profile-layout {
+    display: grid;
+    grid-template-columns: minmax(280px, 330px) minmax(0, 1fr);
+    gap: 22px;
+    align-items: start;
+}
+
+.profile-summary-card {
+    position: sticky;
+    top: calc(var(--topbar-height) + 20px);
+    padding: 24px;
+}
+
+.profile-hero {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 16px;
+    padding-bottom: 22px;
+    border-bottom: 1px solid var(--border);
+}
+
+.profile-avatar {
+    display: inline-flex;
+    width: 64px;
+    height: 64px;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 20px;
+    background: linear-gradient(145deg, var(--brand-primary), var(--brand-accent));
+    color: #ffffff;
+    box-shadow: 0 14px 30px -12px var(--brand-glow);
+    font-family: var(--font-mono);
+    font-size: 18px;
+    font-weight: 800;
+}
+
+.profile-hero > div {
+    display: grid;
+    min-width: 0;
+    gap: 4px;
+}
+
+.profile-hero h2 {
+    color: var(--text-tertiary);
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+}
+
+.profile-hero strong,
+.profile-hero span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.profile-hero strong {
+    color: var(--text-primary);
+    font-size: 15px;
+}
+
+.profile-hero span {
+    color: var(--text-secondary);
+    font-size: 10px;
+}
+
+.profile-facts {
+    display: grid;
+    gap: 0;
+    margin-top: 8px;
+}
+
+.profile-facts > div {
+    display: grid;
+    grid-template-columns: minmax(90px, 0.8fr) minmax(0, 1.2fr);
+    gap: 12px;
+    align-items: center;
+    padding: 13px 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.profile-facts dt {
+    color: var(--text-tertiary);
+    font-size: 9px;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+.profile-facts dd {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    color: var(--text-secondary);
+    font-size: 10px;
+    font-weight: 700;
+    text-align: right;
+}
+
+.profile-theme-note {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin-top: 18px;
+    padding: 13px;
+    border: 1px solid var(--brand-border);
+    border-radius: var(--radius-md);
+    background: var(--brand-soft);
+    color: var(--text-secondary);
+    font-size: 9px;
+    line-height: 1.55;
+}
+
+.profile-theme-note .icon {
+    width: 16px;
+    height: 16px;
+    color: var(--brand-accent);
+}
+
+.profile-forms {
+    display: grid;
+    min-width: 0;
+    gap: 22px;
+}
+
+.profile-form {
+    display: grid;
+    gap: 16px;
+    padding: 22px;
+}
+
+.profile-form .form-group,
+.profile-form .feedback {
+    margin: 0;
+}
+
+.profile-form .btn {
+    justify-self: start;
+    min-width: 190px;
+}
+
 /* User management */
 .user-metrics {
     margin-bottom: 22px;
@@ -2589,7 +2781,7 @@ textarea.form-control {
 
 .user-filter-grid {
     display: grid;
-    grid-template-columns: minmax(160px, 1.5fr) minmax(100px, 0.7fr) minmax(120px, 0.9fr);
+    grid-template-columns: minmax(160px, 1.5fr) repeat(3, minmax(100px, 0.75fr));
     gap: 12px;
     align-items: end;
     padding: 18px 22px;
@@ -2620,7 +2812,7 @@ textarea.form-control {
 
 .user-record {
     display: grid;
-    grid-template-columns: minmax(0, 1.4fr) minmax(120px, 0.9fr) minmax(76px, auto);
+    grid-template-columns: minmax(0, 1.4fr) minmax(120px, 0.8fr) minmax(76px, auto) auto;
     gap: 12px;
     align-items: center;
     min-width: 0;
@@ -2629,6 +2821,11 @@ textarea.form-control {
     border-radius: var(--radius-md);
     background: var(--surface-subtle);
     transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
+}
+
+.user-record.is-inactive {
+    border-style: dashed;
+    background: color-mix(in srgb, var(--surface-subtle) 78%, transparent);
 }
 
 .user-record:hover {
@@ -2743,6 +2940,27 @@ textarea.form-control {
     text-transform: none;
 }
 
+.user-record-actions {
+    display: flex;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 7px;
+}
+
+.user-record-actions .btn {
+    min-width: 68px;
+}
+
+.user-edit-form {
+    display: grid;
+    gap: 16px;
+}
+
+.user-edit-form .form-group,
+.user-edit-form .feedback {
+    margin: 0;
+}
+
 .users-empty-state {
     display: grid;
     min-height: 190px;
@@ -2765,6 +2983,75 @@ textarea.form-control {
     max-width: 420px;
     font-size: 10px;
     line-height: 1.5;
+}
+
+/* Manager-issued password recovery */
+.password-reset-modal {
+    width: min(100%, 660px);
+}
+
+.password-reset-description {
+    margin-bottom: 18px;
+}
+
+.password-reset-result {
+    display: grid;
+    gap: 16px;
+    margin-top: 18px;
+}
+
+.password-reset-notice {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 13px 14px;
+    border: 1px solid rgba(255, 176, 32, 0.3);
+    border-radius: var(--radius-md);
+    background: var(--warning-soft);
+    color: var(--warning);
+    font-size: 10px;
+    font-weight: 650;
+    line-height: 1.55;
+}
+
+.password-reset-notice .icon {
+    width: 17px;
+    height: 17px;
+}
+
+.password-reset-field {
+    display: grid;
+    gap: 7px;
+}
+
+.password-reset-copy-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+    align-items: stretch;
+}
+
+.password-reset-copy-row .btn {
+    min-width: 112px;
+}
+
+.password-reset-value {
+    min-height: 58px;
+    resize: none;
+    overflow-wrap: anywhere;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    line-height: 1.5;
+}
+
+.password-reset-expiration {
+    color: var(--text-secondary);
+    font-size: 10px;
+    font-weight: 700;
+}
+
+.password-reset-modal > .feedback {
+    margin-top: 18px;
 }
 
 @media (max-width: 1180px) {
@@ -2804,6 +3091,10 @@ textarea.form-control {
         grid-template-columns: minmax(0, 1fr) 300px;
     }
 
+    .profile-layout {
+        grid-template-columns: minmax(260px, 300px) minmax(0, 1fr);
+    }
+
     .users-management-layout {
         grid-template-columns: minmax(300px, 340px) minmax(0, 1fr);
     }
@@ -2821,9 +3112,15 @@ textarea.form-control {
     }
 
     .user-record-meta {
-        grid-column: 1 / -1;
+        grid-column: 1;
         grid-template-columns: auto auto;
-        justify-content: end;
+        justify-content: start;
+        justify-items: start;
+        text-align: left;
+    }
+
+    .user-record-actions {
+        grid-column: 2;
     }
 }
 
@@ -2993,6 +3290,18 @@ textarea.form-control {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
+    .profile-layout {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .profile-summary-card {
+        position: static;
+    }
+
+    .profile-forms {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
     .users-management-layout {
         grid-template-columns: minmax(0, 1fr);
     }
@@ -3002,13 +3311,17 @@ textarea.form-control {
     }
 
     .user-record {
-        grid-template-columns: minmax(0, 1fr) minmax(160px, 0.7fr) auto;
+        grid-template-columns: minmax(0, 1fr) minmax(160px, 0.7fr);
     }
 
     .user-record-meta {
-        grid-column: auto;
+        grid-column: 1;
         grid-template-columns: minmax(0, 1fr);
         justify-content: initial;
+    }
+
+    .user-record-actions {
+        grid-column: 2;
     }
 }
 
@@ -3199,6 +3512,20 @@ textarea.form-control {
         width: 100%;
     }
 
+    .profile-forms {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .profile-summary-card,
+    .profile-form {
+        padding: 18px;
+    }
+
+    .profile-form .btn {
+        width: 100%;
+        min-width: 0;
+    }
+
     .users-directory-head {
         align-items: stretch;
         flex-direction: column;
@@ -3233,6 +3560,23 @@ textarea.form-control {
         padding-top: 11px;
         border-top: 1px solid var(--border);
         text-align: left;
+    }
+
+    .user-record-actions {
+        grid-column: auto;
+        justify-content: stretch;
+    }
+
+    .user-record-actions .btn {
+        flex: 1 1 120px;
+    }
+
+    .password-reset-copy-row {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .password-reset-copy-row .btn {
+        width: 100%;
     }
 }
 

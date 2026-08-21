@@ -45,6 +45,23 @@ const api = {
         }
     },
 
+    updateSessionProfile(profile) {
+        const session = this.getSession();
+        if (!session || !profile || profile.id !== session.id) return session;
+
+        const updatedSession = {
+            ...session,
+            name: profile.name || session.name,
+            email: profile.email || session.email,
+            role: profile.role || session.role
+        };
+        sessionStorage.setItem(SESSION_KEY, JSON.stringify(updatedSession));
+        window.dispatchEvent(new CustomEvent('speeddesk:session-updated', {
+            detail: updatedSession
+        }));
+        return updatedSession;
+    },
+
     clearSession() {
         sessionStorage.removeItem(SESSION_KEY);
         localStorage.removeItem('user'); // Garantir limpeza do antigo

@@ -40,6 +40,9 @@ public class AuthenticationService {
         String normalizedEmail = EmailNormalizer.normalize(request.email());
         User user = userRepository.findByEmailIgnoreCase(normalizedEmail)
                 .orElseThrow(InvalidCredentialsException::new);
+        if (!user.isActive()) {
+            throw new InvalidCredentialsException();
+        }
 
         StoredPassword storedPassword = passwordHashClassifier.classify(user.getPassword());
         if (!passwordMatches(request.password(), storedPassword)) {

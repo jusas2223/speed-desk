@@ -3,6 +3,7 @@ package com.speeddesk.api.config;
 import com.speeddesk.api.entity.UserRole;
 import com.speeddesk.api.security.ProblemDetailAccessDeniedHandler;
 import com.speeddesk.api.security.ProblemDetailAuthenticationEntryPoint;
+import com.speeddesk.api.security.CurrentAccountJwtValidator;
 import jakarta.servlet.DispatcherType;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -41,7 +42,11 @@ import java.util.List;
 import java.util.UUID;
 
 @Configuration
-@EnableConfigurationProperties({JwtProperties.class, CorsProperties.class})
+@EnableConfigurationProperties({
+        JwtProperties.class,
+        CorsProperties.class,
+        AccountProperties.class
+})
 public class SecurityConfig {
 
     private static final String ROLE_PREFIX = "ROLE_";
@@ -64,10 +69,22 @@ public class SecurityConfig {
                         .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/users/login").permitAll()
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/account/password-reset/confirm"
+                        ).permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/users")
                         .hasAuthority(authority(UserRole.GERENTE))
                         .requestMatchers(HttpMethod.POST, "/api/users")
                         .hasAuthority(authority(UserRole.GERENTE))
+                        .requestMatchers(HttpMethod.PUT, "/api/users/**")
+                        .hasAuthority(authority(UserRole.GERENTE))
+                        .requestMatchers(HttpMethod.PATCH, "/api/users/**")
+                        .hasAuthority(authority(UserRole.GERENTE))
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/users/*/password-reset"
+                        ).hasAuthority(authority(UserRole.GERENTE))
                         .requestMatchers(
                                 HttpMethod.GET,
                                 "/api/organizations"
@@ -140,7 +157,11 @@ public class SecurityConfig {
     }
 
     @Bean
-    public JwtDecoder jwtDecoder(SecretKey jwtSecretKey, JwtProperties properties) {
+    public JwtDecoder jwtDecoder(
+            SecretKey jwtSecretKey,
+            JwtProperties properties,
+            CurrentAccountJwtValidator currentAccountJwtValidator
+    ) {
         NimbusJwtDecoder decoder = NimbusJwtDecoder.withSecretKey(jwtSecretKey)
                 .macAlgorithm(MacAlgorithm.HS256)
                 .build();
@@ -149,7 +170,8 @@ public class SecurityConfig {
                 JwtValidators.createDefaultWithIssuer(properties.issuer());
         decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(
                 standardValidators,
-                this::validateRequiredClaims
+                this::validateRequiredClaims,
+                currentAccountJwtValidator
         ));
         return decoder;
     }
@@ -189,7 +211,7 @@ public class SecurityConfig {
 
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(allowedOrigins);
-        configuration.setAllowedMethods(List.of("GET", "POST", "PATCH", "OPTIONS"));
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("Content-Type", "Authorization"));
         configuration.setAllowCredentials(false);
         configuration.setMaxAge(3600L);

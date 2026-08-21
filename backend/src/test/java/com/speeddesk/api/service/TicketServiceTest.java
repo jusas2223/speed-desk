@@ -12,6 +12,7 @@ import com.speeddesk.api.entity.TicketType;
 import com.speeddesk.api.entity.User;
 import com.speeddesk.api.entity.UserRole;
 import com.speeddesk.api.exception.InactiveTicketCategoryException;
+import com.speeddesk.api.exception.InactiveUserException;
 import com.speeddesk.api.exception.InvalidTicketStatusTransitionException;
 import com.speeddesk.api.exception.InvalidUserRoleException;
 import com.speeddesk.api.exception.TicketCategoryNotFoundException;
@@ -362,6 +363,35 @@ class TicketServiceTest {
         );
 
         verify(userRepository, never()).findById(technicianId);
+    }
+
+    @Test
+    void rejectsAssignmentToInactiveTechnician() {
+        UUID ticketId = UUID.randomUUID();
+        UUID technicianId = UUID.randomUUID();
+        Ticket ticket = Ticket.builder()
+                .titulo("Chamado")
+                .descricao("Descrição")
+                .prioridade(TicketPriority.NORMAL)
+                .status(TicketStatus.RECEBIDO)
+                .cliente(client(UUID.randomUUID()))
+                .build();
+        User technician = User.builder()
+                .id(technicianId)
+                .name("Técnico")
+                .email("technician@speeddesk.test")
+                .role(UserRole.TECNICO)
+                .active(false)
+                .build();
+        when(ticketRepository.findById(ticketId)).thenReturn(Optional.of(ticket));
+        when(userRepository.findById(technicianId)).thenReturn(Optional.of(technician));
+
+        assertThrows(
+                InactiveUserException.class,
+                () -> ticketService.assumirTicket(ticketId, technicianId)
+        );
+
+        verify(ticketRepository, never()).save(any());
     }
 
     @ParameterizedTest
