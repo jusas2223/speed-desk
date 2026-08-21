@@ -1,193 +1,132 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-BR" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Meus Equipamentos - Speed Desk</title>
-
+    <meta name="description" content="Equipamentos cadastrados no Speed Desk.">
+    <title>Meus Equipamentos — Speed Desk</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/style.css">
-    <style>
-        body {
-            display: flex;
-            justify-content: flex-start;
-            align-items: stretch;
-            background-color: var(--background-color);
-        }
-
-        .sidebar {
-            width: 250px;
-            background-color: var(--surface-color);
-            border-right: 1px solid var(--border-color);
-            padding: var(--spacing-lg);
-            display: flex;
-            flex-direction: column;
-        }
-
-        .sidebar-logo {
-            font-size: 1.5rem;
-            font-weight: 600;
-            color: var(--primary-color);
-            margin-bottom: var(--spacing-xl);
-        }
-
-        .sidebar-menu { list-style: none; padding: 0; flex-grow: 1; }
-        .sidebar-menu li { margin-bottom: var(--spacing-md); }
-        .sidebar-menu a {
-            text-decoration: none;
-            color: var(--text-primary);
-            font-weight: 500;
-            display: block;
-            padding: var(--spacing-sm) 0;
-            transition: color 0.2s;
-        }
-        .sidebar-menu a:hover, .sidebar-menu a.active { color: var(--primary-color); }
-
-        .main-content {
-            flex-grow: 1;
-            padding: var(--spacing-xl);
-            display: flex;
-            flex-direction: column;
-            height: 100vh;
-            overflow: hidden;
-        }
-
-        .dashboard-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: var(--spacing-xl);
-        }
-
-        .dashboard-header h1 { font-size: 1.75rem; font-weight: 600; }
-
-        .assets-container {
-            background-color: var(--surface-color);
-            border-radius: var(--border-radius);
-            border: 1px solid var(--border-color);
-            padding: var(--spacing-lg);
-            flex-grow: 1;
-            overflow-y: auto;
-        }
-
-        .assets-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-            gap: var(--spacing-md);
-        }
-
-        .asset-card {
-            border: 1px solid var(--border-color);
-            border-radius: var(--border-radius);
-            padding: var(--spacing-md);
-            background-color: var(--background-color);
-            display: flex;
-            flex-direction: column;
-            gap: var(--spacing-xs);
-        }
-
-        .asset-card strong { font-size: 1.1rem; }
-        .asset-label { font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-top: var(--spacing-xs); }
-        .asset-value { font-weight: 500; }
-
-        /* Modal */
-        .modal-overlay {
-            position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background-color: rgba(0,0,0,0.5);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            z-index: 1000;
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity 0.2s ease;
-        }
-        .modal-overlay.active { opacity: 1; pointer-events: auto; }
-        .modal-content {
-            background-color: var(--surface-color);
-            padding: var(--spacing-xl);
-            border-radius: var(--border-radius);
-            width: 100%;
-            max-width: 500px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
-        }
-        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--spacing-lg); }
-        .modal-close { background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-secondary); }
-    </style>
+    <script>
+        (() => {
+            const savedTheme = localStorage.getItem('speeddesk-theme');
+            const preferredTheme = savedTheme === 'light' || savedTheme === 'dark'
+                ? savedTheme
+                : (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+            document.documentElement.dataset.theme = preferredTheme;
+            document.documentElement.style.colorScheme = preferredTheme;
+        })();
+    </script>
 </head>
 <body>
+    <div class="velocity-background" aria-hidden="true">
+        <div class="velocity-lines"></div>
+    </div>
 
-    <nav class="sidebar">
-        <div class="sidebar-logo">Speed Desk</div>
-        <ul class="sidebar-menu">
-            <li><a href="dashboard.html">Painel Kanban</a></li>
-            <li><a href="#">Meus Chamados</a></li>
-            <li><a href="assets.html" class="active">Meus Equipamentos</a></li>
-        </ul>
-        <div style="margin-top: auto;">
-            <button id="logoutBtn" class="btn" style="background:none; border:1px solid var(--border-color); color:var(--text-primary);">Sair</button>
+    <div class="app-shell">
+        <aside class="sidebar" id="sidebar-container"></aside>
+
+        <div class="main-column">
+            <header class="topbar">
+                <div class="topbar-start">
+                    <button id="mobileMenuBtn" class="icon-button mobile-menu-button" type="button" aria-label="Abrir menu" aria-expanded="false">
+                        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"></path></svg>
+                    </button>
+                    <div class="topbar-search" aria-label="Pesquisa de equipamentos em breve">
+                        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.35-4.35"></path></svg>
+                        <input class="topbar-search-input" type="search" placeholder="Pesquisar equipamentos — em breve" disabled>
+                    </div>
+                </div>
+
+                <div class="topbar-actions">
+                    <button id="toggleThemeBtn" class="icon-button" type="button" aria-label="Alternar tema claro e escuro">
+                        <svg class="icon theme-icon theme-icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.66 6.34l1.41-1.41"></path></svg>
+                        <svg class="icon theme-icon theme-icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+                    </button>
+                    <div class="topbar-profile">
+                        <span class="user-avatar" data-topbar-avatar></span>
+                        <span class="topbar-user-copy">
+                            <span class="topbar-user-name" data-topbar-name>Usuário</span>
+                            <span class="topbar-user-status">Sessão ativa</span>
+                        </span>
+                    </div>
+                </div>
+            </header>
+
+            <main class="content">
+                <header class="page-heading">
+                    <div class="page-heading-main">
+                        <div class="page-title-row">
+                            <h1 class="page-title">Meus Equipamentos</h1>
+                            <span id="assetCount" class="live-badge">0 cadastrados</span>
+                        </div>
+                        <p class="page-description">Equipamentos vinculados ao seu cadastro e disponíveis para abertura de chamados.</p>
+                    </div>
+                    <button id="btnOpenModal" class="btn btn-primary" type="button">
+                        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+                        Adicionar equipamento
+                    </button>
+                </header>
+
+                <section class="page-card" aria-labelledby="assetsTableTitle">
+                    <header class="page-card-header">
+                        <div>
+                            <h2 id="assetsTableTitle">Inventário pessoal</h2>
+                            <p>Consulte os equipamentos que podem ser relacionados a um chamado.</p>
+                        </div>
+                    </header>
+
+                    <div class="table-scroll">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th scope="col">Equipamento</th>
+                                    <th scope="col">Tipo</th>
+                                    <th scope="col">Número de série</th>
+                                </tr>
+                            </thead>
+                            <tbody id="assetsTableBody">
+                                <tr><td colspan="3">Carregando equipamentos...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            </main>
         </div>
-    </nav>
+    </div>
 
-    <main class="main-content">
-        <header class="dashboard-header">
-            <div>
-                <h1>Meus Equipamentos</h1>
-                <p style="color: var(--text-secondary); font-size: 0.9rem;">Gerencie os ativos atrelados à sua conta.</p>
-            </div>
-            <div>
-                <button id="btnOpenModal" class="btn btn-primary">+ Adicionar Equipamento</button>
-            </div>
-        </header>
-
-        <div class="assets-container" style="overflow-x: auto;">
-            <table class="table-assets" style="width: 100%; border-collapse: collapse; text-align: left;">
-                <thead>
-                    <tr style="border-bottom: 2px solid var(--border-color);">
-                        <th style="padding: 12px; font-weight: 600;">Equipamento</th>
-                        <th style="padding: 12px; font-weight: 600;">Tipo</th>
-                        <th style="padding: 12px; font-weight: 600;">Nº Série</th>
-                    </tr>
-                </thead>
-                <tbody id="assetsTableBody">
-                    <!-- Equipamentos serão carregados aqui via JS -->
-                </tbody>
-            </table>
-        </div>
-    </main>
-
-    <!-- Modal Novo Equipamento -->
-    <div class="modal-overlay" id="newAssetModal">
+    <div class="modal-overlay" id="newAssetModal" role="dialog" aria-modal="true" aria-labelledby="newAssetTitle" aria-hidden="true" inert hidden>
         <div class="modal-content">
-            <div class="modal-header">
-                <h2>Adicionar Equipamento</h2>
-                <button class="modal-close" id="btnCloseModal">&times;</button>
-            </div>
+            <header class="modal-header">
+                <h2 id="newAssetTitle">Adicionar Equipamento</h2>
+                <button class="modal-close" id="btnCloseModal" type="button" aria-label="Fechar">&times;</button>
+            </header>
             <form id="newAssetForm">
                 <div class="form-group">
-                    <label for="nome" class="form-label">Nome do Equipamento</label>
-                    <input type="text" id="nome" class="form-control" required placeholder="Ex: Notebook Dell Inspiron">
+                    <label for="nome" class="form-label">Nome do equipamento</label>
+                    <input type="text" id="nome" class="form-control" required maxlength="255" placeholder="Ex.: Notebook Dell Inspiron">
                 </div>
                 <div class="form-group">
                     <label for="tipo" class="form-label">Tipo</label>
-                    <input type="text" id="tipo" class="form-control" required placeholder="Ex: Computador, Impressora, Monitor">
+                    <input type="text" id="tipo" class="form-control" required maxlength="100" placeholder="Ex.: Notebook, monitor ou impressora">
                 </div>
                 <div class="form-group">
-                    <label for="numeroSerie" class="form-label">Número de Série</label>
-                    <input type="text" id="numeroSerie" class="form-control" required placeholder="SN12345XYZ">
+                    <label for="numeroSerie" class="form-label">Número de série</label>
+                    <input type="text" id="numeroSerie" class="form-control" required maxlength="255" placeholder="Ex.: SN12345XYZ">
                 </div>
-                <div style="display: flex; gap: 1rem; justify-content: flex-end; margin-top: 2rem;">
-                    <button type="button" class="btn" id="btnCancelModal" style="background:none; border:1px solid var(--border-color); color:var(--text-primary); width:auto;">Cancelar</button>
-                    <button type="submit" class="btn btn-primary" id="btnSubmitAsset" style="width:auto;">Salvar</button>
-                </div>
+                <footer class="modal-actions">
+                    <button type="button" class="btn btn-secondary" id="btnCancelModal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary" id="btnSubmitAsset">Salvar equipamento</button>
+                </footer>
             </form>
         </div>
     </div>
 
-    <script type="module" src="./js/assets.js"></script>
+    <div id="toastRegion" class="toast-region" aria-live="polite" aria-atomic="true"></div>
+
+    <script type="module" src="js/navigation.js"></script>
+    <script type="module" src="js/assets.js"></script>
 </body>
 </html>

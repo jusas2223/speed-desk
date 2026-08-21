@@ -1,394 +1,150 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-BR" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Configurações - Speed Desk</title>
-
+    <meta name="description" content="Configurações administrativas do Speed Desk.">
+    <title>Configurações — Speed Desk</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/style.css">
-    <style>
-        body {
-            align-items: stretch;
-            background-color: var(--background-color);
-            display: flex;
-            justify-content: flex-start;
-        }
-
-        .sidebar {
-            background-color: var(--surface-color);
-            border-right: 1px solid var(--border-color);
-            display: flex;
-            flex-direction: column;
-            flex-shrink: 0;
-            min-height: 100vh;
-            padding: var(--spacing-lg);
-            width: 250px;
-        }
-
-        .sidebar-logo {
-            color: var(--primary-color);
-            font-size: 1.5rem;
-            font-weight: 600;
-            margin-bottom: var(--spacing-xl);
-        }
-
-        .sidebar-menu {
-            flex-grow: 1;
-            list-style: none;
-            padding: 0;
-        }
-
-        .sidebar-menu li {
-            margin-bottom: var(--spacing-md);
-        }
-
-        .sidebar-menu a {
-            color: var(--text-primary);
-            display: block;
-            font-weight: 500;
-            padding: var(--spacing-sm) 0;
-            text-decoration: none;
-            transition: color 0.2s;
-        }
-
-        .sidebar-menu a:hover,
-        .sidebar-menu a.active {
-            color: var(--primary-color);
-        }
-
-        .logout-button {
-            background: none;
-            border: 1px solid var(--border-color);
-            color: var(--text-primary);
-            width: auto;
-        }
-
-        .main-content {
-            flex-grow: 1;
-            height: 100vh;
-            min-width: 0;
-            overflow-y: auto;
-            padding: var(--spacing-xl);
-        }
-
-        .page-header {
-            margin-bottom: var(--spacing-xl);
-        }
-
-        .page-header h1 {
-            font-size: 1.75rem;
-            font-weight: 600;
-        }
-
-        .page-header p {
-            color: var(--text-secondary);
-            font-size: 0.9rem;
-            margin-top: var(--spacing-xs);
-        }
-
-        .settings-grid {
-            display: grid;
-            gap: var(--spacing-lg);
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-        }
-
-        .settings-section {
-            align-self: start;
-            background-color: var(--surface-color);
-            border: 1px solid var(--border-color);
-            border-radius: var(--border-radius);
-            padding: var(--spacing-lg);
-        }
-
-        .section-header {
-            margin-bottom: var(--spacing-lg);
-        }
-
-        .section-header h2 {
-            font-size: 1.2rem;
-            font-weight: 600;
-        }
-
-        .section-header p {
-            color: var(--text-secondary);
-            font-size: 0.85rem;
-            margin-top: var(--spacing-xs);
-        }
-
-        .organization-form,
-        .category-form {
-            align-items: end;
-            display: grid;
-            gap: var(--spacing-md);
-            margin-bottom: var(--spacing-md);
-        }
-
-        .organization-form {
-            grid-template-columns: minmax(0, 1fr) auto;
-        }
-
-        .category-form {
-            grid-template-columns: minmax(0, 1fr) minmax(150px, 0.6fr) auto;
-        }
-
-        .settings-section .form-group {
-            margin-bottom: 0;
-        }
-
-        .submit-button {
-            white-space: nowrap;
-            width: auto;
-        }
-
-        .feedback,
-        .list-status {
-            border-radius: var(--border-radius);
-            font-size: 0.85rem;
-            margin-bottom: var(--spacing-md);
-            padding: 0.65rem 0.75rem;
-        }
-
-        .feedback.success {
-            background-color: rgba(36, 161, 72, 0.12);
-            color: #198038;
-        }
-
-        .feedback.error,
-        .list-status.error {
-            background-color: rgba(218, 30, 40, 0.1);
-            color: var(--error-color);
-        }
-
-        .list-status.loading {
-            background-color: rgba(15, 98, 254, 0.08);
-            color: var(--text-secondary);
-        }
-
-        .config-list {
-            display: flex;
-            flex-direction: column;
-            gap: var(--spacing-sm);
-        }
-
-        .config-item {
-            background-color: var(--background-color);
-            border: 1px solid var(--border-color);
-            border-radius: var(--border-radius);
-            padding: var(--spacing-md);
-        }
-
-        .record-header {
-            align-items: flex-start;
-            display: flex;
-            gap: var(--spacing-sm);
-            justify-content: space-between;
-        }
-
-        .record-name {
-            font-size: 0.95rem;
-            font-weight: 600;
-            overflow-wrap: anywhere;
-        }
-
-        .record-meta {
-            color: var(--text-secondary);
-            display: flex;
-            flex-wrap: wrap;
-            font-size: 0.78rem;
-            gap: var(--spacing-sm);
-            margin-top: var(--spacing-sm);
-        }
-
-        .status-pill,
-        .type-pill {
-            border-radius: 12px;
-            flex-shrink: 0;
-            font-size: 0.7rem;
-            font-weight: 600;
-            padding: 3px 8px;
-        }
-
-        .status-pill.active {
-            background-color: #e5f6e6;
-            color: #198038;
-        }
-
-        .status-pill.inactive {
-            background-color: var(--border-color);
-            color: var(--text-secondary);
-        }
-
-        .type-pill {
-            background-color: rgba(15, 98, 254, 0.12);
-            color: var(--primary-color);
-        }
-
-        .empty-state {
-            border: 1px dashed var(--border-color);
-            border-radius: var(--border-radius);
-            color: var(--text-secondary);
-            font-size: 0.9rem;
-            padding: var(--spacing-lg);
-            text-align: center;
-        }
-
-        @media (prefers-color-scheme: dark) {
-            .feedback.success {
-                color: #42be65;
-            }
-
-            .status-pill.active {
-                background-color: rgba(66, 190, 101, 0.14);
-                color: #42be65;
-            }
-        }
-
-        @media (max-width: 1050px) {
-            .settings-grid {
-                grid-template-columns: 1fr;
-            }
-        }
-
-        @media (max-width: 720px) {
-            body {
-                display: block;
-            }
-
-            .sidebar {
-                border-bottom: 1px solid var(--border-color);
-                border-right: 0;
-                min-height: auto;
-                width: 100%;
-            }
-
-            .sidebar-logo {
-                margin-bottom: var(--spacing-md);
-            }
-
-            .sidebar-menu {
-                display: flex;
-                flex-wrap: wrap;
-                gap: var(--spacing-md);
-                margin-bottom: var(--spacing-md);
-            }
-
-            .sidebar-menu li {
-                margin-bottom: 0;
-            }
-
-            .main-content {
-                height: auto;
-                min-height: calc(100vh - 180px);
-                padding: var(--spacing-lg);
-            }
-
-            .organization-form,
-            .category-form {
-                grid-template-columns: 1fr;
-            }
-
-            .submit-button {
-                width: 100%;
-            }
-        }
-    </style>
+    <script>
+        (() => {
+            const savedTheme = localStorage.getItem('speeddesk-theme');
+            const preferredTheme = savedTheme === 'light' || savedTheme === 'dark'
+                ? savedTheme
+                : (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+            document.documentElement.dataset.theme = preferredTheme;
+            document.documentElement.style.colorScheme = preferredTheme;
+        })();
+    </script>
 </head>
 <body>
-    <nav class="sidebar" aria-label="Navegação principal">
-        <div class="sidebar-logo">Speed Desk</div>
-        <ul class="sidebar-menu">
-            <li><a href="dashboard.html">Painel Kanban</a></li>
-            <li><a href="configuracoes.html" class="active" aria-current="page">Configurações</a></li>
-        </ul>
-        <div>
-            <button id="logoutBtn" class="btn logout-button" type="button">Sair</button>
-        </div>
-    </nav>
+    <div class="velocity-background" aria-hidden="true">
+        <div class="velocity-lines"></div>
+    </div>
 
-    <main class="main-content">
-        <header class="page-header">
-            <h1>Configurações administrativas</h1>
-            <p id="welcomeMessage">Carregando sessão...</p>
-        </header>
+    <div class="app-shell">
+        <aside class="sidebar" id="sidebar-container"></aside>
 
-        <div class="settings-grid">
-            <section class="settings-section" aria-labelledby="organizationsTitle">
-                <header class="section-header">
-                    <h2 id="organizationsTitle">Organizações</h2>
-                    <p>Agrupamentos administrativos disponíveis para clientes.</p>
+        <div class="main-column">
+            <header class="topbar">
+                <div class="topbar-start">
+                    <button id="mobileMenuBtn" class="icon-button mobile-menu-button" type="button" aria-label="Abrir menu" aria-expanded="false">
+                        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"></path></svg>
+                    </button>
+                    <div class="topbar-search" aria-label="Pesquisa administrativa em breve">
+                        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.35-4.35"></path></svg>
+                        <input class="topbar-search-input" type="search" placeholder="Pesquisar configurações — em breve" disabled>
+                    </div>
+                </div>
+
+                <div class="topbar-actions">
+                    <button id="toggleThemeBtn" class="icon-button" type="button" aria-label="Alternar tema claro e escuro">
+                        <svg class="icon theme-icon theme-icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.66 6.34l1.41-1.41"></path></svg>
+                        <svg class="icon theme-icon theme-icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+                    </button>
+                    <div class="topbar-profile">
+                        <span class="user-avatar" data-topbar-avatar></span>
+                        <span class="topbar-user-copy">
+                            <span class="topbar-user-name" data-topbar-name>Usuário</span>
+                            <span class="topbar-user-status">Sessão ativa</span>
+                        </span>
+                    </div>
+                </div>
+            </header>
+
+            <main class="content">
+                <header class="page-heading">
+                    <div class="page-heading-main">
+                        <div class="page-title-row">
+                            <h1 class="page-title">Configurações administrativas</h1>
+                            <span class="live-badge">Gerente</span>
+                        </div>
+                        <p id="welcomeMessage" class="page-description">Carregando sua sessão...</p>
+                    </div>
                 </header>
 
-                <form id="organizationForm" class="organization-form">
-                    <div class="form-group">
-                        <label for="organizationName" class="form-label">Nome</label>
-                        <input
-                            type="text"
-                            id="organizationName"
-                            name="name"
-                            class="form-control"
-                            maxlength="255"
-                            autocomplete="organization"
-                            required
-                        >
-                    </div>
-                    <button id="organizationSubmit" class="btn btn-primary submit-button" type="submit">
-                        Criar organização
-                    </button>
-                </form>
+                <div class="settings-grid">
+                    <section class="settings-section" aria-labelledby="organizationsTitle">
+                        <header class="section-header">
+                            <h2 id="organizationsTitle">Organizações</h2>
+                            <p>Cadastre agrupamentos administrativos que poderão ser associados aos clientes.</p>
+                        </header>
 
-                <div id="organizationFeedback" class="feedback" role="alert" aria-live="assertive" hidden></div>
-                <div id="organizationsStatus" class="list-status loading" role="status" aria-live="polite">
-                    Carregando organizações...
+                        <form id="organizationForm" class="organization-form">
+                            <div class="form-group">
+                                <label for="organizationName" class="form-label">Nome da organização</label>
+                                <input
+                                    type="text"
+                                    id="organizationName"
+                                    name="name"
+                                    class="form-control"
+                                    maxlength="255"
+                                    autocomplete="organization"
+                                    placeholder="Ex.: Faculdade Speed"
+                                    required
+                                >
+                            </div>
+                            <button id="organizationSubmit" class="btn btn-primary submit-button" type="submit">
+                                Criar organização
+                            </button>
+                        </form>
+
+                        <div id="organizationFeedback" class="feedback" role="alert" aria-live="assertive" hidden></div>
+                        <div id="organizationsStatus" class="list-status loading" role="status" aria-live="polite">
+                            Carregando organizações...
+                        </div>
+                        <div id="organizationsList" class="config-list" aria-busy="true"></div>
+                    </section>
+
+                    <section class="settings-section" aria-labelledby="categoriesTitle">
+                        <header class="section-header">
+                            <h2 id="categoriesTitle">Categorias de chamados</h2>
+                            <p>Organize os chamados por assunto e pelo respectivo tipo de atendimento.</p>
+                        </header>
+
+                        <form id="categoryForm" class="category-form">
+                            <div class="form-group">
+                                <label for="categoryName" class="form-label">Nome da categoria</label>
+                                <input
+                                    type="text"
+                                    id="categoryName"
+                                    name="name"
+                                    class="form-control"
+                                    maxlength="255"
+                                    autocomplete="off"
+                                    placeholder="Ex.: Problema de acesso"
+                                    required
+                                >
+                            </div>
+                            <div class="form-group">
+                                <label for="categoryTicketType" class="form-label">Tipo</label>
+                                <select id="categoryTicketType" name="ticketType" class="form-control" required>
+                                    <option value="">Selecione</option>
+                                    <option value="GERAL">Geral</option>
+                                    <option value="HARDWARE">Hardware</option>
+                                    <option value="SOFTWARE">Software</option>
+                                </select>
+                            </div>
+                            <button id="categorySubmit" class="btn btn-primary submit-button" type="submit">
+                                Criar categoria
+                            </button>
+                        </form>
+
+                        <div id="categoryFeedback" class="feedback" role="alert" aria-live="assertive" hidden></div>
+                        <div id="categoriesStatus" class="list-status loading" role="status" aria-live="polite">
+                            Carregando categorias...
+                        </div>
+                        <div id="categoriesList" class="config-list" aria-busy="true"></div>
+                    </section>
                 </div>
-                <div id="organizationsList" class="config-list" aria-busy="true"></div>
-            </section>
-
-            <section class="settings-section" aria-labelledby="categoriesTitle">
-                <header class="section-header">
-                    <h2 id="categoriesTitle">Categorias de chamados</h2>
-                    <p>Categorias ativas organizadas pelo tipo do chamado.</p>
-                </header>
-
-                <form id="categoryForm" class="category-form">
-                    <div class="form-group">
-                        <label for="categoryName" class="form-label">Nome</label>
-                        <input
-                            type="text"
-                            id="categoryName"
-                            name="name"
-                            class="form-control"
-                            maxlength="255"
-                            autocomplete="off"
-                            required
-                        >
-                    </div>
-                    <div class="form-group">
-                        <label for="categoryTicketType" class="form-label">Tipo</label>
-                        <select id="categoryTicketType" name="ticketType" class="form-control" required>
-                            <option value="">Selecione</option>
-                            <option value="GERAL">Geral</option>
-                            <option value="HARDWARE">Hardware</option>
-                            <option value="SOFTWARE">Software</option>
-                        </select>
-                    </div>
-                    <button id="categorySubmit" class="btn btn-primary submit-button" type="submit">
-                        Criar categoria
-                    </button>
-                </form>
-
-                <div id="categoryFeedback" class="feedback" role="alert" aria-live="assertive" hidden></div>
-                <div id="categoriesStatus" class="list-status loading" role="status" aria-live="polite">
-                    Carregando categorias...
-                </div>
-                <div id="categoriesList" class="config-list" aria-busy="true"></div>
-            </section>
+            </main>
         </div>
-    </main>
+    </div>
 
-    <script type="module" src="./js/configuracoes.js"></script>
+    <script type="module" src="js/navigation.js"></script>
+    <script type="module" src="js/configuracoes.js"></script>
 </body>
 </html>

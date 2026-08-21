@@ -1,4 +1,5 @@
 import api from './api.js';
+import { updateTicketNavigationCount } from './navigation.js';
 
 const TICKET_TYPE_LABELS = Object.freeze({
     GERAL: 'Geral',
@@ -6,531 +7,744 @@ const TICKET_TYPE_LABELS = Object.freeze({
     SOFTWARE: 'Software'
 });
 
+const STATUS_LABELS = Object.freeze({
+    RECEBIDO: 'Recebido',
+    EM_TRIAGEM: 'Em triagem',
+    EM_ATENDIMENTO: 'Em atendimento',
+    AGUARDANDO_CLIENTE: 'Aguardando cliente',
+    AGUARDANDO_PECA: 'Aguardando peça',
+    RESOLVIDO: 'Resolvido',
+    FECHADO: 'Fechado'
+});
+
+const CLOSED_STATUSES = new Set(['RESOLVIDO', 'FECHADO']);
+const STATUS_GROUPS = Object.freeze([
+    { label: 'Resolvidos', statuses: ['RESOLVIDO', 'FECHADO'], color: 'var(--success)' },
+    { label: 'Em atendimento', statuses: ['EM_ATENDIMENTO'], color: 'var(--brand-primary)' },
+    { label: 'Abertos na fila', statuses: ['RECEBIDO', 'EM_TRIAGEM'], color: 'var(--info)' },
+    { label: 'Pendentes / Aguardando', statuses: ['AGUARDANDO_CLIENTE', 'AGUARDANDO_PECA'], color: 'var(--warning)' }
+]);
+
 document.addEventListener('DOMContentLoaded', () => {
-    // 1. Verificação de Login
     const session = api.requireAuth();
-    if (!session) return; // requireAuth já redireciona
+    if (!session) return;
 
-    const userName = session.name || 'Usuário';
-    const role = session.role ? session.role.toUpperCase() : 'CLIENTE';
-    document.getElementById('welcomeMessage').textContent = `Bem-vindo(a), ${userName} | Perfil: ${role}`;
+    const role = String(session.role || '').toUpperCase();
+    const firstName = String(session.name || 'Usuário').trim().split(/\s+/)[0];
 
-    // 2. Lógica de Logout
-    document.getElementById('logoutBtn').addEventListener('click', () => {
-        api.logout();
-    });
+    const elements = {
+        welcome: document.getElementById('welcomeMessage'),
+        headerActions: document.getElementById('headerActions'),
+        search: document.getElementById('ticketSearch'),
+        ticketList: document.getElementById('ticketList'),
+        ticketCountLabel: document.getElementById('ticketCountLabel'),
+        metricOpen: document.getElementById('metricOpen'),
+        metricOpenTrend: document.getElementById('metricOpenTrend'),
+        metricOpenSubtitle: document.getElementById('metricOpenSubtitle'),
+        metricInProgress: document.getElementById('metricInProgress'),
+        metricInProgressTrend: document.getElementById('metricInProgressTrend'),
+        metricRisk: document.getElementById('metricRisk'),
+        metricRiskTrend: document.getElementById('metricRiskTrend'),
+        metricResolvedToday: document.getElementById('metricResolvedToday'),
+        statusTotal: document.getElementById('statusTotal'),
+        statusSegments: document.getElementById('statusSegments'),
+        statusBreakdown: document.getElementById('statusBreakdown'),
+        categoryDistribution: document.getElementById('categoryDistribution'),
+        toastRegion: document.getElementById('toastRegion')
+    };
 
-    // 3. Referências DOM e Ocultação de Funcionalidades
-    const colNovos = document.getElementById('col-novos-cards');
-    const colAndamento = document.getElementById('col-andamento-cards');
-    const colConcluidos = document.getElementById('col-concluidos-cards');
+    const state = {
+        tickets: [],
+        activeFilter: 'TODOS',
+        query: ''
+    };
 
-    const countNovos = document.getElementById('count-novos');
-    const countAndamento = document.getElementById('count-andamento');
-    const countConcluidos = document.getElementById('count-concluidos');
+    elements.headerActions.hidden = role !== 'CLIENTE';
 
-    const menuAssets = document.getElementById('menuAssets');
-    const menuSettings = document.getElementById('menuSettings');
-    const headerActions = document.getElementById('headerActions');
-
-    // Esconder botões e menus de acordo com o papel
-    if (role !== 'CLIENTE') {
-        if (menuAssets) menuAssets.style.display = 'none';
-        if (headerActions) headerActions.style.display = 'none';
+    function showToast(message, tone = '') {
+        const toast = document.createElement('div');
+        toast.className = `toast ${tone}`.trim();
+        toast.textContent = message;
+        elements.toastRegion.appendChild(toast);
+        window.setTimeout(() => toast.remove(), 3600);
     }
 
-    if (menuSettings) {
-        menuSettings.hidden = role !== 'GERENTE';
+    function createIcon(paths) {
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('class', 'icon');
+        svg.setAttribute('viewBox', '0 0 24 24');
+        svg.setAttribute('aria-hidden', 'true');
+        svg.innerHTML = paths;
+        return svg;
     }
 
-    // Referências para Modal de Atribuição (Gerente)
-    const assignModal = document.getElementById('assignModal');
-    const btnCloseAssignModal = document.getElementById('btnCloseAssignModal');
-    const btnCancelAssignModal = document.getElementById('btnCancelAssignModal');
-    const assignForm = document.getElementById('assignForm');
-    const technicianSelect = document.getElementById('technicianSelect');
-    const assignTicketId = document.getElementById('assignTicketId');
-    const btnSubmitAssign = document.getElementById('btnSubmitAssign');
-    let techniciansLoaded = false;
+    function createBadge(label, className) {
+        const badge = document.createElement('span');
+        badge.className = `badge ${className}`;
+        badge.textContent = label;
+        return badge;
+    }
 
-    function syncAssignButtonState() {
-        if (btnSubmitAssign) {
-            btnSubmitAssign.disabled = !technicianSelect.value;
+    function getInitials(name) {
+        const words = String(name || 'Cliente').trim().split(/\s+/).filter(Boolean);
+        if (words.length === 0) return 'CL';
+        return (words[0][0] + (words.length > 1 ? words.at(-1)[0] : words[0][1] || '')).toUpperCase();
+    }
+
+    function getTicketCode(ticket) {
+        const compactId = String(ticket.id || '').replaceAll('-', '').slice(0, 6).toUpperCase();
+        return `SPD-${compactId || '000000'}`;
+    }
+
+    function parseDate(value) {
+        if (!value) return null;
+        const parsed = new Date(value);
+        return Number.isNaN(parsed.getTime()) ? null : parsed;
+    }
+
+    function isToday(value) {
+        const date = parseDate(value);
+        if (!date) return false;
+        const today = new Date();
+        return date.getFullYear() === today.getFullYear()
+            && date.getMonth() === today.getMonth()
+            && date.getDate() === today.getDate();
+    }
+
+    function formatRelativeTime(value) {
+        const date = parseDate(value);
+        if (!date) return 'Data indisponível';
+
+        const seconds = Math.max(0, Math.floor((Date.now() - date.getTime()) / 1000));
+        if (seconds < 60) return 'Agora';
+        if (seconds < 3600) return `Há ${Math.floor(seconds / 60)} min`;
+        if (seconds < 86400) return `Há ${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}min`;
+        return `Há ${Math.floor(seconds / 86400)} dia(s)`;
+    }
+
+    function getDeadlineInfo(ticket) {
+        if (CLOSED_STATUSES.has(ticket.status)) {
+            return { label: 'Finalizado', risk: false };
         }
+
+        const deadline = parseDate(ticket.dataVencimento);
+        if (!deadline) return { label: 'Prazo não informado', risk: false };
+
+        const difference = deadline.getTime() - Date.now();
+        const absoluteMinutes = Math.ceil(Math.abs(difference) / 60000);
+        const risk = difference <= 24 * 60 * 60 * 1000;
+
+        if (difference <= 0) {
+            if (absoluteMinutes < 60) return { label: `Prazo vencido há ${absoluteMinutes}min`, risk: true };
+            if (absoluteMinutes < 1440) return { label: `Prazo vencido há ${Math.floor(absoluteMinutes / 60)}h`, risk: true };
+            return { label: `Prazo vencido há ${Math.floor(absoluteMinutes / 1440)}d`, risk: true };
+        }
+
+        if (absoluteMinutes < 60) return { label: `Prazo: ${absoluteMinutes}min restantes`, risk };
+        if (absoluteMinutes < 1440) {
+            const hours = Math.floor(absoluteMinutes / 60);
+            const minutes = absoluteMinutes % 60;
+            return { label: `Prazo: ${hours}h ${minutes}min restantes`, risk };
+        }
+        return { label: `Prazo: ${Math.ceil(absoluteMinutes / 1440)}d restantes`, risk };
     }
 
-    if (technicianSelect) {
-        technicianSelect.addEventListener('change', syncAssignButtonState);
+    function statusClass(status) {
+        if (status === 'RECEBIDO') return 'status-recebido';
+        if (status === 'EM_TRIAGEM') return 'status-triagem';
+        if (status === 'EM_ATENDIMENTO') return 'status-atendimento';
+        if (status === 'RESOLVIDO') return 'status-resolvido';
+        if (status === 'FECHADO') return 'status-fechado';
+        return 'status-aguardando';
     }
 
-    // 4. Buscar e Renderizar Tickets
-    async function loadTickets() {
-        try {
-            colNovos.innerHTML = '<div style="padding: 10px; color: var(--text-secondary);">Carregando chamados...</div>';
-            const tickets = await api.request('/tickets');
-            renderKanban(tickets);
-        } catch (error) {
-            console.error('Erro ao carregar tickets:', error);
-            const mainContent = document.querySelector('.main-content');
-            if(mainContent) {
-                 colNovos.textContent = 'Erro ao carregar painel.';
+    function priorityClass(priority) {
+        return {
+            BAIXA: 'p-baixa',
+            NORMAL: 'p-normal',
+            ALTA: 'p-alta',
+            CRITICA: 'p-critica'
+        }[priority] || 'p-baixa';
+    }
+
+    function createActionButton(label, tone, handler) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = `btn btn-compact ${tone}`;
+        button.textContent = label;
+        button.addEventListener('click', async event => {
+            event.stopPropagation();
+            button.disabled = true;
+            try {
+                await handler();
+            } finally {
+                if (button.isConnected) button.disabled = false;
             }
-        }
+        });
+        return button;
     }
 
-    function renderKanban(tickets) {
-        // Limpar colunas antes de renderizar
-        colNovos.innerHTML = '';
-        colAndamento.innerHTML = '';
-        colConcluidos.innerHTML = '';
+    function createTicketRow(ticket) {
+        const row = document.createElement('article');
+        row.className = 'ticket-row';
+        row.title = ticket.descricao || ticket.titulo;
 
-        let cNovos = 0, cAndamento = 0, cConcluidos = 0;
+        const main = document.createElement('div');
+        main.className = 'ticket-main';
 
-        if (!tickets || tickets.length === 0) {
-            countNovos.textContent = '0';
-            countAndamento.textContent = '0';
-            countConcluidos.textContent = '0';
+        const avatar = document.createElement('span');
+        avatar.className = 'ticket-avatar';
+        avatar.textContent = getInitials(ticket.cliente?.name);
 
-            const msgNovos = document.createElement('div');
-            msgNovos.textContent = 'Nenhum chamado encontrado.';
-            msgNovos.style.padding = '10px';
-            msgNovos.style.color = 'var(--text-secondary)';
-            colNovos.appendChild(msgNovos);
+        const copy = document.createElement('div');
+        copy.className = 'ticket-copy';
 
-            const msgAndamento = document.createElement('div');
-            msgAndamento.textContent = 'Nenhum chamado encontrado.';
-            msgAndamento.style.padding = '10px';
-            msgAndamento.style.color = 'var(--text-secondary)';
-            colAndamento.appendChild(msgAndamento);
+        const labels = document.createElement('div');
+        labels.className = 'ticket-labels';
 
-            const msgConcluidos = document.createElement('div');
-            msgConcluidos.textContent = 'Nenhum chamado encontrado.';
-            msgConcluidos.style.padding = '10px';
-            msgConcluidos.style.color = 'var(--text-secondary)';
-            colConcluidos.appendChild(msgConcluidos);
+        const code = document.createElement('span');
+        code.className = 'ticket-code';
+        code.textContent = getTicketCode(ticket);
+        code.title = String(ticket.id || '');
+        labels.appendChild(code);
+
+        const type = ticket.ticketType || 'GERAL';
+        labels.appendChild(createBadge(
+            ticket.category?.name || TICKET_TYPE_LABELS[type] || type,
+            'badge-category'
+        ));
+        labels.appendChild(createBadge(
+            String(ticket.prioridade || 'BAIXA').toLowerCase().replace(/^./, value => value.toUpperCase()),
+            priorityClass(ticket.prioridade)
+        ));
+
+        const title = document.createElement('h3');
+        title.className = 'ticket-title';
+        title.textContent = ticket.titulo || 'Chamado sem título';
+
+        const meta = document.createElement('div');
+        meta.className = 'ticket-meta';
+
+        const metaItems = [
+            ticket.cliente?.name || 'Cliente não informado',
+            ticket.cliente?.organization?.name,
+            ticket.asset?.nome,
+            formatRelativeTime(ticket.dataCriacao)
+        ].filter(Boolean);
+
+        metaItems.forEach((value, index) => {
+            if (index > 0) {
+                const separator = document.createElement('span');
+                separator.className = 'ticket-meta-separator';
+                separator.textContent = '•';
+                meta.appendChild(separator);
+            }
+            const item = document.createElement('span');
+            item.textContent = value;
+            meta.appendChild(item);
+        });
+
+        copy.append(labels, title, meta);
+        main.append(avatar, copy);
+
+        const side = document.createElement('div');
+        side.className = 'ticket-side';
+
+        const statusStack = document.createElement('div');
+        statusStack.className = 'ticket-status-stack';
+        statusStack.appendChild(createBadge(
+            STATUS_LABELS[ticket.status] || ticket.status || 'Recebido',
+            `badge-status ${statusClass(ticket.status)}`
+        ));
+
+        const deadlineInfo = getDeadlineInfo(ticket);
+        const deadline = document.createElement('span');
+        deadline.className = deadlineInfo.risk ? 'ticket-sla is-risk' : 'ticket-sla';
+        deadline.textContent = deadlineInfo.label;
+        statusStack.appendChild(deadline);
+        side.appendChild(statusStack);
+
+        const actions = document.createElement('div');
+        actions.className = 'ticket-actions';
+
+        if (ticket.status === 'RECEBIDO' && role === 'TECNICO') {
+            actions.appendChild(createActionButton('Assumir', 'btn-primary', () => assumeTicket(ticket.id)));
+        }
+        if (ticket.status === 'RECEBIDO' && role === 'GERENTE') {
+            actions.appendChild(createActionButton('Atribuir', 'btn-primary', async () => openAssignModal(ticket.id)));
+        }
+        const technicianOwnsTicket = ticket.tecnico?.id === session.id;
+        if (
+            ticket.status === 'EM_ATENDIMENTO'
+            && (role === 'GERENTE' || (role === 'TECNICO' && technicianOwnsTicket))
+        ) {
+            actions.appendChild(createActionButton('Resolver', 'btn-success', () => resolveTicket(ticket.id)));
+        }
+
+        if (actions.childElementCount > 0) side.appendChild(actions);
+        row.append(main, side);
+        return row;
+    }
+
+    function getFilteredTickets() {
+        const normalizedQuery = state.query.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
+        return state.tickets.filter(ticket => {
+            const searchText = [
+                getTicketCode(ticket),
+                ticket.titulo,
+                ticket.descricao,
+                ticket.cliente?.name,
+                ticket.cliente?.organization?.name,
+                ticket.category?.name,
+                ticket.ticketType
+            ].filter(Boolean).join(' ').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
+            const matchesQuery = !normalizedQuery || searchText.includes(normalizedQuery);
+            const matchesFilter = state.activeFilter === 'TODOS'
+                || (state.activeFilter === 'CRITICOS' && ['ALTA', 'CRITICA'].includes(ticket.prioridade))
+                || ticket.ticketType === state.activeFilter;
+
+            return matchesQuery && matchesFilter;
+        });
+    }
+
+    function renderTicketList() {
+        const filteredTickets = getFilteredTickets();
+        elements.ticketList.replaceChildren();
+
+        elements.ticketCountLabel.textContent = filteredTickets.length === state.tickets.length
+            ? `${state.tickets.length} chamado(s) carregado(s) com dados atuais.`
+            : `${filteredTickets.length} de ${state.tickets.length} chamado(s) correspondem ao filtro.`;
+
+        if (filteredTickets.length === 0) {
+            const emptyState = document.createElement('div');
+            emptyState.className = 'empty-state';
+
+            const inner = document.createElement('div');
+            inner.className = 'empty-state-inner';
+
+            const icon = document.createElement('span');
+            icon.className = 'empty-state-icon';
+            icon.appendChild(createIcon('<path d="M4 5h16v14H4z"></path><path d="M8 9h8M8 13h5"></path>'));
+
+            const title = document.createElement('strong');
+            title.textContent = state.tickets.length === 0
+                ? 'Nenhum chamado registrado'
+                : 'Nenhum chamado encontrado';
+
+            const description = document.createElement('span');
+            description.textContent = state.tickets.length === 0
+                ? 'A fila será exibida aqui assim que o primeiro chamado for criado.'
+                : 'Altere a pesquisa ou escolha outro filtro.';
+
+            inner.append(icon, title, description);
+            emptyState.appendChild(inner);
+            elements.ticketList.appendChild(emptyState);
             return;
         }
 
-        tickets.forEach(ticket => {
-            const card = createCard(ticket);
+        filteredTickets.forEach(ticket => elements.ticketList.appendChild(createTicketRow(ticket)));
+    }
 
-            if (ticket.status === 'RECEBIDO') {
-                colNovos.appendChild(card);
-                cNovos++;
-            } else if (ticket.status === 'EM_ATENDIMENTO') {
-                colAndamento.appendChild(card);
-                cAndamento++;
-            } else if (ticket.status === 'RESOLVIDO' || ticket.status === 'FECHADO') {
-                colConcluidos.appendChild(card);
-                cConcluidos++;
-            } else {
-                colNovos.appendChild(card);
-                cNovos++;
-            }
+    function renderMetrics() {
+        const openTickets = state.tickets.filter(ticket => !CLOSED_STATUSES.has(ticket.status));
+        const inProgress = state.tickets.filter(ticket => ticket.status === 'EM_ATENDIMENTO');
+        const riskLimit = Date.now() + 24 * 60 * 60 * 1000;
+        const riskTickets = openTickets.filter(ticket => {
+            const deadline = parseDate(ticket.dataVencimento);
+            return deadline && deadline.getTime() <= riskLimit;
+        });
+        const resolvedToday = state.tickets.filter(ticket => (
+            CLOSED_STATUSES.has(ticket.status) && isToday(ticket.dataAtualizacao)
+        ));
+        const received = state.tickets.filter(ticket => ['RECEBIDO', 'EM_TRIAGEM'].includes(ticket.status));
+
+        elements.metricOpen.textContent = String(openTickets.length);
+        elements.metricOpenTrend.textContent = received.length > 0
+            ? `${received.length} na fila`
+            : 'Fila atual';
+        elements.metricOpenSubtitle.textContent = openTickets.length > 0
+            ? 'Chamados ainda não finalizados'
+            : 'Nenhum chamado ativo no momento';
+
+        elements.metricInProgress.textContent = String(inProgress.length);
+        elements.metricInProgressTrend.textContent = inProgress.length === 1 ? '1 em curso' : `${inProgress.length} em curso`;
+        elements.metricRisk.textContent = String(riskTickets.length);
+        elements.metricRiskTrend.textContent = riskTickets.some(ticket => parseDate(ticket.dataVencimento)?.getTime() < Date.now())
+            ? 'Inclui vencidos'
+            : 'Próximas 24h';
+        elements.metricResolvedToday.textContent = String(resolvedToday.length);
+    }
+
+    function renderStatusDistribution() {
+        elements.statusSegments.replaceChildren();
+        elements.statusBreakdown.replaceChildren();
+        elements.statusTotal.textContent = `${state.tickets.length} total`;
+
+        const denominator = Math.max(1, state.tickets.length);
+        STATUS_GROUPS.forEach(group => {
+            const count = state.tickets.filter(ticket => group.statuses.includes(ticket.status)).length;
+            const percentage = state.tickets.length === 0 ? 0 : Math.round((count / denominator) * 100);
+
+            const segment = document.createElement('span');
+            segment.className = 'status-segment';
+            segment.style.width = `${percentage}%`;
+            segment.style.backgroundColor = group.color;
+            elements.statusSegments.appendChild(segment);
+
+            const item = document.createElement('li');
+            item.className = 'status-breakdown-item';
+
+            const label = document.createElement('span');
+            label.className = 'status-breakdown-label';
+            const dot = document.createElement('span');
+            dot.className = 'status-dot';
+            dot.style.backgroundColor = group.color;
+            const labelText = document.createElement('span');
+            labelText.textContent = group.label;
+            label.append(dot, labelText);
+
+            const value = document.createElement('span');
+            value.className = 'status-breakdown-value';
+            value.textContent = `${count} (${percentage}%)`;
+
+            item.append(label, value);
+            elements.statusBreakdown.appendChild(item);
+        });
+    }
+
+    function renderCategoryDistribution() {
+        const counts = new Map();
+        state.tickets.forEach(ticket => {
+            const category = ticket.category?.name || TICKET_TYPE_LABELS[ticket.ticketType] || 'Geral';
+            counts.set(category, (counts.get(category) || 0) + 1);
         });
 
-        // Atualizar os contadores numéricos
-        countNovos.textContent = cNovos;
-        countAndamento.textContent = cAndamento;
-        countConcluidos.textContent = cConcluidos;
-    }
+        elements.categoryDistribution.replaceChildren();
+        const categories = [...counts.entries()].sort((left, right) => right[1] - left[1]).slice(0, 4);
 
-    function createCard(ticket) {
-        const div = document.createElement('div');
-        div.className = 'ticket-card';
-
-        // Determinar cor da badge com base na prioridade
-        let priorityClass = 'p-baixa';
-        if (ticket.prioridade === 'ALTA') priorityClass = 'p-alta';
-        else if (ticket.prioridade === 'NORMAL') priorityClass = 'p-normal';
-        else if (ticket.prioridade === 'CRITICA') priorityClass = 'p-critica';
-
-        const clientName = ticket.cliente ? ticket.cliente.name : (ticket.clienteId ? `Cliente #${ticket.clienteId}` : 'N/A');
-
-        const ticketId = ticket.id || '-';
-        const ticketStatus = ticket.status || 'NOVO';
-
-        // Título e ID
-        const titleDiv = document.createElement('div');
-        titleDiv.className = 'ticket-title';
-        titleDiv.textContent = `#${ticketId} - ${ticket.titulo}`;
-        div.appendChild(titleDiv);
-
-        // Cliente
-        const clientDiv = document.createElement('div');
-        clientDiv.className = 'ticket-client';
-        clientDiv.textContent = `👤 ${clientName}`;
-        div.appendChild(clientDiv);
-
-        // Badges
-        const badgesDiv = document.createElement('div');
-        badgesDiv.className = 'ticket-badges';
-
-        const badgePrioridade = document.createElement('span');
-        badgePrioridade.className = `badge ${priorityClass}`;
-        badgePrioridade.textContent = ticket.prioridade || 'BAIXA';
-        badgesDiv.appendChild(badgePrioridade);
-
-        const badgeStatus = document.createElement('span');
-        badgeStatus.className = 'badge badge-status';
-        badgeStatus.textContent = ticketStatus;
-        badgesDiv.appendChild(badgeStatus);
-
-        const ticketType = ticket.ticketType || 'GERAL';
-        const badgeTicketType = document.createElement('span');
-        badgeTicketType.className = 'badge badge-ticket-type';
-        badgeTicketType.textContent = TICKET_TYPE_LABELS[ticketType] || ticketType;
-        badgesDiv.appendChild(badgeTicketType);
-
-        div.appendChild(badgesDiv);
-
-        if (ticket.category && ticket.category.name) {
-            const categoryDiv = document.createElement('div');
-            categoryDiv.className = 'ticket-category';
-            categoryDiv.textContent = `Categoria: ${ticket.category.name}`;
-            div.appendChild(categoryDiv);
+        if (categories.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'category-summary';
+            empty.style.gridColumn = '1 / -1';
+            const label = document.createElement('span');
+            label.className = 'category-summary-name';
+            label.textContent = 'Sem dados disponíveis';
+            const count = document.createElement('strong');
+            count.className = 'category-summary-count';
+            count.textContent = '0 chamados';
+            empty.append(label, count);
+            elements.categoryDistribution.appendChild(empty);
+            return;
         }
 
-        // Botões dinâmicos role-based
-        if (role === 'TECNICO' || role === 'GERENTE') {
-            if (ticketStatus === 'RECEBIDO') {
-                const btnAssumir = document.createElement('button');
-                btnAssumir.className = 'btn btn-assumir btn-primary';
-                btnAssumir.style = 'margin-top: 12px; padding: 6px; font-size: 0.8rem;';
-                btnAssumir.textContent = role === 'GERENTE' ? 'Atribuir Técnico' : 'Assumir';
-                btnAssumir.addEventListener('click', () => {
-                    if (role === 'GERENTE') {
-                        openAssignModal(ticketId);
-                    } else if (role === 'TECNICO') {
-                        assumirChamado(ticketId);
-                    }
-                });
-                div.appendChild(btnAssumir);
-            } else if (ticketStatus === 'EM_ATENDIMENTO') {
-                // Para exibir o botão de Resolver, Gerente sempre vê. Técnico vê se for o responsável.
-                const isTecnicoResponsavel = ticket.tecnico && ticket.tecnico.id === session.id;
+        categories.forEach(([name, count]) => {
+            const item = document.createElement('div');
+            item.className = 'category-summary';
 
-                if (role === 'GERENTE' || (role === 'TECNICO' && isTecnicoResponsavel)) {
-                    const btnResolver = document.createElement('button');
-                    btnResolver.className = 'btn btn-resolver btn-primary';
-                    btnResolver.style = 'margin-top: 12px; padding: 6px; font-size: 0.8rem; background-color: #24a148; border-color: #24a148;';
-                    btnResolver.textContent = 'Resolver';
-                    btnResolver.addEventListener('click', () => resolverChamado(ticketId));
-                    div.appendChild(btnResolver);
-                }
-            }
-        }
+            const label = document.createElement('span');
+            label.className = 'category-summary-name';
+            label.textContent = name;
 
-        return div;
+            const value = document.createElement('strong');
+            value.className = 'category-summary-count';
+            value.textContent = `${count} chamado${count === 1 ? '' : 's'}`;
+
+            item.append(label, value);
+            elements.categoryDistribution.appendChild(item);
+        });
     }
 
-    // Ações do Kanban
-    async function assumirChamado(ticketId) {
+    function renderDashboard() {
+        updateTicketNavigationCount(state.tickets.length);
+        renderMetrics();
+        renderTicketList();
+        renderStatusDistribution();
+        renderCategoryDistribution();
+
+        const openCount = state.tickets.filter(ticket => !CLOSED_STATUSES.has(ticket.status)).length;
+        elements.welcome.textContent = state.tickets.length === 0
+            ? `Olá, ${firstName}. A operação está pronta para receber chamados.`
+            : `Olá, ${firstName}. ${openCount} chamado(s) ativo(s) em uma fila de ${state.tickets.length}.`;
+    }
+
+    async function loadTickets() {
+        elements.ticketList.innerHTML = '<div class="loading-state">Carregando chamados...</div>';
+        try {
+            const response = await api.request('/tickets');
+            state.tickets = Array.isArray(response) ? response : [];
+            renderDashboard();
+        } catch (error) {
+            console.error('Erro ao carregar chamados:', error);
+            elements.ticketList.innerHTML = '<div class="error-state">Não foi possível carregar a fila de chamados.</div>';
+            elements.ticketCountLabel.textContent = 'Falha ao sincronizar os dados.';
+            showToast(error.message || 'Falha ao carregar chamados.', 'error');
+        }
+    }
+
+    elements.search.addEventListener('input', event => {
+        state.query = event.target.value.trim();
+        renderTicketList();
+    });
+
+    document.querySelectorAll('[data-ticket-filter]').forEach(button => {
+        button.addEventListener('click', () => {
+            document.querySelectorAll('[data-ticket-filter]').forEach(item => item.classList.remove('is-active'));
+            button.classList.add('is-active');
+            state.activeFilter = button.dataset.ticketFilter;
+            renderTicketList();
+        });
+    });
+
+    async function assumeTicket(ticketId) {
         if (role !== 'TECNICO') return;
         try {
             await api.request(`/tickets/${ticketId}/assumir/${session.id}`, { method: 'PATCH' });
-            loadTickets(); // Recarrega o Kanban
+            showToast('Chamado assumido com sucesso.', 'success');
+            await loadTickets();
         } catch (error) {
-            console.error('Falha no PATCH assumir:', error);
-            alert(error.message || 'Falha ao assumir chamado.');
+            showToast(error.message || 'Falha ao assumir chamado.', 'error');
         }
     }
 
-    async function resolverChamado(ticketId) {
+    async function resolveTicket(ticketId) {
         try {
             await api.request(`/tickets/${ticketId}/resolver`, { method: 'PATCH' });
-            loadTickets(); // Recarrega o Kanban
+            showToast('Chamado resolvido com sucesso.', 'success');
+            await loadTickets();
         } catch (error) {
-            console.error('Falha no PATCH resolver:', error);
-            alert(error.message || 'Falha ao resolver chamado.');
+            showToast(error.message || 'Falha ao resolver chamado.', 'error');
         }
     }
 
-    // Modal de Atribuição (Gerente)
+    const assignModal = document.getElementById('assignModal');
+    const assignForm = document.getElementById('assignForm');
+    const assignTicketId = document.getElementById('assignTicketId');
+    const technicianSelect = document.getElementById('technicianSelect');
+    const submitAssignButton = document.getElementById('btnSubmitAssign');
+    let techniciansLoaded = false;
+
+    function setAssignButtonState() {
+        submitAssignButton.disabled = !technicianSelect.value;
+    }
+
     async function openAssignModal(ticketId) {
         if (role !== 'GERENTE') return;
 
         assignTicketId.value = ticketId;
+        assignModal.hidden = false;
+        assignModal.removeAttribute('inert');
+        assignModal.setAttribute('aria-hidden', 'false');
         assignModal.classList.add('active');
-        syncAssignButtonState();
+        technicianSelect.focus();
 
-        if (!techniciansLoaded) {
-            try {
-                technicianSelect.innerHTML = '<option value="">Carregando técnicos...</option>';
-                syncAssignButtonState();
+        if (techniciansLoaded) {
+            setAssignButtonState();
+            return;
+        }
 
-                const users = await api.request('/users');
-                const tecnicos = users.filter(u => u.role === 'TECNICO');
+        technicianSelect.replaceChildren(new Option('Carregando técnicos...', ''));
+        technicianSelect.disabled = true;
+        setAssignButtonState();
 
-                technicianSelect.innerHTML = '';
+        try {
+            const users = await api.request('/users');
+            const technicians = Array.isArray(users)
+                ? users.filter(user => user.role === 'TECNICO')
+                : [];
 
-                if (tecnicos.length === 0) {
-                    technicianSelect.innerHTML = '<option value="">Nenhum técnico disponível</option>';
-                } else {
-                    technicianSelect.innerHTML = '<option value="">Selecione um técnico</option>';
-                    tecnicos.forEach(t => {
-                        const opt = document.createElement('option');
-                        opt.value = t.id;
-                        opt.textContent = `${t.name} (${t.email})`;
-                        technicianSelect.appendChild(opt);
-                    });
-                    techniciansLoaded = true;
-                }
-                syncAssignButtonState();
-            } catch (err) {
-                console.error("Erro ao carregar técnicos:", err);
-                technicianSelect.innerHTML = '<option value="">Erro ao carregar técnicos</option>';
-                syncAssignButtonState();
-            }
+            const options = [new Option('Selecione um técnico', '')];
+            technicians.forEach(technician => {
+                options.push(new Option(`${technician.name} (${technician.email})`, technician.id));
+            });
+            technicianSelect.replaceChildren(...options);
+            techniciansLoaded = true;
+        } catch (error) {
+            technicianSelect.replaceChildren(new Option('Erro ao carregar técnicos', ''));
+            showToast(error.message || 'Falha ao carregar técnicos.', 'error');
+        } finally {
+            technicianSelect.disabled = false;
+            setAssignButtonState();
         }
     }
 
     function closeAssignModal() {
-        if (assignModal) assignModal.classList.remove('active');
-        if (assignForm) assignForm.reset();
-        syncAssignButtonState();
+        assignModal.classList.remove('active');
+        assignModal.setAttribute('aria-hidden', 'true');
+        assignModal.setAttribute('inert', '');
+        assignModal.hidden = true;
+        assignForm.reset();
+        setAssignButtonState();
     }
 
-    if (btnCloseAssignModal) btnCloseAssignModal.addEventListener('click', closeAssignModal);
-    if (btnCancelAssignModal) btnCancelAssignModal.addEventListener('click', closeAssignModal);
-    if (assignModal) {
-        assignModal.addEventListener('click', (e) => {
-            if (e.target === assignModal) closeAssignModal();
-        });
-    }
+    technicianSelect.addEventListener('change', setAssignButtonState);
+    document.getElementById('btnCloseAssignModal').addEventListener('click', closeAssignModal);
+    document.getElementById('btnCancelAssignModal').addEventListener('click', closeAssignModal);
+    assignModal.addEventListener('click', event => {
+        if (event.target === assignModal) closeAssignModal();
+    });
 
-    if (assignForm) {
-        assignForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            if (role !== 'GERENTE') return;
+    assignForm.addEventListener('submit', async event => {
+        event.preventDefault();
+        if (role !== 'GERENTE' || !technicianSelect.value) return;
 
-            const tecId = technicianSelect.value;
-            const tId = assignTicketId.value;
+        submitAssignButton.disabled = true;
+        const defaultText = submitAssignButton.textContent;
+        submitAssignButton.textContent = 'Atribuindo...';
 
-            if (!tecId) {
-                alert("Selecione um técnico.");
-                return;
-            }
+        try {
+            await api.request(
+                `/tickets/${assignTicketId.value}/assumir/${technicianSelect.value}`,
+                { method: 'PATCH' }
+            );
+            closeAssignModal();
+            showToast('Técnico atribuído com sucesso.', 'success');
+            await loadTickets();
+        } catch (error) {
+            showToast(error.message || 'Falha ao atribuir técnico.', 'error');
+        } finally {
+            submitAssignButton.textContent = defaultText;
+            setAssignButtonState();
+        }
+    });
 
-            btnSubmitAssign.disabled = true;
-            btnSubmitAssign.textContent = 'Atribuindo...';
-
-            try {
-                await api.request(`/tickets/${tId}/assumir/${tecId}`, { method: 'PATCH' });
-                closeAssignModal();
-                loadTickets();
-            } catch (error) {
-                alert(error.message || 'Falha ao atribuir chamado.');
-            } finally {
-                syncAssignButtonState();
-                btnSubmitAssign.textContent = 'Confirmar';
-            }
-        });
-    }
-
-    // 5. Lógica do Modal de Novo Chamado
-    const modal = document.getElementById('newTicketModal');
-    const btnOpenModal = document.getElementById('btnOpenModal');
-    const btnCloseModal = document.getElementById('btnCloseModal');
-    const btnCancelModal = document.getElementById('btnCancelModal');
+    const newTicketModal = document.getElementById('newTicketModal');
     const newTicketForm = document.getElementById('newTicketForm');
-    const btnSubmitTicket = document.getElementById('btnSubmitTicket');
+    const submitTicketButton = document.getElementById('btnSubmitTicket');
     const assetSelect = document.getElementById('assetSelect');
     const ticketTypeSelect = document.getElementById('ticketType');
     const categorySelect = document.getElementById('categorySelect');
     const categoryStatus = document.getElementById('categoryStatus');
-
     let ticketCategories = [];
-    let ticketCategoriesReady = false;
-    let ticketCategoriesLoading = false;
+    let categoriesLoaded = false;
 
-    function createSelectOption(value, label) {
-        const option = document.createElement('option');
-        option.value = value;
-        option.textContent = label;
-        return option;
-    }
-
-    function setCategoryStatus(message, isError = false) {
-        categoryStatus.textContent = message;
-        categoryStatus.classList.toggle('error', isError);
-    }
-
-    function resetCategoryOptions(disabled = true) {
-        categorySelect.replaceChildren(createSelectOption('', 'Sem categoria'));
-        categorySelect.value = '';
-        categorySelect.disabled = disabled;
+    function option(value, label) {
+        return new Option(label, value);
     }
 
     function renderCategoryOptions() {
-        const selectedCategoryId = categorySelect.value;
         const selectedType = ticketTypeSelect.value || 'GERAL';
         const compatibleCategories = ticketCategories.filter(category => (
-            category
-            && category.active !== false
-            && category.ticketType === selectedType
+            category.active !== false && category.ticketType === selectedType
         ));
-
-        const options = [createSelectOption('', 'Sem categoria')];
-        compatibleCategories.forEach(category => {
-            options.push(createSelectOption(category.id, category.name));
-        });
-
-        categorySelect.replaceChildren(...options);
+        categorySelect.replaceChildren(
+            option('', 'Sem categoria'),
+            ...compatibleCategories.map(category => option(category.id, category.name))
+        );
         categorySelect.disabled = false;
-
-        const selectionRemainsCompatible = compatibleCategories.some(category => (
-            category.id === selectedCategoryId
-        ));
-        categorySelect.value = selectionRemainsCompatible ? selectedCategoryId : '';
-
-        if (compatibleCategories.length === 0) {
-            setCategoryStatus('Nenhuma categoria ativa disponível para este tipo.');
-        } else {
-            setCategoryStatus('');
-        }
+        categoryStatus.textContent = compatibleCategories.length === 0
+            ? 'Nenhuma categoria ativa disponível para este tipo.'
+            : '';
+        categoryStatus.classList.remove('error');
     }
 
-    async function loadTicketCategories() {
-        if (ticketCategoriesLoading) return;
-
-        ticketCategoriesLoading = true;
-        ticketCategoriesReady = false;
-        resetCategoryOptions(true);
-        setCategoryStatus('Carregando categorias...');
+    async function loadCategories() {
+        categorySelect.disabled = true;
+        categoryStatus.textContent = 'Carregando categorias...';
 
         try {
-            const categories = await api.request('/ticket-categories');
-            ticketCategories = Array.isArray(categories) ? categories : [];
-            ticketCategoriesReady = true;
+            const response = await api.request('/ticket-categories');
+            ticketCategories = Array.isArray(response) ? response : [];
+            categoriesLoaded = true;
             renderCategoryOptions();
         } catch (error) {
-            console.error('Erro ao carregar categorias para o chamado:', error);
             ticketCategories = [];
-            resetCategoryOptions(true);
-            setCategoryStatus(
-                'Não foi possível carregar as categorias. Você ainda pode abrir o chamado sem categoria.',
-                true
-            );
-        } finally {
-            ticketCategoriesLoading = false;
+            categorySelect.replaceChildren(option('', 'Sem categoria'));
+            categorySelect.disabled = false;
+            categoryStatus.textContent = 'Não foi possível carregar as categorias. O chamado pode ser aberto sem categoria.';
+            categoryStatus.classList.add('error');
         }
     }
 
-    async function loadAssetsForTicket() {
+    async function loadAssets() {
         assetSelect.disabled = true;
-        assetSelect.replaceChildren(createSelectOption('', 'Carregando...'));
-
+        assetSelect.replaceChildren(option('', 'Carregando equipamentos...'));
         try {
-            const assets = await api.request(`/assets/cliente/${session.id}`);
-            const options = [createSelectOption('', 'Nenhum / Não listado')];
-
-            if (Array.isArray(assets)) {
-                assets.forEach(asset => {
-                    options.push(createSelectOption(
-                        asset.id,
-                        `${asset.nome} (${asset.numeroSerie || 'Sem NS'})`
-                    ));
-                });
-            }
-
-            assetSelect.replaceChildren(...options);
-        } catch (error) {
-            console.error('Erro ao buscar equipamentos para o formulário:', error);
-            assetSelect.replaceChildren(createSelectOption('', 'Nenhum / Não listado'));
+            const response = await api.request(`/assets/cliente/${session.id}`);
+            const assets = Array.isArray(response) ? response : [];
+            assetSelect.replaceChildren(
+                option('', 'Nenhum / Não listado'),
+                ...assets.map(asset => option(asset.id, `${asset.nome} (${asset.numeroSerie || 'Sem NS'})`))
+            );
+        } catch {
+            assetSelect.replaceChildren(option('', 'Nenhum / Não listado'));
         } finally {
             assetSelect.disabled = false;
         }
     }
 
-    function openModal() {
+    function openNewTicketModal() {
+        if (role !== 'CLIENTE') return;
+        newTicketModal.hidden = false;
+        newTicketModal.removeAttribute('inert');
+        newTicketModal.setAttribute('aria-hidden', 'false');
+        newTicketModal.classList.add('active');
+        document.getElementById('titulo').focus();
+        loadAssets();
+        if (categoriesLoaded) renderCategoryOptions();
+        else loadCategories();
+    }
+
+    function closeNewTicketModal() {
+        newTicketModal.classList.remove('active');
+        newTicketModal.setAttribute('aria-hidden', 'true');
+        newTicketModal.setAttribute('inert', '');
+        newTicketModal.hidden = true;
+        newTicketForm.reset();
+        ticketTypeSelect.value = 'GERAL';
+        if (categoriesLoaded) renderCategoryOptions();
+    }
+
+    document.getElementById('btnOpenModal').addEventListener('click', openNewTicketModal);
+    document.getElementById('btnCloseModal').addEventListener('click', closeNewTicketModal);
+    document.getElementById('btnCancelModal').addEventListener('click', closeNewTicketModal);
+    ticketTypeSelect.addEventListener('change', () => {
+        if (categoriesLoaded) renderCategoryOptions();
+    });
+    newTicketModal.addEventListener('click', event => {
+        if (event.target === newTicketModal) closeNewTicketModal();
+    });
+
+    newTicketForm.addEventListener('submit', async event => {
+        event.preventDefault();
         if (role !== 'CLIENTE') return;
 
-        modal.classList.add('active');
-        loadAssetsForTicket();
-        loadTicketCategories();
-    }
+        submitTicketButton.disabled = true;
+        const defaultText = submitTicketButton.textContent;
+        submitTicketButton.textContent = 'Salvando...';
 
-    function closeModal() {
-        if (modal) modal.classList.remove('active');
-        if (newTicketForm) {
-            newTicketForm.reset();
-            ticketTypeSelect.value = 'GERAL';
+        const payload = {
+            titulo: document.getElementById('titulo').value.trim(),
+            descricao: document.getElementById('descricao').value.trim(),
+            prioridade: document.getElementById('prioridade').value,
+            clienteId: session.id,
+            assetId: assetSelect.value || null,
+            ticketType: ticketTypeSelect.value || 'GERAL'
+        };
+        if (categorySelect.value) payload.categoryId = categorySelect.value;
+
+        try {
+            await api.request('/tickets', {
+                method: 'POST',
+                body: JSON.stringify(payload)
+            });
+            closeNewTicketModal();
+            showToast('Chamado criado com sucesso.', 'success');
+            await loadTickets();
+        } catch (error) {
+            showToast(error.message || 'Falha ao criar chamado.', 'error');
+        } finally {
+            submitTicketButton.disabled = false;
+            submitTicketButton.textContent = defaultText;
         }
+    });
 
-        if (ticketCategoriesReady) {
-            renderCategoryOptions();
-        } else {
-            resetCategoryOptions(true);
-            setCategoryStatus('');
-        }
-    }
+    document.addEventListener('keydown', event => {
+        if (event.key !== 'Escape') return;
+        if (newTicketModal.classList.contains('active')) closeNewTicketModal();
+        if (assignModal.classList.contains('active')) closeAssignModal();
+    });
 
-    if (btnOpenModal) btnOpenModal.addEventListener('click', openModal);
-    if (btnCloseModal) btnCloseModal.addEventListener('click', closeModal);
-    if (btnCancelModal) btnCancelModal.addEventListener('click', closeModal);
-    if (ticketTypeSelect) {
-        ticketTypeSelect.addEventListener('change', () => {
-            if (ticketCategoriesReady) {
-                renderCategoryOptions();
-            } else {
-                resetCategoryOptions(true);
-            }
-        });
-    }
-
-    // Fechar o modal ao clicar na área escura (overlay)
-    if (modal) {
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal) closeModal();
-        });
-    }
-
-    // 6. Submeter o formulário (POST Novo Chamado)
-    if (newTicketForm) {
-        newTicketForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            if (role !== 'CLIENTE') return;
-
-            btnSubmitTicket.disabled = true;
-            btnSubmitTicket.textContent = 'Salvando...';
-
-            const prioridadeBruta = document.getElementById('prioridade').value;
-            const prioridadeLimpa = prioridadeBruta.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().trim();
-            const assetId = assetSelect.value;
-            const categoryId = categorySelect.disabled ? '' : categorySelect.value;
-
-            const novoChamado = {
-                titulo: document.getElementById('titulo').value,
-                descricao: document.getElementById('descricao').value,
-                prioridade: prioridadeLimpa,
-                clienteId: session.id,
-                assetId: assetId || null,
-                ticketType: ticketTypeSelect.value || 'GERAL'
-            };
-
-            if (categoryId) {
-                novoChamado.categoryId = categoryId;
-            }
-
-            try {
-                await api.request('/tickets', {
-                    method: 'POST',
-                    body: JSON.stringify(novoChamado)
-                });
-
-                closeModal();
-                await loadTickets();
-            } catch (error) {
-                console.error('Erro na requisição ao servidor:', error);
-                alert(error.message || 'Erro ao criar chamado.');
-            } finally {
-                btnSubmitTicket.disabled = false;
-                btnSubmitTicket.textContent = 'Salvar Chamado';
-            }
-        });
-    }
-
-    // Inicia buscando os dados assim que a página estiver pronta
     loadTickets();
 });

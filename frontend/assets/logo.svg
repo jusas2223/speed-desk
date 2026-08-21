@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="speedDeskLogoTitle">
+  <title id="speedDeskLogoTitle">Símbolo Speed Desk</title>
+  <defs>
+    <linearGradient id="speedDeskGradient" x1="8" y1="8" x2="56" y2="56" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#7C3AED"/>
+      <stop offset="1" stop-color="#9B6CFF"/>
+    </linearGradient>
+    <filter id="speedDeskShadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="6" stdDeviation="5" flood-color="#7C3AED" flood-opacity=".35"/>
+    </filter>
+  </defs>
+  <rect x="4" y="4" width="56" height="56" rx="16" fill="url(#speedDeskGradient)" filter="url(#speedDeskShadow)"/>
+  <path d="M5 38h10M8 30h10M11 22h9" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" opacity=".72"/>
+  <path d="M22 21h22c3.2 0 4.8 3.7 2.5 5.9L42 31H30.5c-2.8 0-4.3 3.2-2.5 5.3l2 2.2" fill="none" stroke="#fff" stroke-width="4.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M35 25.5l-1 1.5c-1.5 2.2.1 5 2.8 5h9.7l-5.7 5.5C38.5 40 35.2 42 31 42H20" fill="none" stroke="#fff" stroke-width="4.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M34 32h15m-5-5 5 5-5 5" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M10 10c14-5 29-3 43 5" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity=".18"/>
+</svg>

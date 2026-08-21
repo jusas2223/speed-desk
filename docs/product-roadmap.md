@@ -15,6 +15,8 @@ Este arquivo é a fonte de verdade do escopo escolhido. Ele separa o que já exi
 - cadastro e consulta de organizações e categorias;
 - página administrativa de organizações e categorias;
 - seleção e exibição de tipo e categoria no frontend;
+- identidade visual completa com temas claro e escuro, fundo de velocidade e componentes responsivos;
+- shell compartilhado de navegação por perfil, opções futuras desabilitadas e telas integradas de login, painel, ativos e configurações;
 - testes automatizados do backend e integração frontend/backend validada localmente.
 
 ### Parcialmente implementado
@@ -22,7 +24,8 @@ Este arquivo é a fonte de verdade do escopo escolhido. Ele separa o que já exi
 | Código | Item | O que ainda falta |
 | --- | --- | --- |
 | `CFG2` | Configurações do gerente | Ampliar para usuários, regras de SLA e demais parâmetros futuros. |
-| `T1` | Lista completa de chamados | Existe Kanban, mas falta a lista operacional completa. |
+| `T1` | Lista completa de chamados | O painel já usa uma lista operacional; falta a área completa de chamados e a página de detalhes. |
+| `T2` | Filtros e busca | Busca e filtros básicos existem no painel; faltam filtros completos por status, prioridade, categoria e responsável. |
 | `T4` | Transições controladas | Existem atribuição e resolução; faltam as demais transições e regras. |
 | `T6` | Prazo de SLA | O prazo é calculado, mas falta exposição completa, risco e pausa. |
 | `T7` | Categorias | Cadastro e uso básico prontos; edição/ativação não fazem parte do escopo atual. |
@@ -33,12 +36,12 @@ Este arquivo é a fonte de verdade do escopo escolhido. Ele separa o que já exi
 
 ## Macroblocos restantes, na ordem recomendada
 
-### 1. Estrutura visual e navegação do produto
+### 1. Estrutura visual e navegação do produto — concluído
 
-- criar um shell compartilhado de navegação para evitar sidebars duplicadas;
-- exibir todas as áreas futuras de acordo com o perfil;
-- marcar módulos ainda indisponíveis como `Em breve`, sem links quebrados;
-- padronizar cabeçalho, responsividade, mensagens e estados de carregamento.
+- shell compartilhado e navegação por perfil implementados;
+- áreas futuras exibidas como `Em breve`, sem links quebrados;
+- temas claro e escuro, responsividade, mensagens e estados de carregamento padronizados;
+- identidade visual do Google AI Studio adaptada ao frontend real do produto.
 
 ### 2. Núcleo completo de chamados
 

@@ -19,8 +19,6 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('welcomeMessage').textContent = (
         `Bem-vindo(a), ${session.name} | Perfil: ${role}`
     );
-    document.getElementById('logoutBtn').addEventListener('click', () => api.logout());
-
     const organizationForm = document.getElementById('organizationForm');
     const organizationName = document.getElementById('organizationName');
     const organizationSubmit = document.getElementById('organizationSubmit');

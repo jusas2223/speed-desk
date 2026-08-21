@@ -4,7 +4,7 @@ Speed Desk é uma aplicação web de service desk para registrar ativos, abrir c
 
 ## Estado atual
 
-O projeto está em uma versão funcional de estabilização. Login, sessão web, autorização por perfil, gestão básica de usuários, ativos e chamados, persistência local offline e integração frontend/backend estão implementados e cobertos por testes automatizados no backend. Organizações, categorias e tipos de chamado também estão integrados ao backend e ao frontend administrativo.
+O projeto está em uma versão funcional de evolução. Login, sessão web, autorização por perfil, gestão básica de usuários, ativos e chamados, persistência local offline e integração frontend/backend estão implementados e cobertos por testes automatizados no backend. O frontend possui identidade visual responsiva, temas claro e escuro e navegação específica para cliente, técnico e gerente. Organizações, categorias e tipos de chamado também estão integrados ao backend e ao frontend administrativo.
 
 ## Tecnologias
 
@@ -59,7 +59,9 @@ O navegador se comunica somente com a API. A API autentica o JWT, aplica as regr
 - cadastro e consulta de organizações administrativas no backend e no frontend do gerente;
 - cadastro e consulta de categorias ativas no backend e no frontend do gerente;
 - abertura de chamados dos tipos `GERAL`, `HARDWARE` e `SOFTWARE`, com categoria e ativo opcionais, prioridade e prazo calculado por SLA;
-- painel Kanban com chamados recebidos, em atendimento e concluídos;
+- lista operacional com chamados recebidos, em atendimento e concluídos;
+- painel operacional responsivo com busca, filtros, métricas calculadas com dados reais e distribuição por status e categoria;
+- shell compartilhado de navegação, temas claro e escuro, tela de login e identidade visual baseada em velocidade;
 - autoatribuição de chamado pelo técnico e atribuição pelo gerente;
 - resolução por técnico responsável ou gerente;
 - respostas de erro no formato `ProblemDetail` e validação de entrada;

@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="streak" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#9B6CFF" stop-opacity="0"/>
+      <stop offset=".48" stop-color="#7C3AED" stop-opacity=".75"/>
+      <stop offset="1" stop-color="#9B6CFF" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="curve" x1="0" y1="0" x2="1" y2="0">
+      <stop stop-color="#9B6CFF" stop-opacity="0"/>
+      <stop offset=".5" stop-color="#7C3AED" stop-opacity=".6"/>
+      <stop offset="1" stop-color="#9B6CFF" stop-opacity="0"/>
+    </linearGradient>
+    <pattern id="nodes" width="64" height="64" patternUnits="userSpaceOnUse">
+      <circle cx="32" cy="32" r="1.1" fill="#9B6CFF" opacity=".35"/>
+      <path d="M0 32h64" stroke="#7C3AED" stroke-width=".5" stroke-dasharray="1 11" opacity=".13"/>
+    </pattern>
+  </defs>
+  <rect width="1920" height="1080" fill="url(#nodes)" opacity=".55"/>
+  <path d="M-180 120 2070 760" stroke="url(#streak)" stroke-width="2"/>
+  <path d="M-220 250 2030 890" stroke="url(#streak)" stroke-width="1.4" stroke-dasharray="150 210"/>
+  <path d="M40-40 2050 545" stroke="url(#streak)" stroke-width="1" stroke-dasharray="85 150"/>
+  <path d="M-320 470 1740 1080" stroke="url(#streak)" stroke-width="1.8"/>
+  <path d="M-120 365C310 220 545 610 990 420c390-165 600 190 1080 18" fill="none" stroke="url(#curve)" stroke-width="2.3" stroke-dasharray="8 11"/>
+  <path d="M-190 575C280 405 515 785 975 590c370-157 595 190 1110 8" fill="none" stroke="url(#curve)" stroke-width="1.5"/>
+  <g fill="#9B6CFF">
+    <circle cx="356" cy="302" r="3.4" opacity=".6"/><circle cx="540" cy="355" r="2.2" opacity=".45"/>
+    <circle cx="1395" cy="480" r="3.4" opacity=".55"/><circle cx="1570" cy="532" r="2.2" opacity=".4"/>
+  </g>
+  <g stroke="#7C3AED" stroke-width="1.2" stroke-dasharray="4 5" opacity=".45">
+    <path d="m356 302 184 53"/><path d="m1395 480 175 52"/>
+  </g>
+</svg>
