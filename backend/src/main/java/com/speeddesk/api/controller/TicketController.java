@@ -2,6 +2,9 @@ package com.speeddesk.api.controller;
 
 import com.speeddesk.api.dto.TicketRequestDTO;
 import com.speeddesk.api.dto.TicketResponseDTO;
+import com.speeddesk.api.entity.TicketPriority;
+import com.speeddesk.api.entity.TicketStatus;
+import com.speeddesk.api.entity.TicketType;
 import com.speeddesk.api.service.TicketService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -36,9 +39,30 @@ public class TicketController {
 
     @GetMapping
     public ResponseEntity<List<TicketResponseDTO>> listAll(
-            @RequestParam(required = false) UUID clienteId
+            @RequestParam(required = false) UUID clienteId,
+            @RequestParam(required = false) TicketStatus status,
+            @RequestParam(required = false) TicketPriority prioridade,
+            @RequestParam(required = false) TicketType ticketType,
+            @RequestParam(required = false) UUID categoryId,
+            @RequestParam(required = false) UUID tecnicoId,
+            @RequestParam(required = false) Boolean semTecnico,
+            @RequestParam(required = false) String query
     ) {
-        return ResponseEntity.ok(ticketService.listAll(clienteId));
+        return ResponseEntity.ok(ticketService.listAll(
+                clienteId,
+                status,
+                prioridade,
+                ticketType,
+                categoryId,
+                tecnicoId,
+                semTecnico,
+                query
+        ));
+    }
+
+    @GetMapping("/{ticketId}")
+    public ResponseEntity<TicketResponseDTO> findById(@PathVariable UUID ticketId) {
+        return ResponseEntity.ok(ticketService.findById(ticketId));
     }
 
     @PatchMapping("/{ticketId}/assumir/{tecnicoId}")

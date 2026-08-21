@@ -10,13 +10,14 @@ Este arquivo é a fonte de verdade do escopo escolhido. Ele separa o que já exi
 - perfil `localdev` com H2 e dados de demonstração idempotentes;
 - cadastro e consulta básicos de usuários pelo backend;
 - cadastro e consulta básicos de ativos;
-- abertura, listagem em Kanban, atribuição e resolução básicas de chamados;
+- abertura, lista completa, busca, filtros, detalhe protegido, atribuição e resolução básicas de chamados;
 - prioridades, prazo básico de SLA, tipos `GERAL`, `HARDWARE` e `SOFTWARE`;
 - cadastro e consulta de organizações e categorias;
 - página administrativa de organizações e categorias;
 - seleção e exibição de tipo e categoria no frontend;
 - identidade visual completa com temas claro e escuro, fundo de velocidade e componentes responsivos;
 - shell compartilhado de navegação por perfil, opções futuras desabilitadas e telas integradas de login, painel, ativos e configurações;
+- área dedicada de chamados e consulta detalhada por UUID com autorização de proprietário;
 - testes automatizados do backend e integração frontend/backend validada localmente.
 
 ### Parcialmente implementado
@@ -24,8 +25,6 @@ Este arquivo é a fonte de verdade do escopo escolhido. Ele separa o que já exi
 | Código | Item | O que ainda falta |
 | --- | --- | --- |
 | `CFG2` | Configurações do gerente | Ampliar para usuários, regras de SLA e demais parâmetros futuros. |
-| `T1` | Lista completa de chamados | O painel já usa uma lista operacional; falta a área completa de chamados e a página de detalhes. |
-| `T2` | Filtros e busca | Busca e filtros básicos existem no painel; faltam filtros completos por status, prioridade, categoria e responsável. |
 | `T4` | Transições controladas | Existem atribuição e resolução; faltam as demais transições e regras. |
 | `T6` | Prazo de SLA | O prazo é calculado, mas falta exposição completa, risco e pausa. |
 | `T7` | Categorias | Cadastro e uso básico prontos; edição/ativação não fazem parte do escopo atual. |
@@ -45,9 +44,9 @@ Este arquivo é a fonte de verdade do escopo escolhido. Ele separa o que já exi
 
 ### 2. Núcleo completo de chamados
 
-- `T1` lista completa;
-- `T2` filtros e busca;
-- `T3` detalhes;
+- `T1` lista completa — concluído;
+- `T2` filtros e busca — concluído;
+- `T3` detalhes — concluído;
 - `T4` todas as transições permitidas;
 - `T5` fechar e reabrir;
 - `T6` exibição do SLA;

@@ -41,6 +41,11 @@ Antes de cada commit:
 - executar `git diff --check`;
 - revisar `git status --short` e segredos acidentais;
 - testar autorização por perfil e o fluxo principal afetado;
+- em recursos consultados por UUID, cobrir `401`, `400`, `403`, `404` e tentativa de acesso a outro proprietário;
+- testar filtros isolados, combinados, limpeza e resultado vazio;
+- executar o fluxo ponta a ponta nos três perfis quando o comportamento variar por role;
+- páginas novas devem reutilizar `navigation.js`, `theme.js` e o sistema visual compartilhado;
+- páginas de detalhe devem funcionar por URL direta e após recarregamento;
 - não versionar H2, `target/`, credenciais ou arquivos internos das ferramentas.
 
 ## Convenções de Git

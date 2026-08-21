@@ -5,6 +5,7 @@ import com.speeddesk.api.dto.TicketResponseDTO;
 import com.speeddesk.api.dto.UserResponseDTO;
 import com.speeddesk.api.entity.TicketPriority;
 import com.speeddesk.api.entity.TicketStatus;
+import com.speeddesk.api.entity.TicketType;
 import com.speeddesk.api.entity.UserRole;
 import com.speeddesk.api.service.TicketService;
 import org.junit.jupiter.api.Test;
@@ -54,14 +55,46 @@ class TicketControllerTest {
     @Test
     void listsTicketDtos() {
         UUID clientId = UUID.randomUUID();
+        UUID categoryId = UUID.randomUUID();
+        UUID technicianId = UUID.randomUUID();
         List<TicketResponseDTO> tickets = List.of(response());
-        when(ticketService.listAll(clientId)).thenReturn(tickets);
+        when(ticketService.listAll(
+                clientId,
+                TicketStatus.RECEBIDO,
+                TicketPriority.NORMAL,
+                TicketType.HARDWARE,
+                categoryId,
+                technicianId,
+                false,
+                "notebook"
+        )).thenReturn(tickets);
 
         ResponseEntity<List<TicketResponseDTO>> response =
-                ticketController.listAll(clientId);
+                ticketController.listAll(
+                        clientId,
+                        TicketStatus.RECEBIDO,
+                        TicketPriority.NORMAL,
+                        TicketType.HARDWARE,
+                        categoryId,
+                        technicianId,
+                        false,
+                        "notebook"
+                );
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertSame(tickets, response.getBody());
+    }
+
+    @Test
+    void getsTicketDetails() {
+        UUID ticketId = UUID.randomUUID();
+        TicketResponseDTO ticket = response();
+        when(ticketService.findById(ticketId)).thenReturn(ticket);
+
+        ResponseEntity<TicketResponseDTO> response = ticketController.findById(ticketId);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertSame(ticket, response.getBody());
     }
 
     @Test

@@ -29,19 +29,37 @@ const TICKET_COUNT_STORAGE_KEY = 'speeddesk-ticket-count';
 const MENU_ITEMS = Object.freeze({
     CLIENTE: [
         { label: 'Painel', icon: 'panel', href: 'dashboard.html', page: 'dashboard.html' },
-        { label: 'Meus chamados', icon: 'ticket', href: 'dashboard.html#tickets', count: true },
+        {
+            label: 'Meus chamados',
+            icon: 'ticket',
+            href: 'chamados.html',
+            pages: ['chamados.html', 'chamado.html'],
+            count: true
+        },
         { label: 'Meus equipamentos', icon: 'asset', href: 'assets.html', page: 'assets.html' }
     ],
     TECNICO: [
         { label: 'Painel', icon: 'panel', href: 'dashboard.html', page: 'dashboard.html' },
-        { label: 'Fila de atendimento', icon: 'queue', href: 'dashboard.html#tickets', count: true },
+        {
+            label: 'Fila de atendimento',
+            icon: 'queue',
+            href: 'chamados.html',
+            pages: ['chamados.html', 'chamado.html'],
+            count: true
+        },
         { label: 'Hardware', icon: 'hardware', future: true },
         { label: 'Software', icon: 'software', future: true },
         { label: 'Incidentes', icon: 'incident', future: true }
     ],
     GERENTE: [
         { label: 'Painel', icon: 'panel', href: 'dashboard.html', page: 'dashboard.html' },
-        { label: 'Chamados', icon: 'ticket', href: 'dashboard.html#tickets', count: true },
+        {
+            label: 'Chamados',
+            icon: 'ticket',
+            href: 'chamados.html',
+            pages: ['chamados.html', 'chamado.html'],
+            count: true
+        },
         { label: 'Usuários', icon: 'users', future: true },
         { label: 'Ativos', icon: 'asset', future: true },
         { label: 'Incidentes', icon: 'incident', future: true },
@@ -83,7 +101,8 @@ function createNavigationItem(item, currentPage) {
         element.classList.add('nav-item-danger');
     } else {
         element.href = item.href;
-        if (item.page === currentPage) element.setAttribute('aria-current', 'page');
+        const isCurrentPage = item.page === currentPage || item.pages?.includes(currentPage);
+        if (isCurrentPage) element.setAttribute('aria-current', 'page');
     }
 
     element.insertAdjacentHTML('beforeend', iconMarkup(item.icon));

@@ -186,7 +186,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function createTicketRow(ticket) {
         const row = document.createElement('article');
-        row.className = 'ticket-row';
+        const detailHref = `chamado.html?id=${encodeURIComponent(ticket.id)}`;
+        row.className = 'ticket-row is-clickable';
         row.title = ticket.descricao || ticket.titulo;
 
         const main = document.createElement('div');
@@ -218,8 +219,9 @@ document.addEventListener('DOMContentLoaded', () => {
             priorityClass(ticket.prioridade)
         ));
 
-        const title = document.createElement('h3');
-        title.className = 'ticket-title';
+        const title = document.createElement('a');
+        title.className = 'ticket-title ticket-title-link';
+        title.href = detailHref;
         title.textContent = ticket.titulo || 'Chamado sem título';
 
         const meta = document.createElement('div');
@@ -283,6 +285,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (actions.childElementCount > 0) side.appendChild(actions);
         row.append(main, side);
+        row.addEventListener('click', event => {
+            if (event.target.closest('a, button, input, select, textarea')) return;
+            window.location.href = detailHref;
+        });
         return row;
     }
 

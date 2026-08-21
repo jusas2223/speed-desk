@@ -5,6 +5,7 @@ import com.speeddesk.api.dto.TicketResponseDTO;
 import com.speeddesk.api.entity.Asset;
 import com.speeddesk.api.entity.Ticket;
 import com.speeddesk.api.entity.TicketCategory;
+import com.speeddesk.api.entity.TicketPriority;
 import com.speeddesk.api.entity.TicketStatus;
 import com.speeddesk.api.entity.TicketType;
 import com.speeddesk.api.entity.User;
@@ -28,9 +29,11 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.text.Normalizer;
 import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 
 @Service
@@ -110,14 +113,69 @@ public class TicketService {
     }
 
     public List<TicketResponseDTO> listAll(UUID clienteId) {
+        return listAll(clienteId, null, null, null, null, null, null, null);
+    }
+
+    public List<TicketResponseDTO> listAll(
+            UUID clienteId,
+            TicketStatus status,
+            TicketPriority prioridade,
+            TicketType ticketType,
+            UUID categoryId,
+            UUID tecnicoId,
+            String query
+    ) {
+        return listAll(
+                clienteId,
+                status,
+                prioridade,
+                ticketType,
+                categoryId,
+                tecnicoId,
+                null,
+                query
+        );
+    }
+
+    public List<TicketResponseDTO> listAll(
+            UUID clienteId,
+            TicketStatus status,
+            TicketPriority prioridade,
+            TicketType ticketType,
+            UUID categoryId,
+            UUID tecnicoId,
+            Boolean semTecnico,
+            String query
+    ) {
         UUID effectiveClientId = authorizationService.clientScope(clienteId);
         List<Ticket> tickets = effectiveClientId == null
                 ? ticketRepository.findAllByOrderByDataCriacaoDesc()
                 : ticketRepository.findAllByCliente_IdOrderByDataCriacaoDesc(effectiveClientId);
+        String normalizedQuery = normalizeQuery(query);
 
         return tickets.stream()
+                .filter(ticket -> status == null || ticket.getStatus() == status)
+                .filter(ticket -> prioridade == null || ticket.getPrioridade() == prioridade)
+                .filter(ticket -> ticketType == null
+                        || effectiveTicketType(ticket) == ticketType)
+                .filter(ticket -> categoryId == null
+                        || (ticket.getCategory() != null
+                        && categoryId.equals(ticket.getCategory().getId())))
+                .filter(ticket -> tecnicoId == null
+                        || (ticket.getTecnico() != null
+                        && tecnicoId.equals(ticket.getTecnico().getId())))
+                .filter(ticket -> !Boolean.TRUE.equals(semTecnico)
+                        || ticket.getTecnico() == null)
+                .filter(ticket -> matchesQuery(ticket, normalizedQuery))
                 .map(TicketResponseDTO::from)
                 .toList();
+    }
+
+    public TicketResponseDTO findById(UUID ticketId) {
+        Ticket ticket = ticketRepository.findById(ticketId)
+                .orElseThrow(() -> new TicketNotFoundException(ticketId));
+        authorizationService.requireCanRead(ticket);
+        return TicketResponseDTO.from(ticket);
     }
 
     @Transactional
@@ -166,5 +224,55 @@ public class TicketService {
         if (user.getRole() != expectedRole) {
             throw new InvalidUserRoleException(user.getId(), expectedRole);
         }
+    }
+
+    private String normalizeQuery(String query) {
+        if (query == null || query.isBlank()) {
+            return null;
+        }
+        return normalizeSearchText(query.trim());
+    }
+
+    private boolean matchesQuery(Ticket ticket, String query) {
+        if (query == null) {
+            return true;
+        }
+
+        return contains(ticket.getId(), query)
+                || contains(displayCode(ticket), query)
+                || contains(ticket.getTitulo(), query)
+                || contains(ticket.getDescricao(), query)
+                || contains(ticket.getCliente().getName(), query)
+                || contains(ticket.getCliente().getEmail(), query)
+                || (ticket.getCliente().getOrganization() != null
+                && contains(ticket.getCliente().getOrganization().getName(), query))
+                || (ticket.getCategory() != null
+                && contains(ticket.getCategory().getName(), query))
+                || contains(effectiveTicketType(ticket), query)
+                || (ticket.getAsset() != null
+                && (contains(ticket.getAsset().getId(), query)
+                        || contains(ticket.getAsset().getNome(), query)
+                        || contains(ticket.getAsset().getTipo(), query)
+                        || contains(ticket.getAsset().getNumeroSerie(), query)));
+    }
+
+    private TicketType effectiveTicketType(Ticket ticket) {
+        return ticket.getTicketType() == null ? TicketType.GERAL : ticket.getTicketType();
+    }
+
+    private String displayCode(Ticket ticket) {
+        String compactId = ticket.getId().toString().replace("-", "");
+        return "SPD-" + compactId.substring(0, Math.min(6, compactId.length()));
+    }
+
+    private boolean contains(Object value, String query) {
+        return value != null
+                && normalizeSearchText(value.toString()).contains(query);
+    }
+
+    private String normalizeSearchText(String value) {
+        return Normalizer.normalize(value, Normalizer.Form.NFD)
+                .replaceAll("\\p{M}", "")
+                .toLowerCase(Locale.ROOT);
     }
 }

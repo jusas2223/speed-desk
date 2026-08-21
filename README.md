@@ -4,7 +4,7 @@ Speed Desk é uma aplicação web de service desk para registrar ativos, abrir c
 
 ## Estado atual
 
-O projeto está em uma versão funcional de evolução. Login, sessão web, autorização por perfil, gestão básica de usuários, ativos e chamados, persistência local offline e integração frontend/backend estão implementados e cobertos por testes automatizados no backend. O frontend possui identidade visual responsiva, temas claro e escuro e navegação específica para cliente, técnico e gerente. Organizações, categorias e tipos de chamado também estão integrados ao backend e ao frontend administrativo.
+O projeto está em uma versão funcional de evolução. Login, sessão web, autorização por perfil, gestão básica de usuários, ativos e chamados, persistência local offline e integração frontend/backend estão implementados e cobertos por testes automatizados no backend. O frontend possui identidade visual responsiva, temas claro e escuro, navegação específica por perfil e uma área dedicada de chamados com consulta individual protegida. Organizações, categorias e tipos de chamado também estão integrados ao backend e ao frontend administrativo.
 
 ## Tecnologias
 
@@ -44,9 +44,9 @@ O navegador se comunica somente com a API. A API autentica o JWT, aplica as regr
 
 | Perfil | Comportamento atual |
 | --- | --- |
-| `CLIENTE` | Visualiza e cadastra os próprios ativos e chamados. Pode estar vinculado administrativamente a uma organização, sem compartilhar dados com outros clientes. Não acessa recursos de outro cliente. |
-| `TECNICO` | Visualiza chamados e ativos de clientes, pode criar recursos para clientes, assumir chamados em seu próprio nome e resolver os que estiverem atribuídos a ele. |
-| `GERENTE` | Gerencia usuários, consulta e cria recursos para clientes, atribui chamados a técnicos e pode resolver chamados em atendimento. |
+| `CLIENTE` | Visualiza, filtra e consulta individualmente somente os próprios ativos e chamados. Pode estar vinculado administrativamente a uma organização, sem compartilhar dados com outros clientes. |
+| `TECNICO` | Visualiza, filtra e consulta individualmente chamados e ativos de clientes, pode criar recursos para clientes, assumir chamados em seu próprio nome e resolver os que estiverem atribuídos a ele. |
+| `GERENTE` | Gerencia usuários, consulta e cria recursos para clientes, visualiza qualquer chamado existente, atribui chamados a técnicos e pode resolver chamados em atendimento. |
 
 ## Funcionalidades implementadas
 
@@ -59,7 +59,8 @@ O navegador se comunica somente com a API. A API autentica o JWT, aplica as regr
 - cadastro e consulta de organizações administrativas no backend e no frontend do gerente;
 - cadastro e consulta de categorias ativas no backend e no frontend do gerente;
 - abertura de chamados dos tipos `GERAL`, `HARDWARE` e `SOFTWARE`, com categoria e ativo opcionais, prioridade e prazo calculado por SLA;
-- lista operacional com chamados recebidos, em atendimento e concluídos;
+- lista completa de chamados com busca e filtros combináveis por status, prioridade, tipo, categoria e responsável;
+- página de detalhes persistente por UUID, protegida conforme o proprietário e o perfil autenticado;
 - painel operacional responsivo com busca, filtros, métricas calculadas com dados reais e distribuição por status e categoria;
 - shell compartilhado de navegação, temas claro e escuro, tela de login e identidade visual baseada em velocidade;
 - autoatribuição de chamado pelo técnico e atribuição pelo gerente;
@@ -84,7 +85,8 @@ Todos os endpoints abaixo usam o prefixo `http://localhost:8080/api` durante o d
 | `POST` | `/ticket-categories` | Somente `GERENTE`. Cria uma categoria para um tipo de chamado. |
 | `GET` | `/assets/cliente/{clienteId}` | Autenticado. Cliente acessa somente os próprios ativos; técnico e gerente podem consultar clientes. |
 | `POST` | `/assets` | Autenticado. Cria ativo vinculado a um usuário `CLIENTE`, respeitando o escopo de acesso. |
-| `GET` | `/tickets` | Autenticado. Aceita `clienteId` opcional; cliente é sempre limitado aos próprios chamados. |
+| `GET` | `/tickets` | Autenticado. Aceita filtros opcionais por cliente, status, prioridade, tipo, categoria, técnico, ausência de técnico e busca textual; o cliente permanece limitado aos próprios chamados. |
+| `GET` | `/tickets/{ticketId}` | Autenticado. Cliente consulta somente chamado próprio; técnico e gerente podem consultar chamados existentes. |
 | `POST` | `/tickets` | Autenticado. Abre chamado para um usuário `CLIENTE`, com tipo, categoria compatível e ativo do mesmo cliente opcionais. |
 | `PATCH` | `/tickets/{ticketId}/assumir/{tecnicoId}` | Técnico assume em nome próprio ou gerente atribui a um técnico. |
 | `PATCH` | `/tickets/{ticketId}/resolver` | Técnico atribuído ou gerente resolve chamado em atendimento. |
@@ -93,34 +95,32 @@ Todos os endpoints abaixo usam o prefixo `http://localhost:8080/api` durante o d
 
 O perfil `localdev` foi criado para desenvolvimento offline, incluindo o uso do projeto dentro da faculdade. Ele usa H2 persistente em arquivo, em modo de compatibilidade PostgreSQL, sem acessar o Supabase por JDBC.
 
-### IntelliJ IDEA
+### PowerShell — forma recomendada
+
+Na raiz do repositório, execute:
+
+```powershell
+.\start-local.ps1
+```
+
+O inicializador localiza o JDK 26 instalado, ativa o perfil `localdev`, configura apenas valores locais e usa sempre o banco existente em `.speeddesk-local/`, independentemente do diretório atual do terminal. IntelliJ e outras IDEs são opcionais para este fluxo.
+
+### IntelliJ IDEA — opcional
 
 1. Use o JDK 26 e abra uma configuração Spring Boot para `com.speeddesk.api.ApiApplication`.
-2. Defina `C:\Meus Projetos\speed-desk\backend` como diretório de trabalho.
+2. Defina `C:\Meus Projetos\speed-desk` como diretório de trabalho.
 3. Informe `localdev` no campo **Active profiles**.
 4. Configure estas variáveis de ambiente com valores apenas locais:
 
 ```text
 SPEEDDESK_JWT_SECRET=localdev-only-secret-with-at-least-32-bytes
 SPEEDDESK_CORS_ALLOWED_ORIGINS=http://127.0.0.1:5500,http://localhost:5500
+SPEEDDESK_LOCAL_DB_PATH=C:/Meus Projetos/speed-desk/.speeddesk-local/speeddesk
 ```
 
 5. Execute `ApiApplication`.
 
-As variáveis de banco `SPEEDDESK_DB_*` não são necessárias no perfil `localdev`.
-
-### PowerShell
-
-```powershell
-cd "C:\Meus Projetos\speed-desk\backend"
-$env:JAVA_HOME="C:\Users\Pessoal\.jdks\openjdk-26.0.1"
-$env:SPRING_PROFILES_ACTIVE="localdev"
-$env:SPEEDDESK_JWT_SECRET="localdev-only-secret-with-at-least-32-bytes"
-$env:SPEEDDESK_CORS_ALLOWED_ORIGINS="http://127.0.0.1:5500,http://localhost:5500"
-.\mvnw.cmd spring-boot:run
-```
-
-O banco será salvo em `backend/.speeddesk-local/`. O H2 Console permanece desabilitado.
+As variáveis de banco `SPEEDDESK_DB_*` não são necessárias no perfil `localdev`. O banco será salvo em `.speeddesk-local/` na raiz do projeto. O H2 Console permanece desabilitado.
 
 ### Contas locais de demonstração
 
@@ -192,4 +192,4 @@ As decisões definitivas sobre separação de ambientes, publicação do fronten
 - implementar notificações, incidentes, exportações, tempo real, PWA e IA;
 - definir a estratégia final de ambientes e sincronizar o schema remoto de forma controlada.
 
-O escopo completo, as exclusões e a ordem dos macroblocos estão em [`docs/product-roadmap.md`](docs/product-roadmap.md). A divisão fixa entre mentor, Codex e Antigravity está em [`docs/development-workflow.md`](docs/development-workflow.md). Detalhes de segurança e operação local estão em [`docs/backend-security.md`](docs/backend-security.md).
+O escopo completo, as exclusões e a ordem dos macroblocos estão em [`docs/product-roadmap.md`](docs/product-roadmap.md). O fluxo técnico consolidado do Codex está em [`docs/development-workflow.md`](docs/development-workflow.md). Detalhes de segurança e operação local estão em [`docs/backend-security.md`](docs/backend-security.md).

@@ -46,6 +46,23 @@ public class AuthorizationService {
         return requestedClientId;
     }
 
+    public void requireCanRead(Ticket ticket) {
+        AuthenticatedUser currentUser = currentUser();
+
+        if (currentUser.role() != UserRole.CLIENTE) {
+            return;
+        }
+
+        if (ticket.getCliente() != null
+                && currentUser.id().equals(ticket.getCliente().getId())) {
+            return;
+        }
+
+        throw new ForbiddenOperationException(
+                "Clientes só podem acessar os próprios chamados."
+        );
+    }
+
     public void requireCanAssignTo(UUID technicianId) {
         AuthenticatedUser currentUser = currentUser();
 

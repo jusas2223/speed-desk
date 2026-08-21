@@ -122,6 +122,74 @@ class AuthorizationIntegrationTest {
     }
 
     @Test
+    void ticketDetailsRespectClientOwnershipAndAllowSupportRoles() throws Exception {
+        Ticket ownTicket = saveTicket(
+                "Chamado do cliente A",
+                clientA,
+                assetA,
+                null,
+                TicketStatus.RECEBIDO
+        );
+        Ticket otherTicket = saveTicket(
+                "Chamado do cliente B",
+                clientB,
+                assetB,
+                technicianA,
+                TicketStatus.EM_ATENDIMENTO
+        );
+
+        mockMvc.perform(get("/api/tickets/{ticketId}", ownTicket.getId())
+                        .header(HttpHeaders.AUTHORIZATION, bearer(clientA)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(ownTicket.getId().toString()))
+                .andExpect(jsonPath("$.cliente.id").value(clientA.getId().toString()));
+
+        mockMvc.perform(get("/api/tickets/{ticketId}", otherTicket.getId())
+                        .header(HttpHeaders.AUTHORIZATION, bearer(clientA)))
+                .andExpect(status().isForbidden())
+                .andExpect(content().contentTypeCompatibleWith(
+                        MediaType.APPLICATION_PROBLEM_JSON));
+
+        mockMvc.perform(get("/api/tickets/{ticketId}", otherTicket.getId())
+                        .header(HttpHeaders.AUTHORIZATION, bearer(technicianB)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(otherTicket.getId().toString()));
+
+        mockMvc.perform(get("/api/tickets/{ticketId}", otherTicket.getId())
+                        .header(HttpHeaders.AUTHORIZATION, bearer(manager)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(otherTicket.getId().toString()));
+    }
+
+    @Test
+    void ticketDetailsReturnStandardAuthenticationAndIdentifierErrors() throws Exception {
+        Ticket ticket = saveTicket(
+                "Chamado protegido",
+                clientA,
+                assetA,
+                null,
+                TicketStatus.RECEBIDO
+        );
+
+        mockMvc.perform(get("/api/tickets/{ticketId}", ticket.getId()))
+                .andExpect(status().isUnauthorized())
+                .andExpect(content().contentTypeCompatibleWith(
+                        MediaType.APPLICATION_PROBLEM_JSON));
+
+        mockMvc.perform(get("/api/tickets/not-a-uuid")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(manager)))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(
+                        MediaType.APPLICATION_PROBLEM_JSON));
+
+        mockMvc.perform(get("/api/tickets/{ticketId}", java.util.UUID.randomUUID())
+                        .header(HttpHeaders.AUTHORIZATION, bearer(manager)))
+                .andExpect(status().isNotFound())
+                .andExpect(content().contentTypeCompatibleWith(
+                        MediaType.APPLICATION_PROBLEM_JSON));
+    }
+
+    @Test
     void clientCannotAccessOrCreateResourcesForAnotherClient() throws Exception {
         mockMvc.perform(get("/api/tickets")
                         .queryParam("clienteId", clientB.getId().toString())
@@ -202,6 +270,41 @@ class AuthorizationIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(assetBody("Impressora", "SN-MANAGER", clientB)))
                 .andExpect(status().isCreated());
+    }
+
+    @Test
+    void ticketListAcceptsCombinedFiltersAndCaseInsensitiveQuery() throws Exception {
+        TicketCategory category = saveCategory(
+                "Equipamento corporativo",
+                TicketType.HARDWARE,
+                true
+        );
+        Ticket matching = ticketRepository.saveAndFlush(Ticket.builder()
+                .titulo("Falha no Notebook A")
+                .descricao("Equipamento não inicializa")
+                .status(TicketStatus.EM_ATENDIMENTO)
+                .prioridade(TicketPriority.CRITICA)
+                .ticketType(TicketType.HARDWARE)
+                .category(category)
+                .cliente(clientA)
+                .tecnico(technicianA)
+                .asset(assetA)
+                .dataVencimento(OffsetDateTime.now(ZoneOffset.UTC).plusHours(4))
+                .build());
+        saveTicket("Outro chamado", clientB, assetB, null, TicketStatus.RECEBIDO);
+
+        mockMvc.perform(get("/api/tickets")
+                        .queryParam("clienteId", clientA.getId().toString())
+                        .queryParam("status", "EM_ATENDIMENTO")
+                        .queryParam("prioridade", "CRITICA")
+                        .queryParam("ticketType", "HARDWARE")
+                        .queryParam("categoryId", category.getId().toString())
+                        .queryParam("tecnicoId", technicianA.getId().toString())
+                        .queryParam("query", "NOTEBOOK A")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(manager)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].id").value(matching.getId().toString()));
     }
 
     @Test

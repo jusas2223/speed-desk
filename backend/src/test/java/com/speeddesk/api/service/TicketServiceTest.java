@@ -3,6 +3,7 @@ package com.speeddesk.api.service;
 import com.speeddesk.api.dto.TicketRequestDTO;
 import com.speeddesk.api.dto.TicketResponseDTO;
 import com.speeddesk.api.entity.Asset;
+import com.speeddesk.api.entity.Organization;
 import com.speeddesk.api.entity.Ticket;
 import com.speeddesk.api.entity.TicketCategory;
 import com.speeddesk.api.entity.TicketPriority;
@@ -123,6 +124,200 @@ class TicketServiceTest {
         assertEquals(1, result.size());
         assertEquals(effectiveId, result.getFirst().cliente().id());
         verify(ticketRepository, never()).findAllByOrderByDataCriacaoDesc();
+    }
+
+    @Test
+    void appliesAllStructuredTicketFilters() {
+        UUID categoryId = UUID.randomUUID();
+        UUID technicianId = UUID.randomUUID();
+        User customer = client(UUID.randomUUID());
+        User technician = User.builder()
+                .id(technicianId)
+                .name("Técnico")
+                .email("tecnico@speeddesk.test")
+                .role(UserRole.TECNICO)
+                .build();
+        TicketCategory category = category(categoryId, TicketType.HARDWARE, true);
+        Ticket matching = Ticket.builder()
+                .id(UUID.randomUUID())
+                .titulo("Falha no notebook")
+                .descricao("Descrição")
+                .status(TicketStatus.EM_ATENDIMENTO)
+                .prioridade(TicketPriority.ALTA)
+                .ticketType(TicketType.HARDWARE)
+                .category(category)
+                .cliente(customer)
+                .tecnico(technician)
+                .build();
+        Ticket different = Ticket.builder()
+                .id(UUID.randomUUID())
+                .titulo("Solicitação geral")
+                .descricao("Descrição")
+                .status(TicketStatus.RECEBIDO)
+                .prioridade(TicketPriority.NORMAL)
+                .ticketType(TicketType.GERAL)
+                .cliente(customer)
+                .build();
+        when(ticketRepository.findAllByOrderByDataCriacaoDesc())
+                .thenReturn(List.of(different, matching));
+
+        List<TicketResponseDTO> result = ticketService.listAll(
+                null,
+                TicketStatus.EM_ATENDIMENTO,
+                TicketPriority.ALTA,
+                TicketType.HARDWARE,
+                categoryId,
+                technicianId,
+                null
+        );
+
+        assertEquals(1, result.size());
+        assertEquals(matching.getId(), result.getFirst().id());
+    }
+
+    @Test
+    void filtersTicketsWithoutAssignedTechnician() {
+        User customer = client(UUID.randomUUID());
+        Ticket unassigned = Ticket.builder()
+                .id(UUID.randomUUID())
+                .titulo("Sem responsável")
+                .descricao("Descrição")
+                .status(TicketStatus.RECEBIDO)
+                .prioridade(TicketPriority.NORMAL)
+                .ticketType(TicketType.GERAL)
+                .cliente(customer)
+                .build();
+        Ticket assigned = Ticket.builder()
+                .id(UUID.randomUUID())
+                .titulo("Com responsável")
+                .descricao("Descrição")
+                .status(TicketStatus.EM_ATENDIMENTO)
+                .prioridade(TicketPriority.NORMAL)
+                .ticketType(TicketType.GERAL)
+                .cliente(customer)
+                .tecnico(User.builder()
+                        .id(UUID.randomUUID())
+                        .name("Técnico")
+                        .email("tecnico@speeddesk.test")
+                        .role(UserRole.TECNICO)
+                        .build())
+                .build();
+        when(ticketRepository.findAllByOrderByDataCriacaoDesc())
+                .thenReturn(List.of(assigned, unassigned));
+
+        List<TicketResponseDTO> result = ticketService.listAll(
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                true,
+                null
+        );
+
+        assertEquals(1, result.size());
+        assertEquals(unassigned.getId(), result.getFirst().id());
+    }
+
+    @Test
+    void searchesCaseInsensitivelyAcrossTicketAndRelatedData() {
+        UUID ticketId = UUID.randomUUID();
+        Organization organization = Organization.builder()
+                .id(UUID.randomUUID())
+                .name("Organização Alfa")
+                .active(true)
+                .build();
+        User customer = User.builder()
+                .id(UUID.randomUUID())
+                .name("Ana Cliente")
+                .email("ana.cliente@speeddesk.test")
+                .password("hash")
+                .role(UserRole.CLIENTE)
+                .organization(organization)
+                .build();
+        TicketCategory category = TicketCategory.builder()
+                .id(UUID.randomUUID())
+                .name("Equipamento corporativo")
+                .ticketType(TicketType.HARDWARE)
+                .active(true)
+                .build();
+        Asset asset = Asset.builder()
+                .id(UUID.randomUUID())
+                .nome("Notebook Velocity")
+                .tipo("Notebook")
+                .numeroSerie("SERIAL-ABC-123")
+                .cliente(customer)
+                .build();
+        Ticket matching = Ticket.builder()
+                .id(ticketId)
+                .titulo("Falha Crítica")
+                .descricao("Bloqueio durante a inicialização")
+                .status(TicketStatus.RECEBIDO)
+                .prioridade(TicketPriority.CRITICA)
+                .ticketType(TicketType.HARDWARE)
+                .category(category)
+                .cliente(customer)
+                .asset(asset)
+                .build();
+        Ticket different = Ticket.builder()
+                .id(UUID.randomUUID())
+                .titulo("Outro chamado")
+                .descricao("Sem correspondência")
+                .status(TicketStatus.RECEBIDO)
+                .prioridade(TicketPriority.NORMAL)
+                .ticketType(TicketType.GERAL)
+                .cliente(client(UUID.randomUUID()))
+                .build();
+        when(ticketRepository.findAllByOrderByDataCriacaoDesc())
+                .thenReturn(List.of(different, matching));
+
+        List<String> queries = List.of(
+                ticketId.toString().substring(0, 8).toUpperCase(),
+                "SPD-" + ticketId.toString().replace("-", "").substring(0, 6),
+                "FALHA CRITICA",
+                "INICIALIZACAO",
+                "ANA CLIENTE",
+                "ANA.CLIENTE@SPEEDDESK.TEST",
+                "ORGANIZACAO ALFA",
+                "EQUIPAMENTO CORPORATIVO",
+                "HARDWARE",
+                "NOTEBOOK VELOCITY",
+                "SERIAL-ABC-123"
+        );
+
+        for (String query : queries) {
+            List<TicketResponseDTO> result = ticketService.listAll(
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    query
+            );
+            assertEquals(1, result.size(), "query: " + query);
+            assertEquals(ticketId, result.getFirst().id(), "query: " + query);
+        }
+    }
+
+    @Test
+    void returnsTicketDetailsAfterObjectAuthorization() {
+        UUID ticketId = UUID.randomUUID();
+        Ticket ticket = Ticket.builder()
+                .id(ticketId)
+                .titulo("Detalhes")
+                .descricao("Descrição")
+                .status(TicketStatus.RECEBIDO)
+                .prioridade(TicketPriority.NORMAL)
+                .cliente(client(UUID.randomUUID()))
+                .build();
+        when(ticketRepository.findById(ticketId)).thenReturn(Optional.of(ticket));
+
+        TicketResponseDTO result = ticketService.findById(ticketId);
+
+        assertEquals(ticketId, result.id());
+        verify(authorizationService).requireCanRead(ticket);
     }
 
     @Test
