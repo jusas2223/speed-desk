@@ -2,10 +2,14 @@ package com.speeddesk.api.dto;
 
 import com.speeddesk.api.entity.Ticket;
 import com.speeddesk.api.entity.TicketPriority;
+import com.speeddesk.api.entity.SlaState;
 import com.speeddesk.api.entity.TicketStatus;
 import com.speeddesk.api.entity.TicketType;
 
+import java.time.Clock;
+import java.time.Duration;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.UUID;
 
 public record TicketResponseDTO(
@@ -21,9 +25,22 @@ public record TicketResponseDTO(
         AssetResponseDTO asset,
         OffsetDateTime dataCriacao,
         OffsetDateTime dataAtualizacao,
-        OffsetDateTime dataVencimento
+        OffsetDateTime dataVencimento,
+        OffsetDateTime resolvedAt,
+        OffsetDateTime closedAt,
+        boolean slaPaused,
+        OffsetDateTime slaPausedAt,
+        SlaState slaState,
+        Long slaRemainingSeconds,
+        Integer slaWarningMinutes,
+        Long version
 ) {
     public static TicketResponseDTO from(Ticket ticket) {
+        return from(ticket, Clock.systemUTC());
+    }
+
+    public static TicketResponseDTO from(Ticket ticket, Clock clock) {
+        SlaProjection sla = projectSla(ticket, clock);
         return new TicketResponseDTO(
                 ticket.getId(),
                 ticket.getTitulo(),
@@ -43,7 +60,15 @@ public record TicketResponseDTO(
                         : AssetResponseDTO.from(ticket.getAsset()),
                 ticket.getDataCriacao(),
                 ticket.getDataAtualizacao(),
-                ticket.getDataVencimento()
+                ticket.getDataVencimento(),
+                ticket.getResolvedAt(),
+                ticket.getClosedAt(),
+                ticket.isSlaPaused(),
+                ticket.getSlaPausedAt(),
+                sla.state(),
+                sla.remainingSeconds(),
+                effectiveWarningMinutes(ticket),
+                ticket.getVersion()
         );
     }
 
@@ -73,7 +98,79 @@ public record TicketResponseDTO(
                 asset,
                 dataCriacao,
                 dataAtualizacao,
-                dataVencimento
+                dataVencimento,
+                null,
+                null,
+                false,
+                null,
+                SlaState.ON_TRACK,
+                null,
+                null,
+                null
         );
+    }
+
+    private static SlaProjection projectSla(Ticket ticket, Clock clock) {
+        OffsetDateTime deadline = ticket.getDataVencimento();
+        if (deadline == null) {
+            return new SlaProjection(
+                    ticket.isSlaPaused() ? SlaState.PAUSED : SlaState.ON_TRACK,
+                    null
+            );
+        }
+
+        boolean completed = ticket.getStatus() == TicketStatus.RESOLVIDO
+                || ticket.getStatus() == TicketStatus.FECHADO;
+        OffsetDateTime reference = OffsetDateTime.now(clock)
+                .withOffsetSameInstant(ZoneOffset.UTC);
+        if (ticket.isSlaPaused() && ticket.getSlaPausedAt() != null) {
+            reference = ticket.getSlaPausedAt();
+        } else if (ticket.getResolvedAt() != null) {
+            reference = ticket.getResolvedAt();
+        } else if (completed && ticket.getClosedAt() != null) {
+            reference = ticket.getClosedAt();
+        } else if (completed && ticket.getDataAtualizacao() != null) {
+            // Chamados resolvidos antes da introdução de resolvedAt devem manter
+            // uma projeção estável, usando o último instante persistido conhecido.
+            reference = ticket.getDataAtualizacao();
+        } else if (completed && ticket.getDataCriacao() != null) {
+            reference = ticket.getDataCriacao();
+        }
+
+        long remainingSeconds = Duration.between(reference, deadline).getSeconds();
+        if (ticket.isSlaPaused()) {
+            return new SlaProjection(SlaState.PAUSED, remainingSeconds);
+        }
+
+        if (completed && remainingSeconds >= 0) {
+            return new SlaProjection(SlaState.MET, remainingSeconds);
+        }
+        if (remainingSeconds < 0) {
+            return new SlaProjection(SlaState.BREACHED, remainingSeconds);
+        }
+
+        long warningSeconds = Math.multiplyExact(
+                effectiveWarningMinutes(ticket).longValue(),
+                60L
+        );
+        return new SlaProjection(
+                remainingSeconds <= warningSeconds ? SlaState.AT_RISK : SlaState.ON_TRACK,
+                remainingSeconds
+        );
+    }
+
+    private static Integer effectiveWarningMinutes(Ticket ticket) {
+        if (ticket.getSlaWarningMinutes() != null) {
+            return ticket.getSlaWarningMinutes();
+        }
+        return switch (ticket.getPrioridade()) {
+            case CRITICA -> 60;
+            case ALTA -> 240;
+            case NORMAL -> 480;
+            case BAIXA -> 720;
+        };
+    }
+
+    private record SlaProjection(SlaState state, Long remainingSeconds) {
     }
 }

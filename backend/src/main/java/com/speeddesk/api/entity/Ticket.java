@@ -13,6 +13,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -85,6 +86,33 @@ public class Ticket {
 
     @Column(name = "data_vencimento")
     private OffsetDateTime dataVencimento;
+
+    @Column(name = "sla_duracao_minutos")
+    private Integer slaDurationMinutes;
+
+    @Column(name = "sla_alerta_minutos")
+    private Integer slaWarningMinutes;
+
+    @Column(
+            name = "sla_pausado",
+            nullable = false,
+            columnDefinition = "boolean default false"
+    )
+    @Builder.Default
+    private boolean slaPaused = false;
+
+    @Column(name = "sla_pausado_em")
+    private OffsetDateTime slaPausedAt;
+
+    @Column(name = "resolvido_em")
+    private OffsetDateTime resolvedAt;
+
+    @Column(name = "fechado_em")
+    private OffsetDateTime closedAt;
+
+    @Version
+    @Column(nullable = false, columnDefinition = "bigint default 0")
+    private long version;
 
     @PrePersist
     private void prepareForInsert() {

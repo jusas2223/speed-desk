@@ -7,6 +7,7 @@ import com.speeddesk.api.entity.Organization;
 import com.speeddesk.api.entity.Ticket;
 import com.speeddesk.api.entity.TicketCategory;
 import com.speeddesk.api.entity.TicketPriority;
+import com.speeddesk.api.entity.TicketSlaPause;
 import com.speeddesk.api.entity.TicketStatus;
 import com.speeddesk.api.entity.TicketType;
 import com.speeddesk.api.entity.User;
@@ -20,8 +21,11 @@ import com.speeddesk.api.exception.TicketCategoryTypeMismatchException;
 import com.speeddesk.api.repository.AssetRepository;
 import com.speeddesk.api.repository.TicketCategoryRepository;
 import com.speeddesk.api.repository.TicketRepository;
+import com.speeddesk.api.repository.TicketSlaPauseRepository;
 import com.speeddesk.api.repository.UserRepository;
 import com.speeddesk.api.security.AuthorizationService;
+import com.speeddesk.api.security.AuthenticatedUser;
+import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -39,8 +43,10 @@ import java.util.UUID;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -55,6 +61,8 @@ class TicketServiceTest {
     private UserRepository userRepository;
     private AssetRepository assetRepository;
     private TicketCategoryRepository ticketCategoryRepository;
+    private TicketSlaPauseRepository ticketSlaPauseRepository;
+    private SlaPolicyService slaPolicyService;
     private AuthorizationService authorizationService;
     private TicketService ticketService;
 
@@ -64,12 +72,20 @@ class TicketServiceTest {
         userRepository = mock(UserRepository.class);
         assetRepository = mock(AssetRepository.class);
         ticketCategoryRepository = mock(TicketCategoryRepository.class);
+        ticketSlaPauseRepository = mock(TicketSlaPauseRepository.class);
+        slaPolicyService = mock(SlaPolicyService.class);
         authorizationService = mock(AuthorizationService.class);
+        when(slaPolicyService.snapshot(any(TicketPriority.class)))
+                .thenAnswer(invocation -> SlaPolicyService.defaults(
+                        invocation.getArgument(0)
+                ));
         ticketService = new TicketService(
                 ticketRepository,
                 userRepository,
                 assetRepository,
                 ticketCategoryRepository,
+                ticketSlaPauseRepository,
+                slaPolicyService,
                 authorizationService,
                 Clock.fixed(NOW, ZoneOffset.UTC)
         );
@@ -495,6 +511,177 @@ class TicketServiceTest {
         );
 
         verify(ticketRepository, never()).save(any());
+    }
+
+    @Test
+    void legacyAssignmentDelegatesTriageToAttendanceTransition() {
+        UUID ticketId = UUID.randomUUID();
+        UUID technicianId = UUID.randomUUID();
+        User technician = User.builder()
+                .id(technicianId)
+                .name("Tecnico")
+                .email("technician@speeddesk.test")
+                .role(UserRole.TECNICO)
+                .build();
+        Ticket ticket = workflowTicket(TicketStatus.EM_TRIAGEM, null);
+        when(ticketRepository.findById(ticketId)).thenReturn(Optional.of(ticket));
+        when(userRepository.findById(technicianId)).thenReturn(Optional.of(technician));
+        when(ticketRepository.save(ticket)).thenReturn(ticket);
+
+        TicketResponseDTO result = ticketService.assumirTicket(ticketId, technicianId);
+
+        assertEquals(TicketStatus.EM_ATENDIMENTO, result.status());
+        assertEquals(technicianId, result.tecnico().id());
+    }
+
+    @Test
+    void followsControlledStatusMachineAndCapturesResolutionTime() {
+        User technician = technician(UUID.randomUUID());
+        UUID ticketId = UUID.randomUUID();
+        Ticket ticket = workflowTicket(TicketStatus.EM_ATENDIMENTO, technician);
+        when(ticketRepository.findById(ticketId)).thenReturn(Optional.of(ticket));
+        when(ticketRepository.save(ticket)).thenReturn(ticket);
+
+        assertEquals(
+                TicketStatus.AGUARDANDO_PECA,
+                ticketService.updateStatus(ticketId, TicketStatus.AGUARDANDO_PECA).status()
+        );
+        assertEquals(
+                TicketStatus.EM_ATENDIMENTO,
+                ticketService.updateStatus(ticketId, TicketStatus.EM_ATENDIMENTO).status()
+        );
+        TicketResponseDTO resolved = ticketService.resolverTicket(ticketId);
+
+        assertEquals(TicketStatus.RESOLVIDO, resolved.status());
+        assertEquals(OffsetDateTime.ofInstant(NOW, ZoneOffset.UTC), resolved.resolvedAt());
+        verify(authorizationService, org.mockito.Mockito.times(2)).requireCanOperate(ticket);
+        verify(authorizationService).requireCanResolve(ticket);
+    }
+
+    @Test
+    void extendsDeadlineByExactPauseDurationWhenResumed() {
+        User technician = technician(UUID.randomUUID());
+        UUID ticketId = UUID.randomUUID();
+        OffsetDateTime now = OffsetDateTime.ofInstant(NOW, ZoneOffset.UTC);
+        OffsetDateTime originalDeadline = now.plusHours(10);
+        Ticket ticket = workflowTicket(TicketStatus.EM_ATENDIMENTO, technician);
+        ticket.setDataVencimento(originalDeadline);
+        ticket.setSlaDurationMinutes(2880);
+        ticket.setSlaWarningMinutes(480);
+        ticket.setSlaPaused(true);
+        ticket.setSlaPausedAt(now.minusMinutes(90));
+        TicketSlaPause pause = TicketSlaPause.builder()
+                .ticket(ticket)
+                .pausedBy(technician)
+                .reason("Aguardando fornecedor")
+                .pausedAt(now.minusMinutes(90))
+                .build();
+        when(ticketRepository.findById(ticketId)).thenReturn(Optional.of(ticket));
+        when(ticketSlaPauseRepository
+                .findFirstByTicket_IdAndResumedAtIsNullOrderByPausedAtDesc(ticketId))
+                .thenReturn(Optional.of(pause));
+        when(authorizationService.currentUser()).thenReturn(new AuthenticatedUser(
+                technician.getId(),
+                technician.getEmail(),
+                UserRole.TECNICO
+        ));
+        when(userRepository.getReferenceById(technician.getId())).thenReturn(technician);
+        when(ticketRepository.save(ticket)).thenReturn(ticket);
+
+        TicketResponseDTO result = ticketService.resumeSla(ticketId);
+
+        assertFalse(result.slaPaused());
+        assertNull(result.slaPausedAt());
+        assertEquals(originalDeadline.plusMinutes(90), result.dataVencimento());
+        assertEquals(now, pause.getResumedAt());
+        assertEquals(technician, pause.getResumedBy());
+    }
+
+    @Test
+    void persistsRequiredReasonAndFreezesRemainingTimeWhenPaused() {
+        User manager = User.builder()
+                .id(UUID.randomUUID())
+                .name("Gerente")
+                .email("manager@speeddesk.test")
+                .role(UserRole.GERENTE)
+                .build();
+        UUID ticketId = UUID.randomUUID();
+        OffsetDateTime now = OffsetDateTime.ofInstant(NOW, ZoneOffset.UTC);
+        Ticket ticket = workflowTicket(TicketStatus.RECEBIDO, null);
+        ticket.setDataVencimento(now.plusHours(4));
+        when(ticketRepository.findById(ticketId)).thenReturn(Optional.of(ticket));
+        when(authorizationService.currentUser()).thenReturn(new AuthenticatedUser(
+                manager.getId(),
+                manager.getEmail(),
+                UserRole.GERENTE
+        ));
+        when(userRepository.getReferenceById(manager.getId())).thenReturn(manager);
+        when(ticketRepository.save(ticket)).thenReturn(ticket);
+        ArgumentCaptor<TicketSlaPause> captor = ArgumentCaptor.forClass(
+                TicketSlaPause.class
+        );
+
+        TicketResponseDTO result = ticketService.pauseSla(
+                ticketId,
+                "  Aguardando janela de manutencao  "
+        );
+
+        assertTrue(result.slaPaused());
+        assertEquals(now, result.slaPausedAt());
+        assertEquals(14400L, result.slaRemainingSeconds());
+        verify(ticketSlaPauseRepository).save(captor.capture());
+        assertEquals("Aguardando janela de manutencao", captor.getValue().getReason());
+    }
+
+    @Test
+    void closesOnlyResolvedAndReopensWithFreshSnapshotDeadline() {
+        User technician = technician(UUID.randomUUID());
+        UUID ticketId = UUID.randomUUID();
+        Ticket ticket = workflowTicket(TicketStatus.RESOLVIDO, technician);
+        ticket.setResolvedAt(OffsetDateTime.ofInstant(NOW, ZoneOffset.UTC).minusMinutes(1));
+        ticket.setSlaDurationMinutes(600);
+        ticket.setSlaWarningMinutes(120);
+        when(ticketRepository.findById(ticketId)).thenReturn(Optional.of(ticket));
+        when(ticketRepository.save(ticket)).thenReturn(ticket);
+
+        TicketResponseDTO closed = ticketService.close(ticketId);
+        assertEquals(TicketStatus.FECHADO, closed.status());
+        assertEquals(OffsetDateTime.ofInstant(NOW, ZoneOffset.UTC), closed.closedAt());
+
+        TicketResponseDTO reopened = ticketService.reopen(ticketId);
+        assertEquals(TicketStatus.EM_ATENDIMENTO, reopened.status());
+        assertNull(reopened.resolvedAt());
+        assertNull(reopened.closedAt());
+        assertEquals(
+                OffsetDateTime.ofInstant(NOW, ZoneOffset.UTC).plusMinutes(600),
+                reopened.dataVencimento()
+        );
+        verify(authorizationService, org.mockito.Mockito.times(2))
+                .requireCanCloseOrReopen(ticket);
+    }
+
+    private Ticket workflowTicket(TicketStatus status, User technician) {
+        return Ticket.builder()
+                .id(UUID.randomUUID())
+                .titulo("Chamado")
+                .descricao("Descricao")
+                .prioridade(TicketPriority.NORMAL)
+                .status(status)
+                .cliente(client(UUID.randomUUID()))
+                .tecnico(technician)
+                .dataVencimento(OffsetDateTime.ofInstant(NOW, ZoneOffset.UTC).plusHours(48))
+                .slaDurationMinutes(2880)
+                .slaWarningMinutes(480)
+                .build();
+    }
+
+    private User technician(UUID id) {
+        return User.builder()
+                .id(id)
+                .name("Tecnico")
+                .email(id + "@speeddesk.test")
+                .role(UserRole.TECNICO)
+                .build();
     }
 
     private static Stream<Arguments> slaCases() {

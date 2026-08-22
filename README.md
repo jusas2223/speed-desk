@@ -4,7 +4,7 @@ Speed Desk é uma aplicação web de service desk para registrar ativos, abrir c
 
 ## Estado atual
 
-O projeto está em uma versão funcional de evolução. Login, sessão web, autorização por perfil, ciclo administrativo de usuários, configurações pessoais, ativos e chamados, persistência local offline e integração frontend/backend estão implementados e cobertos por testes automatizados no backend. O frontend possui identidade visual responsiva, temas claro e escuro, navegação específica por perfil, área dedicada de chamados, perfil pessoal e diretório administrativo de usuários. Organizações, categorias e tipos de chamado também estão integrados ao backend e ao frontend administrativo.
+O projeto está em uma versão funcional de evolução. Login, sessão web, autorização por perfil, ciclo administrativo de usuários, configurações pessoais, ativos e o núcleo completo de chamados, persistência local offline e integração frontend/backend estão implementados e cobertos por testes automatizados no backend. O frontend possui identidade visual responsiva, temas claro e escuro, navegação específica por perfil, área dedicada de chamados, perfil pessoal e diretório administrativo de usuários. Organizações, categorias, tipos de chamado, comentários públicos, notas internas e políticas de SLA também estão integrados ao backend e às telas correspondentes.
 
 ## Tecnologias
 
@@ -44,9 +44,9 @@ O navegador se comunica somente com a API. A API autentica o JWT, aplica as regr
 
 | Perfil | Comportamento atual |
 | --- | --- |
-| `CLIENTE` | Visualiza, filtra e consulta individualmente somente os próprios ativos e chamados. Pode estar vinculado administrativamente a uma organização, sem compartilhar dados com outros clientes. |
-| `TECNICO` | Visualiza, filtra e consulta individualmente chamados e ativos de clientes, pode criar recursos para clientes, assumir chamados em seu próprio nome e resolver os que estiverem atribuídos a ele. |
-| `GERENTE` | Gerencia usuários, consulta e cria recursos para clientes, visualiza qualquer chamado existente, atribui chamados a técnicos e pode resolver chamados em atendimento. |
+| `CLIENTE` | Visualiza, filtra e consulta individualmente somente os próprios ativos e chamados. Comenta publicamente e pode fechar ou reabrir o próprio chamado nos estados permitidos. Pode estar vinculado administrativamente a uma organização, sem compartilhar dados com outros clientes. |
+| `TECNICO` | Visualiza, filtra e consulta chamados e ativos de clientes, pode criar recursos para clientes, comentar chamados e assumir em seu próprio nome; status e SLA só podem ser operados quando ele for o técnico atribuído. |
+| `GERENTE` | Gerencia usuários e políticas de SLA, consulta e cria recursos para clientes, visualiza qualquer chamado existente e pode atribuir, operar, fechar, reabrir e comentar chamados conforme as regras de negócio. |
 
 ## Funcionalidades implementadas
 
@@ -66,6 +66,12 @@ O navegador se comunica somente com a API. A API autentica o JWT, aplica as regr
 - abertura de chamados dos tipos `GERAL`, `HARDWARE` e `SOFTWARE`, com categoria e ativo opcionais, prioridade e prazo calculado por SLA;
 - lista completa de chamados com busca e filtros combináveis por status, prioridade, tipo, categoria e responsável;
 - página de detalhes persistente por UUID, protegida conforme o proprietário e o perfil autenticado;
+- transições controladas entre os sete status canônicos, com fechamento e reabertura separados;
+- prazo de SLA projetado como `ON_TRACK`, `AT_RISK`, `BREACHED`, `PAUSED` ou `MET`, incluindo tempo restante;
+- políticas de duração e alerta por prioridade, configuráveis pelo gerente e copiadas para cada novo chamado;
+- pausa de SLA com motivo e retomada que desloca o vencimento pelo tempo efetivamente pausado;
+- comentários públicos e notas internas da equipe, ocultas de usuários `CLIENTE`;
+- controle de concorrência otimista nas mutações de chamados, políticas e pausas de SLA;
 - painel operacional responsivo com busca, filtros, métricas calculadas com dados reais e distribuição por status e categoria;
 - shell compartilhado de navegação, temas claro e escuro, tela de login e identidade visual baseada em velocidade;
 - autoatribuição de chamado pelo técnico e atribuição pelo gerente;
@@ -73,7 +79,7 @@ O navegador se comunica somente com a API. A API autentica o JWT, aplica as regr
 - respostas de erro no formato `ProblemDetail` e validação de entrada;
 - perfil `localdev` com H2 persistente e dados locais de demonstração.
 
-Os status canônicos são `RECEBIDO`, `EM_TRIAGEM`, `EM_ATENDIMENTO`, `AGUARDANDO_CLIENTE`, `AGUARDANDO_PECA`, `RESOLVIDO` e `FECHADO`. As prioridades são `BAIXA`, `NORMAL`, `ALTA` e `CRITICA`. Os tipos de chamado são `GERAL`, `HARDWARE` e `SOFTWARE`; requests antigos sem tipo continuam sendo tratados como `GERAL`.
+Os status canônicos são `RECEBIDO`, `EM_TRIAGEM`, `EM_ATENDIMENTO`, `AGUARDANDO_CLIENTE`, `AGUARDANDO_PECA`, `RESOLVIDO` e `FECHADO`. O fluxo normal permite `RECEBIDO → EM_TRIAGEM/EM_ATENDIMENTO`, `EM_TRIAGEM → EM_ATENDIMENTO/AGUARDANDO_CLIENTE`, `EM_ATENDIMENTO → AGUARDANDO_CLIENTE/AGUARDANDO_PECA/RESOLVIDO` e o retorno dos dois estados de espera para `EM_ATENDIMENTO`. Fechamento e reabertura usam operações próprias e não burlam essa matriz. As prioridades são `BAIXA`, `NORMAL`, `ALTA` e `CRITICA`. Os tipos de chamado são `GERAL`, `HARDWARE` e `SOFTWARE`; requests antigos sem tipo continuam sendo tratados como `GERAL`.
 
 ## Endpoints atuais
 
@@ -102,6 +108,17 @@ Todos os endpoints abaixo usam o prefixo `http://localhost:8080/api` durante o d
 | `POST` | `/tickets` | Autenticado. Abre chamado para um usuário `CLIENTE`, com tipo, categoria compatível e ativo do mesmo cliente opcionais. |
 | `PATCH` | `/tickets/{ticketId}/assumir/{tecnicoId}` | Técnico assume em nome próprio ou gerente atribui a um técnico. |
 | `PATCH` | `/tickets/{ticketId}/resolver` | Técnico atribuído ou gerente resolve chamado em atendimento. |
+| `PATCH` | `/tickets/{ticketId}/status` | Técnico atribuído ou gerente executa uma transição permitida. O SLA precisa estar ativo. |
+| `POST` | `/tickets/{ticketId}/close` | Cliente proprietário ou gerente fecha um chamado `RESOLVIDO`. |
+| `POST` | `/tickets/{ticketId}/reopen` | Cliente proprietário ou gerente reabre um chamado `RESOLVIDO` ou `FECHADO` e reinicia o prazo a partir do snapshot de SLA. |
+| `POST` | `/tickets/{ticketId}/sla/pause` | Técnico atribuído ou gerente pausa o SLA de chamado não concluído, com motivo obrigatório. |
+| `POST` | `/tickets/{ticketId}/sla/resume` | Técnico atribuído ou gerente retoma o SLA e acrescenta ao vencimento o período pausado. |
+| `GET` | `/tickets/{ticketId}/comments` | Autenticado e autorizado no chamado. Clientes recebem somente comentários públicos; a equipe recebe também notas internas. |
+| `POST` | `/tickets/{ticketId}/comments` | Autenticado e autorizado no chamado. Cliente cria apenas comentário público; técnico e gerente também podem criar nota interna. |
+| `GET` | `/sla-policies` | Qualquer usuário autenticado. Lista duração e alerta de SLA por prioridade. |
+| `PUT` | `/sla-policies/{priority}` | Somente `GERENTE`. Atualiza a política usada por chamados criados posteriormente. |
+
+Transições inválidas, operações incompatíveis com o estado do SLA e disputas de atualização concorrente retornam `409 Conflict` em `ProblemDetail`. Uma política nova não recalcula chamados existentes: duração e alerta ficam registrados no chamado quando ele é criado.
 
 ## Executar o backend com `localdev`
 
@@ -200,7 +217,7 @@ As decisões definitivas sobre separação de ambientes, publicação do fronten
 
 ## Roadmap
 
-- consolidar o núcleo completo de chamados, usuários, ativos, SLA e comentários;
+- concluir a gestão avançada de ativos, preservando o núcleo de chamados, usuários, SLA e comentários já implementado;
 - adicionar os fluxos especializados de hardware e software;
 - implementar notificações, incidentes, exportações, tempo real, PWA e IA;
 - definir a estratégia final de ambientes e sincronizar o schema remoto de forma controlada.

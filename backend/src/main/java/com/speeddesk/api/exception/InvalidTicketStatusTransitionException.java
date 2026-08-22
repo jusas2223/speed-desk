@@ -6,12 +6,19 @@ public class InvalidTicketStatusTransitionException extends RuntimeException {
 
     public InvalidTicketStatusTransitionException(
             TicketStatus currentStatus,
-            TicketStatus expectedStatus,
             TicketStatus targetStatus
     ) {
         super(
-                "Transicao invalida: ticket em %s; esperado %s para alterar para %s"
-                        .formatted(currentStatus, expectedStatus, targetStatus)
+                "Transicao de status nao permitida: %s -> %s"
+                        .formatted(currentStatus, targetStatus)
         );
+    }
+
+    public InvalidTicketStatusTransitionException(
+            TicketStatus currentStatus,
+            TicketStatus expectedStatus,
+            TicketStatus targetStatus
+    ) {
+        this(currentStatus, targetStatus);
     }
 }

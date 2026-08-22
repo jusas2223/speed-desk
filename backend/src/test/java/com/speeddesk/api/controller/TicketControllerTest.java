@@ -2,6 +2,8 @@ package com.speeddesk.api.controller;
 
 import com.speeddesk.api.dto.TicketRequestDTO;
 import com.speeddesk.api.dto.TicketResponseDTO;
+import com.speeddesk.api.dto.TicketStatusUpdateRequestDTO;
+import com.speeddesk.api.dto.SlaPauseRequestDTO;
 import com.speeddesk.api.dto.UserResponseDTO;
 import com.speeddesk.api.entity.TicketPriority;
 import com.speeddesk.api.entity.TicketStatus;
@@ -107,6 +109,27 @@ class TicketControllerTest {
 
         assertSame(ticket, ticketController.assumirTicket(ticketId, technicianId).getBody());
         assertSame(ticket, ticketController.resolverTicket(ticketId).getBody());
+    }
+
+    @Test
+    void mapsWorkflowAndSlaEndpoints() {
+        UUID ticketId = UUID.randomUUID();
+        TicketResponseDTO ticket = response();
+        TicketStatusUpdateRequestDTO statusRequest =
+                new TicketStatusUpdateRequestDTO(TicketStatus.EM_TRIAGEM);
+        SlaPauseRequestDTO pauseRequest = new SlaPauseRequestDTO("Aguardando cliente");
+        when(ticketService.updateStatus(ticketId, TicketStatus.EM_TRIAGEM))
+                .thenReturn(ticket);
+        when(ticketService.close(ticketId)).thenReturn(ticket);
+        when(ticketService.reopen(ticketId)).thenReturn(ticket);
+        when(ticketService.pauseSla(ticketId, pauseRequest.reason())).thenReturn(ticket);
+        when(ticketService.resumeSla(ticketId)).thenReturn(ticket);
+
+        assertSame(ticket, ticketController.updateStatus(ticketId, statusRequest).getBody());
+        assertSame(ticket, ticketController.close(ticketId).getBody());
+        assertSame(ticket, ticketController.reopen(ticketId).getBody());
+        assertSame(ticket, ticketController.pauseSla(ticketId, pauseRequest).getBody());
+        assertSame(ticket, ticketController.resumeSla(ticketId).getBody());
     }
 
     @Test

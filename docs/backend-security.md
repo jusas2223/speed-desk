@@ -36,9 +36,9 @@ O backend também valida a assinatura, o emissor, a expiração e as claims obri
 
 | Perfil | Permissões implementadas |
 | --- | --- |
-| `CLIENTE` | Consulta e atualiza o próprio perfil, troca a própria senha, lista, filtra, cria e consulta individualmente somente os próprios chamados e ativos. Pode consultar categorias ativas. Não pode assumir ou resolver chamados nem administrar usuários, organizações ou categorias. |
-| `TECNICO` | Consulta e atualiza o próprio perfil, troca a própria senha, lista, filtra e consulta individualmente chamados e ativos de clientes, consulta categorias ativas, pode criar recursos para um cliente, assumir um chamado `RECEBIDO` somente em seu próprio nome e resolver apenas o chamado `EM_ATENDIMENTO` atribuído a ele. Não pode administrar usuários, organizações ou categorias. |
-| `GERENTE` | Consulta e atualiza o próprio perfil, troca a própria senha, lista, cria, edita, ativa e desativa contas pela tela administrativa, emite recuperações manuais, gerencia organizações e categorias básicas, consulta e cria recursos para clientes, consulta qualquer chamado existente, atribui chamados recebidos a usuários `TECNICO` ativos e pode resolver chamados em atendimento. |
+| `CLIENTE` | Consulta e atualiza o próprio perfil, troca a própria senha, lista, filtra, cria e consulta individualmente somente os próprios chamados e ativos. Pode comentar publicamente e fechar ou reabrir o próprio chamado nos estados permitidos, além de consultar categorias e políticas de SLA. Não pode assumir, operar status/SLA, criar notas internas nem administrar cadastros. |
+| `TECNICO` | Consulta e atualiza o próprio perfil, troca a própria senha, lista, filtra e consulta chamados e ativos de clientes, consulta categorias e políticas de SLA, pode criar recursos para um cliente, comentar chamados, assumir em seu próprio nome e operar status ou SLA somente quando for o técnico atribuído. Não pode fechar/reabrir chamados nem administrar políticas ou cadastros. |
+| `GERENTE` | Consulta e atualiza o próprio perfil, troca a própria senha, administra contas, recuperações manuais, organizações, categorias e políticas de SLA, consulta e cria recursos para clientes e pode atribuir, operar, fechar, reabrir e comentar qualquer chamado conforme as regras de estado. |
 
 O vínculo de um ativo ou chamado sempre exige um usuário com role `CLIENTE`. Um ativo informado na abertura do chamado precisa pertencer ao mesmo cliente. Apenas usuários `CLIENTE` podem receber uma organização, e esse agrupamento não altera as regras de proprietário nem concede acesso aos dados de outro cliente. Categorias precisam estar ativas e ter o mesmo tipo do chamado. As respostas usam DTOs e não expõem hashes de senha nem entidades JPA internas.
 
@@ -68,11 +68,43 @@ Redefinir a senha de uma conta inativa não a reativa. A autenticação continua
 
 Os filtros de listagem e a busca textual são aplicados somente depois que o escopo do usuário é determinado. Portanto, parâmetros como `clienteId`, `tecnicoId`, `semTecnico`, status, prioridade, tipo ou categoria nunca ampliam o conjunto autorizado de um cliente.
 
+### Estados, fechamento e reabertura de chamados
+
+O endpoint `PATCH /api/tickets/{ticketId}/status` pode ser usado somente pelo técnico atualmente atribuído ou por um gerente. Ele aplica a seguinte matriz explícita:
+
+| Estado atual | Próximos estados permitidos |
+| --- | --- |
+| `RECEBIDO` | `EM_TRIAGEM`, `EM_ATENDIMENTO` |
+| `EM_TRIAGEM` | `EM_ATENDIMENTO`, `AGUARDANDO_CLIENTE` |
+| `EM_ATENDIMENTO` | `AGUARDANDO_CLIENTE`, `AGUARDANDO_PECA`, `RESOLVIDO` |
+| `AGUARDANDO_CLIENTE` | `EM_ATENDIMENTO` |
+| `AGUARDANDO_PECA` | `EM_ATENDIMENTO` |
+
+A entrada em `EM_ATENDIMENTO` exige técnico atribuído. `RESOLVIDO` e `FECHADO` não aceitam transições pelo endpoint genérico, e qualquer mudança de status é bloqueada enquanto o SLA estiver pausado. `PATCH /api/tickets/{ticketId}/resolver` permanece como atalho sujeito à mesma autorização e à transição `EM_ATENDIMENTO → RESOLVIDO`.
+
+`POST /api/tickets/{ticketId}/close` fecha somente um chamado `RESOLVIDO`; `POST /api/tickets/{ticketId}/reopen` aceita `RESOLVIDO` ou `FECHADO`. Essas duas operações são exclusivas do cliente proprietário ou de um gerente. Ao reabrir, o chamado volta a `EM_ATENDIMENTO` se ainda possuir técnico ativo; caso contrário, perde a atribuição e volta a `RECEBIDO`. A resolução e o fechamento anteriores são limpos e um novo prazo completo começa usando o snapshot de SLA já registrado no chamado.
+
+### Políticas, projeção e pausa de SLA
+
+`GET /api/sla-policies` exige autenticação. `PUT /api/sla-policies/{priority}` é exclusivo de `GERENTE` e valida duração entre 1 e 43200 minutos, alerta entre 0 e 10080 minutos e alerta estritamente menor que a duração. Na ausência de configuração persistida, os padrões são criados de forma idempotente: `CRITICA` 240/60, `ALTA` 1440/240, `NORMAL` 2880/480 e `BAIXA` 4320/720 minutos de duração/alerta.
+
+Ao abrir um chamado, duração e alerta da prioridade são copiados para o próprio registro. Alterar uma política afeta chamados futuros, sem recalcular retroativamente prazos existentes. O `TicketResponseDTO` expõe o vencimento, o tempo restante em segundos e um estado derivado: `ON_TRACK`, `AT_RISK`, `BREACHED`, `PAUSED` ou `MET`. Em chamados resolvidos ou fechados a projeção usa o instante da resolução, preservando o resultado do SLA.
+
+`POST /api/tickets/{ticketId}/sla/pause` e `/sla/resume` são permitidos apenas ao técnico atribuído ou a um gerente. A pausa exige motivo não vazio de até 500 caracteres, não é aceita em chamado concluído e não pode ser duplicada. A retomada fecha o registro de pausa ativo e desloca `data_vencimento` pelo período efetivamente pausado. Os registros em `ticket_sla_pauses` são evidência operacional necessária ao cálculo e não implementam a linha do tempo `C3` nem a trilha de auditoria `SEC1`, ambas fora do escopo.
+
+Chamados, políticas e registros de pausa possuem versão de concorrência otimista. Duas operações que tentem persistir a mesma versão não se sobrescrevem silenciosamente: a segunda recebe `409 Conflict` em `ProblemDetail` e deve atualizar os dados antes de tentar novamente. Transições de estado e operações de SLA incompatíveis também retornam `409`.
+
+### Comentários públicos e notas internas
+
+`GET` e `POST /api/tickets/{ticketId}/comments` exigem autenticação e primeiro aplicam a autorização de leitura do chamado. O cliente acessa somente comentários públicos dos próprios chamados e não pode marcar uma publicação como interna. Técnicos e gerentes podem consultar e criar tanto comentários públicos quanto notas internas. O conteúdo é aparado, obrigatório e limitado a 4000 caracteres; a resposta contém apenas dados públicos do autor.
+
+Não existem endpoints para editar ou apagar comentários. Notas internas nunca são devolvidas a um cliente, mesmo que ele seja o proprietário do chamado. A coleção ordenada de comentários é uma conversa do chamado e não representa a linha do tempo geral rejeitada no item `C3`.
+
 ## RLS e Data API do Supabase
 
-As tabelas remotas existentes estão com RLS habilitado e sem policies, mantendo bloqueado o acesso pela Data API. O schema de referência habilita RLS também em `organizations`, `ticket_categories` e `password_reset_tokens`, mas essas definições novas não foram aplicadas ao Supabase remoto e permanecem pendentes de revisão. A API Spring continua sendo a única porta de entrada da aplicação e acessa o PostgreSQL pela conexão JDBC configurada no backend. O acesso direto ao Supabase pelo frontend está fora do escopo aprovado. Nenhuma chave `service_role` deve ser exposta no navegador.
+As tabelas remotas existentes estão com RLS habilitado e sem policies, mantendo bloqueado o acesso pela Data API. O schema de referência habilita RLS também em `organizations`, `ticket_categories`, `password_reset_tokens`, `sla_policies`, `ticket_sla_pauses` e `ticket_comments`, mas essas definições novas não foram aplicadas ao Supabase remoto e permanecem pendentes de revisão. A API Spring continua sendo a única porta de entrada da aplicação e acessa o PostgreSQL pela conexão JDBC configurada no backend. O acesso direto ao Supabase pelo frontend está fora do escopo aprovado. Nenhuma chave `service_role` deve ser exposta no navegador.
 
-Os blocos `T1–T3` e `U1–U6/CFG1/ORG2` não alteraram grants, Data API nem o banco remoto. `U4` acrescentou `users.ativo`, enquanto `U6` acrescentou `password_reset_tokens` ao modelo local e ao schema PostgreSQL de referência; sua aplicação remota permanece pendente da migration controlada. A tabela de recuperação possui chave estrangeira e índice por usuário, hash único e RLS sem policy, de modo que seus registros não sejam acessíveis pela Data API.
+Os blocos `T1–T7`, `C1–C2`, `SLA1–SLA2` e `U1–U6/CFG1/ORG2` não alteraram grants, Data API nem o banco remoto. As novas tabelas e colunas existem no modelo local e no schema PostgreSQL de referência, mas sua aplicação remota permanece pendente da migration controlada. Como a arquitetura é API-only, o schema não cria policies nem concede acesso a `anon` ou `authenticated`; RLS sem policy mantém as tabelas indisponíveis pela Data API. As chaves estrangeiras usadas em consultas ou cascatas possuem índices, comentários e pausas são removidos com o chamado, e autores/operadores permanecem protegidos por `ON DELETE RESTRICT`.
 
 ## Desenvolvimento offline com o perfil `localdev`
 
@@ -105,7 +137,7 @@ Essa compatibilidade é transitória. Contas legadas que nunca voltarem a fazer 
 ## Pendências de implantação
 
 - Configurar as variáveis de ambiente no runtime oficial do backend.
-- Criar e revisar a migration remota para `users.ativo` e `password_reset_tokens`, sem expor a nova tabela pela Data API.
+- Criar e revisar a migration remota para as alterações acumuladas, incluindo `users.ativo`, `password_reset_tokens`, políticas e snapshots de SLA, pausas, comentários e versões de concorrência, sem expor as novas tabelas pela Data API.
 - Rotacionar no painel do provedor qualquer credencial externa que já tenha sido versionada.
 - Migrar ou redefinir senhas legadas remanescentes.
 - Definir a estratégia definitiva de ambientes e implantação.

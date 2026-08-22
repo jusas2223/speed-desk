@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/style.css?v=20260821.2">
+    <link rel="stylesheet" href="css/style.css?v=20260821.4">
     <script>
         (() => {
             const savedTheme = localStorage.getItem('speeddesk-theme');
@@ -67,6 +67,22 @@
                 </header>
 
                 <div class="settings-grid">
+                    <section class="settings-section settings-section-wide" aria-labelledby="slaPoliciesTitle">
+                        <header class="section-header section-header-split">
+                            <div>
+                                <h2 id="slaPoliciesTitle">Políticas de SLA</h2>
+                                <p>Defina o prazo total e quando cada prioridade deve entrar em estado de atenção.</p>
+                            </div>
+                            <span class="live-badge">Tempo corrido</span>
+                        </header>
+
+                        <div id="slaPoliciesStatus" class="list-status loading" role="status" aria-live="polite">
+                            Carregando políticas de SLA...
+                        </div>
+                        <form id="slaPoliciesForm" class="sla-policies-form" aria-busy="true" hidden></form>
+                        <div id="slaPoliciesFeedback" class="feedback" role="alert" aria-live="assertive" hidden></div>
+                    </section>
+
                     <section class="settings-section" aria-labelledby="organizationsTitle">
                         <header class="section-header">
                             <h2 id="organizationsTitle">Organizações</h2>
@@ -144,7 +160,9 @@
         </div>
     </div>
 
-    <script type="module" src="js/navigation.js?v=20260821.2"></script>
-    <script type="module" src="js/configuracoes.js"></script>
+    <div id="settingsToastRegion" class="toast-region" role="status" aria-live="polite"></div>
+
+    <script type="module" src="js/navigation.js?v=20260821.3"></script>
+    <script type="module" src="js/configuracoes.js?v=20260821.3"></script>
 </body>
 </html>

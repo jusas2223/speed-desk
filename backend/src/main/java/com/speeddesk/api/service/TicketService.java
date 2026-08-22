@@ -6,6 +6,7 @@ import com.speeddesk.api.entity.Asset;
 import com.speeddesk.api.entity.Ticket;
 import com.speeddesk.api.entity.TicketCategory;
 import com.speeddesk.api.entity.TicketPriority;
+import com.speeddesk.api.entity.TicketSlaPause;
 import com.speeddesk.api.entity.TicketStatus;
 import com.speeddesk.api.entity.TicketType;
 import com.speeddesk.api.entity.User;
@@ -13,6 +14,7 @@ import com.speeddesk.api.entity.UserRole;
 import com.speeddesk.api.exception.AssetNotFoundException;
 import com.speeddesk.api.exception.ClientNotFoundException;
 import com.speeddesk.api.exception.ForbiddenOperationException;
+import com.speeddesk.api.exception.InvalidSlaOperationException;
 import com.speeddesk.api.exception.InvalidTicketStatusTransitionException;
 import com.speeddesk.api.exception.InvalidUserRoleException;
 import com.speeddesk.api.exception.InactiveTicketCategoryException;
@@ -24,6 +26,7 @@ import com.speeddesk.api.exception.TicketNotFoundException;
 import com.speeddesk.api.repository.AssetRepository;
 import com.speeddesk.api.repository.TicketCategoryRepository;
 import com.speeddesk.api.repository.TicketRepository;
+import com.speeddesk.api.repository.TicketSlaPauseRepository;
 import com.speeddesk.api.repository.UserRepository;
 import com.speeddesk.api.security.AuthorizationService;
 import lombok.RequiredArgsConstructor;
@@ -32,9 +35,13 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.text.Normalizer;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.OffsetDateTime;
+import java.util.EnumMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -42,10 +49,15 @@ import java.util.UUID;
 @Transactional(readOnly = true)
 public class TicketService {
 
+    private static final Map<TicketStatus, Set<TicketStatus>> ALLOWED_TRANSITIONS =
+            allowedTransitions();
+
     private final TicketRepository ticketRepository;
     private final UserRepository userRepository;
     private final AssetRepository assetRepository;
     private final TicketCategoryRepository ticketCategoryRepository;
+    private final TicketSlaPauseRepository ticketSlaPauseRepository;
+    private final SlaPolicyService slaPolicyService;
     private final AuthorizationService authorizationService;
     private final Clock clock;
 
@@ -72,12 +84,9 @@ public class TicketService {
                 : request.ticketType();
         TicketCategory category = resolveCategory(request.categoryId(), ticketType);
 
-        long slaHours = switch (request.prioridade()) {
-            case CRITICA -> 4;
-            case ALTA -> 24;
-            case NORMAL -> 48;
-            case BAIXA -> 72;
-        };
+        SlaPolicyService.SlaPolicySnapshot sla =
+                slaPolicyService.snapshot(request.prioridade());
+        OffsetDateTime now = OffsetDateTime.now(clock);
 
         Ticket ticket = Ticket.builder()
                 .titulo(request.titulo().trim())
@@ -88,10 +97,12 @@ public class TicketService {
                 .category(category)
                 .cliente(cliente)
                 .asset(asset)
-                .dataVencimento(OffsetDateTime.now(clock).plusHours(slaHours))
+                .dataVencimento(now.plusMinutes(sla.durationMinutes()))
+                .slaDurationMinutes(sla.durationMinutes())
+                .slaWarningMinutes(sla.warningMinutes())
                 .build();
 
-        return TicketResponseDTO.from(ticketRepository.save(ticket));
+        return saveAndRespond(ticket);
     }
 
     private TicketCategory resolveCategory(UUID categoryId, TicketType ticketType) {
@@ -169,7 +180,7 @@ public class TicketService {
                 .filter(ticket -> !Boolean.TRUE.equals(semTecnico)
                         || ticket.getTecnico() == null)
                 .filter(ticket -> matchesQuery(ticket, normalizedQuery))
-                .map(TicketResponseDTO::from)
+                .map(this::response)
                 .toList();
     }
 
@@ -177,7 +188,7 @@ public class TicketService {
         Ticket ticket = ticketRepository.findById(ticketId)
                 .orElseThrow(() -> new TicketNotFoundException(ticketId));
         authorizationService.requireCanRead(ticket);
-        return TicketResponseDTO.from(ticket);
+        return response(ticket);
     }
 
     @Transactional
@@ -186,7 +197,8 @@ public class TicketService {
         Ticket ticket = ticketRepository.findById(ticketId)
                 .orElseThrow(() -> new TicketNotFoundException(ticketId));
 
-        if (ticket.getStatus() != TicketStatus.RECEBIDO) {
+        if (ticket.getStatus() != TicketStatus.RECEBIDO
+                && ticket.getStatus() != TicketStatus.EM_TRIAGEM) {
             throw new InvalidTicketStatusTransitionException(
                     ticket.getStatus(),
                     TicketStatus.RECEBIDO,
@@ -200,9 +212,9 @@ public class TicketService {
         requireActive(tecnico);
 
         ticket.setTecnico(tecnico);
-        ticket.setStatus(TicketStatus.EM_ATENDIMENTO);
+        applyTransition(ticket, TicketStatus.EM_ATENDIMENTO, OffsetDateTime.now(clock));
 
-        return TicketResponseDTO.from(ticketRepository.save(ticket));
+        return saveAndRespond(ticket);
     }
 
     @Transactional
@@ -210,17 +222,233 @@ public class TicketService {
         Ticket ticket = ticketRepository.findById(ticketId)
                 .orElseThrow(() -> new TicketNotFoundException(ticketId));
         authorizationService.requireCanResolve(ticket);
+        applyTransition(ticket, TicketStatus.RESOLVIDO, OffsetDateTime.now(clock));
+        return saveAndRespond(ticket);
+    }
 
-        if (ticket.getStatus() != TicketStatus.EM_ATENDIMENTO) {
+    @Transactional
+    public TicketResponseDTO updateStatus(UUID ticketId, TicketStatus targetStatus) {
+        Ticket ticket = findTicket(ticketId);
+        authorizationService.requireCanOperate(ticket);
+        applyTransition(ticket, targetStatus, OffsetDateTime.now(clock));
+        return saveAndRespond(ticket);
+    }
+
+    @Transactional
+    public TicketResponseDTO close(UUID ticketId) {
+        Ticket ticket = findTicket(ticketId);
+        authorizationService.requireCanCloseOrReopen(ticket);
+        if (ticket.getStatus() != TicketStatus.RESOLVIDO) {
             throw new InvalidTicketStatusTransitionException(
                     ticket.getStatus(),
-                    TicketStatus.EM_ATENDIMENTO,
-                    TicketStatus.RESOLVIDO
+                    TicketStatus.FECHADO
             );
         }
 
-        ticket.setStatus(TicketStatus.RESOLVIDO);
-        return TicketResponseDTO.from(ticketRepository.save(ticket));
+        OffsetDateTime now = OffsetDateTime.now(clock);
+        ticket.setStatus(TicketStatus.FECHADO);
+        if (ticket.getResolvedAt() == null) {
+            ticket.setResolvedAt(now);
+        }
+        ticket.setClosedAt(now);
+        return saveAndRespond(ticket);
+    }
+
+    @Transactional
+    public TicketResponseDTO reopen(UUID ticketId) {
+        Ticket ticket = findTicket(ticketId);
+        authorizationService.requireCanCloseOrReopen(ticket);
+        if (ticket.getStatus() != TicketStatus.RESOLVIDO
+                && ticket.getStatus() != TicketStatus.FECHADO) {
+            throw new InvalidTicketStatusTransitionException(
+                    ticket.getStatus(),
+                    TicketStatus.EM_ATENDIMENTO
+            );
+        }
+
+        ensureSlaSnapshot(ticket);
+        OffsetDateTime now = OffsetDateTime.now(clock);
+        boolean assignedToActiveTechnician = ticket.getTecnico() != null
+                && ticket.getTecnico().isActive();
+        if (!assignedToActiveTechnician) {
+            ticket.setTecnico(null);
+        }
+        ticket.setStatus(assignedToActiveTechnician
+                ? TicketStatus.EM_ATENDIMENTO
+                : TicketStatus.RECEBIDO);
+        ticket.setResolvedAt(null);
+        ticket.setClosedAt(null);
+        ticket.setSlaPaused(false);
+        ticket.setSlaPausedAt(null);
+        ticket.setDataVencimento(now.plusMinutes(ticket.getSlaDurationMinutes()));
+        return saveAndRespond(ticket);
+    }
+
+    @Transactional
+    public TicketResponseDTO pauseSla(UUID ticketId, String reason) {
+        Ticket ticket = findTicket(ticketId);
+        authorizationService.requireCanOperate(ticket);
+        if (ticket.getStatus() == TicketStatus.RESOLVIDO
+                || ticket.getStatus() == TicketStatus.FECHADO) {
+            throw new InvalidSlaOperationException(
+                    "O SLA de um chamado concluido nao pode ser pausado."
+            );
+        }
+        if (ticket.isSlaPaused()) {
+            throw new InvalidSlaOperationException("O SLA do chamado ja esta pausado.");
+        }
+
+        ensureSlaSnapshot(ticket);
+        OffsetDateTime now = OffsetDateTime.now(clock);
+        if (ticket.getDataVencimento() == null) {
+            ticket.setDataVencimento(now.plusMinutes(ticket.getSlaDurationMinutes()));
+        }
+        ticket.setSlaPaused(true);
+        ticket.setSlaPausedAt(now);
+
+        User actor = userRepository.getReferenceById(
+                authorizationService.currentUser().id()
+        );
+        ticketSlaPauseRepository.save(TicketSlaPause.builder()
+                .ticket(ticket)
+                .pausedBy(actor)
+                .reason(reason.trim())
+                .pausedAt(now)
+                .build());
+        return saveAndRespond(ticket);
+    }
+
+    @Transactional
+    public TicketResponseDTO resumeSla(UUID ticketId) {
+        Ticket ticket = findTicket(ticketId);
+        authorizationService.requireCanOperate(ticket);
+        if (!ticket.isSlaPaused() || ticket.getSlaPausedAt() == null) {
+            throw new InvalidSlaOperationException("O SLA do chamado nao esta pausado.");
+        }
+
+        TicketSlaPause pause = ticketSlaPauseRepository
+                .findFirstByTicket_IdAndResumedAtIsNullOrderByPausedAtDesc(ticketId)
+                .orElseThrow(() -> new InvalidSlaOperationException(
+                        "O registro da pausa ativa do SLA nao foi encontrado."
+                ));
+        OffsetDateTime now = OffsetDateTime.now(clock);
+        Duration pausedDuration = Duration.between(ticket.getSlaPausedAt(), now);
+        if (pausedDuration.isNegative()) {
+            throw new InvalidSlaOperationException("O periodo de pausa do SLA e invalido.");
+        }
+
+        ensureSlaSnapshot(ticket);
+        OffsetDateTime deadline = ticket.getDataVencimento() == null
+                ? now.plusMinutes(ticket.getSlaDurationMinutes())
+                : ticket.getDataVencimento().plus(pausedDuration);
+        ticket.setDataVencimento(deadline);
+        ticket.setSlaPaused(false);
+        ticket.setSlaPausedAt(null);
+
+        pause.setResumedAt(now);
+        pause.setResumedBy(userRepository.getReferenceById(
+                authorizationService.currentUser().id()
+        ));
+        ticketSlaPauseRepository.save(pause);
+        return saveAndRespond(ticket);
+    }
+
+    private Ticket findTicket(UUID ticketId) {
+        return ticketRepository.findById(ticketId)
+                .orElseThrow(() -> new TicketNotFoundException(ticketId));
+    }
+
+    private void applyTransition(
+            Ticket ticket,
+            TicketStatus targetStatus,
+            OffsetDateTime now
+    ) {
+        if (ticket.isSlaPaused()) {
+            throw new InvalidSlaOperationException(
+                    "Retome o SLA antes de alterar o status do chamado."
+            );
+        }
+        if (targetStatus == TicketStatus.FECHADO
+                || ticket.getStatus() == TicketStatus.RESOLVIDO
+                || ticket.getStatus() == TicketStatus.FECHADO
+                || !ALLOWED_TRANSITIONS
+                        .getOrDefault(ticket.getStatus(), Set.of())
+                        .contains(targetStatus)) {
+            throw new InvalidTicketStatusTransitionException(
+                    ticket.getStatus(),
+                    targetStatus
+            );
+        }
+        if (targetStatus == TicketStatus.EM_ATENDIMENTO
+                && ticket.getTecnico() == null) {
+            throw new InvalidSlaOperationException(
+                    "A entrada em atendimento exige um tecnico atribuido."
+            );
+        }
+
+        ticket.setStatus(targetStatus);
+        if (targetStatus == TicketStatus.RESOLVIDO) {
+            ticket.setResolvedAt(now);
+        }
+    }
+
+    private void ensureSlaSnapshot(Ticket ticket) {
+        if (ticket.getSlaDurationMinutes() != null
+                && ticket.getSlaWarningMinutes() != null) {
+            return;
+        }
+
+        TicketPriority priority = ticket.getPrioridade() == null
+                ? TicketPriority.NORMAL
+                : ticket.getPrioridade();
+        SlaPolicyService.SlaPolicySnapshot defaults =
+                slaPolicyService.snapshot(priority);
+        if (ticket.getSlaDurationMinutes() == null) {
+            ticket.setSlaDurationMinutes(defaults.durationMinutes());
+        }
+        if (ticket.getSlaWarningMinutes() == null) {
+            ticket.setSlaWarningMinutes(defaults.warningMinutes());
+        }
+    }
+
+    private TicketResponseDTO response(Ticket ticket) {
+        return TicketResponseDTO.from(ticket, clock);
+    }
+
+    private TicketResponseDTO saveAndRespond(Ticket ticket) {
+        Ticket saved = ticketRepository.save(ticket);
+        ticketRepository.flush();
+        return response(saved);
+    }
+
+    private static Map<TicketStatus, Set<TicketStatus>> allowedTransitions() {
+        Map<TicketStatus, Set<TicketStatus>> transitions =
+                new EnumMap<>(TicketStatus.class);
+        transitions.put(
+                TicketStatus.RECEBIDO,
+                Set.of(TicketStatus.EM_TRIAGEM, TicketStatus.EM_ATENDIMENTO)
+        );
+        transitions.put(
+                TicketStatus.EM_TRIAGEM,
+                Set.of(TicketStatus.EM_ATENDIMENTO, TicketStatus.AGUARDANDO_CLIENTE)
+        );
+        transitions.put(
+                TicketStatus.EM_ATENDIMENTO,
+                Set.of(
+                        TicketStatus.AGUARDANDO_CLIENTE,
+                        TicketStatus.AGUARDANDO_PECA,
+                        TicketStatus.RESOLVIDO
+                )
+        );
+        transitions.put(
+                TicketStatus.AGUARDANDO_CLIENTE,
+                Set.of(TicketStatus.EM_ATENDIMENTO)
+        );
+        transitions.put(
+                TicketStatus.AGUARDANDO_PECA,
+                Set.of(TicketStatus.EM_ATENDIMENTO)
+        );
+        return Map.copyOf(transitions);
     }
 
     private void requireRole(User user, UserRole expectedRole) {

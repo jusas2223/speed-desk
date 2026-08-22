@@ -63,6 +63,49 @@ function formatDuration(milliseconds) {
 }
 
 function getSlaInfo(ticket) {
+    const hasServerRemaining = ticket.slaRemainingSeconds !== null
+        && ticket.slaRemainingSeconds !== undefined
+        && Number.isFinite(Number(ticket.slaRemainingSeconds));
+    const remainingMilliseconds = hasServerRemaining
+        ? Number(ticket.slaRemainingSeconds) * 1000
+        : 0;
+
+    if (ticket.slaState === 'PAUSED' || ticket.slaPaused) {
+        return {
+            label: hasServerRemaining
+                ? (Number(ticket.slaRemainingSeconds) >= 0
+                    ? `Pausado · ${formatDuration(remainingMilliseconds)} preservados`
+                    : `Pausado · vencido há ${formatDuration(remainingMilliseconds)}`)
+                : 'SLA pausado',
+            tone: 'is-paused'
+        };
+    }
+    if (ticket.slaState === 'MET') return { label: 'SLA cumprido', tone: 'is-complete' };
+    if (ticket.slaState === 'BREACHED') {
+        return {
+            label: hasServerRemaining
+                ? `Vencido há ${formatDuration(remainingMilliseconds)}`
+                : 'SLA vencido',
+            tone: 'is-overdue'
+        };
+    }
+    if (ticket.slaState === 'AT_RISK') {
+        return {
+            label: hasServerRemaining
+                ? `${formatDuration(remainingMilliseconds)} restantes`
+                : 'SLA em risco',
+            tone: 'is-risk'
+        };
+    }
+    if (ticket.slaState === 'ON_TRACK') {
+        return {
+            label: hasServerRemaining
+                ? `${formatDuration(remainingMilliseconds)} restantes`
+                : 'Dentro do prazo',
+            tone: ''
+        };
+    }
+
     const deadline = parseDate(ticket.dataVencimento);
     if (!deadline) return { label: 'Prazo não informado', tone: '' };
     if (CLOSED_STATUSES.has(ticket.status)) return { label: 'Finalizado', tone: 'is-complete' };

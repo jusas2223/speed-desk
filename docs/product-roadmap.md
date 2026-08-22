@@ -13,9 +13,17 @@ Este arquivo é a fonte de verdade do escopo escolhido. Ele separa o que já exi
 - recuperação de senha por token temporário emitido pelo gerente para entrega manual;
 - vínculo opcional de clientes a organizações integrado ao frontend;
 - cadastro e consulta básicos de ativos;
-- abertura, lista completa, busca, filtros, detalhe protegido, atribuição e resolução básicas de chamados;
-- prioridades, prazo básico de SLA, tipos `GERAL`, `HARDWARE` e `SOFTWARE`;
-- cadastro e consulta de organizações e categorias;
+- abertura, lista completa, busca, filtros, detalhe protegido e atribuição de chamados;
+- `T4` transições controladas entre os sete estados canônicos;
+- `T5` fechamento e reabertura com autorização do proprietário ou gerente;
+- `T6` prazo e tempo restante de SLA expostos na lista, no painel e no detalhe;
+- `T7` cadastro, consulta e uso das categorias no escopo aprovado;
+- `C1` comentários públicos e `C2` notas internas com visibilidade por perfil;
+- `SLA1` indicadores `ON_TRACK`, `AT_RISK`, `BREACHED`, `PAUSED` e `MET`;
+- `SLA2` pausa controlada com motivo e retomada que preserva o tempo pausado;
+- políticas de SLA por prioridade, snapshots por chamado e concorrência otimista;
+- tipos `GERAL`, `HARDWARE` e `SOFTWARE`;
+- cadastro e consulta de organizações;
 - página administrativa de organizações e categorias;
 - seleção e exibição de tipo e categoria no frontend;
 - identidade visual completa com temas claro e escuro, fundo de velocidade e componentes responsivos;
@@ -27,13 +35,10 @@ Este arquivo é a fonte de verdade do escopo escolhido. Ele separa o que já exi
 
 | Código | Item | O que ainda falta |
 | --- | --- | --- |
-| `CFG2` | Configurações do gerente | Usuários, organizações e categorias estão integrados; faltam regras de SLA e demais parâmetros futuros. |
-| `T4` | Transições controladas | Existem atribuição e resolução; faltam as demais transições e regras. |
-| `T6` | Prazo de SLA | O prazo é calculado, mas falta exposição completa, risco e pausa. |
-| `T7` | Categorias | Cadastro e uso básico prontos; edição/ativação não fazem parte do escopo atual. |
+| `CFG2` | Configurações do gerente | Usuários, organizações, categorias e políticas de SLA estão integrados; controles que pertencem aos módulos futuros serão concluídos com esses módulos. |
 | `ORG1` | Organizações | Cadastro e listagem básicos implementados. |
 
-## Macroblocos restantes, na ordem recomendada
+## Macroblocos na ordem recomendada
 
 ### 1. Estrutura visual e navegação do produto — concluído
 
@@ -42,19 +47,21 @@ Este arquivo é a fonte de verdade do escopo escolhido. Ele separa o que já exi
 - temas claro e escuro, responsividade, mensagens e estados de carregamento padronizados;
 - identidade visual do Google AI Studio adaptada ao frontend real do produto.
 
-### 2. Núcleo completo de chamados
+### 2. Núcleo completo de chamados — concluído
 
 - `T1` lista completa — concluído;
 - `T2` filtros e busca — concluído;
 - `T3` detalhes — concluído;
-- `T4` todas as transições permitidas;
-- `T5` fechar e reabrir;
-- `T6` exibição do SLA;
-- `T7` categorias já iniciadas;
-- `C1` comentários públicos;
-- `C2` notas internas;
-- `SLA1` risco de SLA;
-- `SLA2` pausa controlada.
+- `T4` todas as transições permitidas — concluído;
+- `T5` fechar e reabrir — concluído;
+- `T6` exibição do SLA — concluído;
+- `T7` categorias — concluído no escopo aprovado;
+- `C1` comentários públicos — concluído;
+- `C2` notas internas — concluído;
+- `SLA1` risco de SLA — concluído;
+- `SLA2` pausa controlada — concluído.
+
+O bloco inclui política configurável por prioridade, snapshot por chamado, controle de concorrência e telas operacionais. Não inclui linha do tempo (`C3`) nem trilha de auditoria (`SEC1`).
 
 ### 3. Gestão de usuários e configurações
 
@@ -137,7 +144,7 @@ Nem toda funcionalidade deve virar um item de menu. A navegação planejada ser�
 - **Meus chamados**;
 - **Meus equipamentos**;
 - abertura de chamado geral, hardware ou software;
-- comentários públicos e acompanhamento de SLA.
+- comentários públicos e acompanhamento de SLA — implementados.
 
 ### Técnico
 
@@ -145,7 +152,8 @@ Nem toda funcionalidade deve virar um item de menu. A navegação planejada ser�
 - **Hardware**;
 - **Software**;
 - **Incidentes**;
-- notas internas e etapas técnicas.
+- notas internas — implementadas;
+- etapas técnicas — pendentes do macrobloco especializado.
 
 ### Gerente
 
@@ -159,8 +167,8 @@ Nem toda funcionalidade deve virar um item de menu. A navegação planejada ser�
 
 ### Recursos internos, sem item de menu próprio
 
-- transições de status, fechamento e reabertura;
-- SLA, pausas e indicadores de risco;
+- transições de status, fechamento e reabertura — implementados;
+- SLA, pausas e indicadores de risco — implementados;
 - idempotência e rate limiting;
 - tempo real;
 - instalação PWA;

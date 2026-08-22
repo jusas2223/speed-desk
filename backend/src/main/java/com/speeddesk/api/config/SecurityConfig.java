@@ -101,6 +101,10 @@ public class SecurityConfig {
                                 HttpMethod.GET,
                                 "/api/ticket-categories"
                         ).authenticated()
+                        .requestMatchers(
+                                HttpMethod.PUT,
+                                "/api/sla-policies/*"
+                        ).hasAuthority(authority(UserRole.GERENTE))
                         .requestMatchers("/api/**").authenticated()
                         .anyRequest().denyAll())
                 .exceptionHandling(exceptions -> exceptions

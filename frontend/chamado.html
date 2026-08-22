@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/style.css?v=20260821.2">
+    <link rel="stylesheet" href="css/style.css?v=20260821.4">
     <script>
         (() => {
             const savedTheme = localStorage.getItem('speeddesk-theme');
@@ -83,7 +83,29 @@
         </div>
     </div>
 
-    <script type="module" src="js/navigation.js?v=20260821.2"></script>
-    <script type="module" src="js/chamado.js"></script>
+    <div id="ticketActionModal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="ticketActionTitle" aria-describedby="ticketActionDescription" aria-hidden="true" inert hidden>
+        <div class="modal-content modal-content-compact">
+            <div class="modal-header">
+                <h2 id="ticketActionTitle">Confirmar ação</h2>
+                <button id="closeTicketActionModal" class="modal-close" type="button" aria-label="Fechar">&times;</button>
+            </div>
+            <p id="ticketActionDescription" class="modal-description"></p>
+            <div id="ticketPauseReasonField" class="form-group ticket-pause-reason" hidden>
+                <label for="ticketPauseReason" class="form-label">Motivo da pausa</label>
+                <textarea id="ticketPauseReason" class="form-control" rows="4" maxlength="500" placeholder="Explique por que o SLA deve ser pausado."></textarea>
+                <span class="field-hint">Obrigatório, com no máximo 500 caracteres.</span>
+            </div>
+            <div id="ticketActionFeedback" class="feedback" role="alert" aria-live="assertive" hidden></div>
+            <div class="modal-actions">
+                <button id="cancelTicketAction" class="btn btn-secondary" type="button">Cancelar</button>
+                <button id="confirmTicketAction" class="btn btn-primary" type="button">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="ticketToastRegion" class="toast-region" role="status" aria-live="polite"></div>
+
+    <script type="module" src="js/navigation.js?v=20260821.3"></script>
+    <script type="module" src="js/chamado.js?v=20260821.4"></script>
 </body>
 </html>

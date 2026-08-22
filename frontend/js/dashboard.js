@@ -123,8 +123,68 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function getDeadlineInfo(ticket) {
+        const hasServerRemaining = ticket.slaRemainingSeconds !== null
+            && ticket.slaRemainingSeconds !== undefined
+            && Number.isFinite(Number(ticket.slaRemainingSeconds));
+        const remainingSeconds = hasServerRemaining
+            ? Math.abs(Number(ticket.slaRemainingSeconds))
+            : 0;
+
+        function formatServerDuration(seconds) {
+            const totalMinutes = Math.max(1, Math.ceil(seconds / 60));
+            if (totalMinutes < 60) return `${totalMinutes}min`;
+            if (totalMinutes < 1440) {
+                const hours = Math.floor(totalMinutes / 60);
+                const minutes = totalMinutes % 60;
+                return minutes ? `${hours}h ${minutes}min` : `${hours}h`;
+            }
+            const days = Math.floor(totalMinutes / 1440);
+            const hours = Math.floor((totalMinutes % 1440) / 60);
+            return hours ? `${days}d ${hours}h` : `${days}d`;
+        }
+
+        if (ticket.slaState === 'PAUSED' || ticket.slaPaused) {
+            return {
+                label: hasServerRemaining
+                    ? (Number(ticket.slaRemainingSeconds) >= 0
+                        ? `SLA pausado · ${formatServerDuration(remainingSeconds)} preservados`
+                        : `SLA pausado · vencido há ${formatServerDuration(remainingSeconds)}`)
+                    : 'SLA pausado',
+                risk: false,
+                tone: 'is-paused'
+            };
+        }
+        if (ticket.slaState === 'MET') return { label: 'SLA cumprido', risk: false, tone: 'is-complete' };
+        if (ticket.slaState === 'BREACHED') {
+            return {
+                label: hasServerRemaining
+                    ? `Prazo vencido há ${formatServerDuration(remainingSeconds)}`
+                    : 'Prazo vencido',
+                risk: true,
+                tone: 'is-overdue'
+            };
+        }
+        if (ticket.slaState === 'AT_RISK') {
+            return {
+                label: hasServerRemaining
+                    ? `Prazo: ${formatServerDuration(remainingSeconds)} restantes`
+                    : 'SLA em risco',
+                risk: true,
+                tone: 'is-risk'
+            };
+        }
+        if (ticket.slaState === 'ON_TRACK') {
+            return {
+                label: hasServerRemaining
+                    ? `Prazo: ${formatServerDuration(remainingSeconds)} restantes`
+                    : 'Dentro do prazo',
+                risk: false,
+                tone: ''
+            };
+        }
+
         if (CLOSED_STATUSES.has(ticket.status)) {
-            return { label: 'Finalizado', risk: false };
+            return { label: 'Finalizado', risk: false, tone: 'is-complete' };
         }
 
         const deadline = parseDate(ticket.dataVencimento);
@@ -261,7 +321,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const deadlineInfo = getDeadlineInfo(ticket);
         const deadline = document.createElement('span');
-        deadline.className = deadlineInfo.risk ? 'ticket-sla is-risk' : 'ticket-sla';
+        deadline.className = `ticket-sla ${deadlineInfo.tone || (deadlineInfo.risk ? 'is-risk' : '')}`.trim();
         deadline.textContent = deadlineInfo.label;
         statusStack.appendChild(deadline);
         side.appendChild(statusStack);
@@ -356,13 +416,15 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderMetrics() {
         const openTickets = state.tickets.filter(ticket => !CLOSED_STATUSES.has(ticket.status));
         const inProgress = state.tickets.filter(ticket => ticket.status === 'EM_ATENDIMENTO');
-        const riskLimit = Date.now() + 24 * 60 * 60 * 1000;
         const riskTickets = openTickets.filter(ticket => {
+            if (ticket.slaState) return ['AT_RISK', 'BREACHED'].includes(ticket.slaState);
+            const riskLimit = Date.now() + 24 * 60 * 60 * 1000;
             const deadline = parseDate(ticket.dataVencimento);
             return deadline && deadline.getTime() <= riskLimit;
         });
         const resolvedToday = state.tickets.filter(ticket => (
-            CLOSED_STATUSES.has(ticket.status) && isToday(ticket.dataAtualizacao)
+            CLOSED_STATUSES.has(ticket.status)
+            && isToday(ticket.closedAt || ticket.resolvedAt || ticket.dataAtualizacao)
         ));
         const received = state.tickets.filter(ticket => ['RECEBIDO', 'EM_TRIAGEM'].includes(ticket.status));
 
@@ -377,7 +439,10 @@ document.addEventListener('DOMContentLoaded', () => {
         elements.metricInProgress.textContent = String(inProgress.length);
         elements.metricInProgressTrend.textContent = inProgress.length === 1 ? '1 em curso' : `${inProgress.length} em curso`;
         elements.metricRisk.textContent = String(riskTickets.length);
-        elements.metricRiskTrend.textContent = riskTickets.some(ticket => parseDate(ticket.dataVencimento)?.getTime() < Date.now())
+        elements.metricRiskTrend.textContent = riskTickets.some(ticket => (
+            ticket.slaState === 'BREACHED'
+            || (!ticket.slaState && parseDate(ticket.dataVencimento)?.getTime() < Date.now())
+        ))
             ? 'Inclui vencidos'
             : 'Próximas 24h';
         elements.metricResolvedToday.textContent = String(resolvedToday.length);
@@ -516,7 +581,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function resolveTicket(ticketId) {
         try {
-            await api.request(`/tickets/${ticketId}/resolver`, { method: 'PATCH' });
+            await api.request(`/tickets/${ticketId}/status`, {
+                method: 'PATCH',
+                body: JSON.stringify({ status: 'RESOLVIDO' })
+            });
             showToast('Chamado resolvido com sucesso.', 'success');
             await loadTickets();
         } catch (error) {

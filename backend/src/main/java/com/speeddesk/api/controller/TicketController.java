@@ -1,7 +1,9 @@
 package com.speeddesk.api.controller;
 
+import com.speeddesk.api.dto.SlaPauseRequestDTO;
 import com.speeddesk.api.dto.TicketRequestDTO;
 import com.speeddesk.api.dto.TicketResponseDTO;
+import com.speeddesk.api.dto.TicketStatusUpdateRequestDTO;
 import com.speeddesk.api.entity.TicketPriority;
 import com.speeddesk.api.entity.TicketStatus;
 import com.speeddesk.api.entity.TicketType;
@@ -76,5 +78,36 @@ public class TicketController {
     @PatchMapping("/{ticketId}/resolver")
     public ResponseEntity<TicketResponseDTO> resolverTicket(@PathVariable UUID ticketId) {
         return ResponseEntity.ok(ticketService.resolverTicket(ticketId));
+    }
+
+    @PatchMapping("/{ticketId}/status")
+    public ResponseEntity<TicketResponseDTO> updateStatus(
+            @PathVariable UUID ticketId,
+            @Valid @RequestBody TicketStatusUpdateRequestDTO request
+    ) {
+        return ResponseEntity.ok(ticketService.updateStatus(ticketId, request.status()));
+    }
+
+    @PostMapping("/{ticketId}/close")
+    public ResponseEntity<TicketResponseDTO> close(@PathVariable UUID ticketId) {
+        return ResponseEntity.ok(ticketService.close(ticketId));
+    }
+
+    @PostMapping("/{ticketId}/reopen")
+    public ResponseEntity<TicketResponseDTO> reopen(@PathVariable UUID ticketId) {
+        return ResponseEntity.ok(ticketService.reopen(ticketId));
+    }
+
+    @PostMapping("/{ticketId}/sla/pause")
+    public ResponseEntity<TicketResponseDTO> pauseSla(
+            @PathVariable UUID ticketId,
+            @Valid @RequestBody SlaPauseRequestDTO request
+    ) {
+        return ResponseEntity.ok(ticketService.pauseSla(ticketId, request.reason()));
+    }
+
+    @PostMapping("/{ticketId}/sla/resume")
+    public ResponseEntity<TicketResponseDTO> resumeSla(@PathVariable UUID ticketId) {
+        return ResponseEntity.ok(ticketService.resumeSla(ticketId));
     }
 }

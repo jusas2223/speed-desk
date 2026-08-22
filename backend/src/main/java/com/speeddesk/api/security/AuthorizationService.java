@@ -81,6 +81,10 @@ public class AuthorizationService {
     }
 
     public void requireCanResolve(Ticket ticket) {
+        requireCanOperate(ticket);
+    }
+
+    public void requireCanOperate(Ticket ticket) {
         AuthenticatedUser currentUser = currentUser();
 
         if (currentUser.role() == UserRole.GERENTE) {
@@ -94,7 +98,25 @@ public class AuthorizationService {
         }
 
         throw new ForbiddenOperationException(
-                "Somente o técnico atribuído ou um gerente pode resolver o chamado."
+                "Somente o técnico atribuído ou um gerente pode operar o chamado."
+        );
+    }
+
+    public void requireCanCloseOrReopen(Ticket ticket) {
+        AuthenticatedUser currentUser = currentUser();
+
+        if (currentUser.role() == UserRole.GERENTE) {
+            return;
+        }
+
+        if (currentUser.role() == UserRole.CLIENTE
+                && ticket.getCliente() != null
+                && currentUser.id().equals(ticket.getCliente().getId())) {
+            return;
+        }
+
+        throw new ForbiddenOperationException(
+                "Somente o cliente proprietário ou um gerente pode fechar ou reabrir o chamado."
         );
     }
 }

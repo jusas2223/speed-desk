@@ -2,6 +2,7 @@ package com.speeddesk.api.exception;
 
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
@@ -124,15 +125,31 @@ public class GlobalExceptionHandler {
         );
     }
 
-    @ExceptionHandler(InvalidTicketStatusTransitionException.class)
+    @ExceptionHandler({
+            InvalidTicketStatusTransitionException.class,
+            InvalidSlaOperationException.class
+    })
     public ResponseEntity<ProblemDetail> handleInvalidTicketStatusTransition(
-            InvalidTicketStatusTransitionException exception,
+            RuntimeException exception,
             HttpServletRequest request
     ) {
         return response(
                 HttpStatus.CONFLICT,
                 "Transição de status inválida",
                 exception.getMessage(),
+                request
+        );
+    }
+
+    @ExceptionHandler(OptimisticLockingFailureException.class)
+    public ResponseEntity<ProblemDetail> handleOptimisticLockingFailure(
+            OptimisticLockingFailureException exception,
+            HttpServletRequest request
+    ) {
+        return response(
+                HttpStatus.CONFLICT,
+                "Conflito de concorrencia",
+                "O chamado foi alterado por outra operacao. Atualize os dados e tente novamente.",
                 request
         );
     }

@@ -23,7 +23,19 @@ const TYPE_LABELS = Object.freeze({
     SOFTWARE: 'Software'
 });
 
+const STATUS_TRANSITIONS = Object.freeze({
+    RECEBIDO: ['EM_TRIAGEM', 'EM_ATENDIMENTO'],
+    EM_TRIAGEM: ['EM_ATENDIMENTO', 'AGUARDANDO_CLIENTE'],
+    EM_ATENDIMENTO: ['AGUARDANDO_CLIENTE', 'AGUARDANDO_PECA', 'RESOLVIDO'],
+    AGUARDANDO_CLIENTE: ['EM_ATENDIMENTO'],
+    AGUARDANDO_PECA: ['EM_ATENDIMENTO'],
+    RESOLVIDO: [],
+    FECHADO: []
+});
+
 const CLOSED_STATUSES = new Set(['RESOLVIDO', 'FECHADO']);
+const TEAM_ROLES = new Set(['GERENTE', 'TECNICO']);
+const ASSIGNABLE_STATUSES = new Set(['RECEBIDO', 'EM_TRIAGEM']);
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function getTicketCode(ticket) {
@@ -46,24 +58,72 @@ function formatDate(value) {
     }).format(date);
 }
 
-function formatDuration(milliseconds) {
-    const totalMinutes = Math.max(1, Math.ceil(Math.abs(milliseconds) / 60000));
+function formatSeconds(value) {
+    const seconds = Math.max(0, Math.abs(Number(value) || 0));
+    const totalMinutes = Math.max(1, Math.ceil(seconds / 60));
     if (totalMinutes < 60) return `${totalMinutes} minuto${totalMinutes === 1 ? '' : 's'}`;
-
     const totalHours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
     if (totalHours < 24) {
-        const minutes = totalMinutes % 60;
-        const hourLabel = `${totalHours} hora${totalHours === 1 ? '' : 's'}`;
-        return minutes > 0 ? `${hourLabel} e ${minutes} minuto${minutes === 1 ? '' : 's'}` : hourLabel;
+        const hoursLabel = `${totalHours} hora${totalHours === 1 ? '' : 's'}`;
+        return minutes ? `${hoursLabel} e ${minutes} minuto${minutes === 1 ? '' : 's'}` : hoursLabel;
     }
-
     const days = Math.floor(totalHours / 24);
     const hours = totalHours % 24;
-    const dayLabel = `${days} dia${days === 1 ? '' : 's'}`;
-    return hours > 0 ? `${dayLabel} e ${hours} hora${hours === 1 ? '' : 's'}` : dayLabel;
+    const daysLabel = `${days} dia${days === 1 ? '' : 's'}`;
+    return hours ? `${daysLabel} e ${hours} hora${hours === 1 ? '' : 's'}` : daysLabel;
 }
 
 function getSlaInfo(ticket) {
+    const hasServerRemaining = ticket.slaRemainingSeconds !== null
+        && ticket.slaRemainingSeconds !== undefined
+        && Number.isFinite(Number(ticket.slaRemainingSeconds));
+    const remaining = hasServerRemaining ? Number(ticket.slaRemainingSeconds) : 0;
+    const state = ticket.slaState;
+
+    if (state === 'PAUSED' || ticket.slaPaused) {
+        const pausedBalance = hasServerRemaining
+            ? (remaining >= 0
+                ? `${formatSeconds(remaining)} preservados`
+                : `o prazo já estava vencido há ${formatSeconds(remaining)}`)
+            : 'saldo indisponível';
+        return {
+            title: 'SLA pausado',
+            description: hasServerRemaining
+                ? `${pausedBalance}. Pausa registrada em ${formatDate(ticket.slaPausedAt)}.`
+                : `Contagem interrompida em ${formatDate(ticket.slaPausedAt)}.`,
+            tone: 'is-paused'
+        };
+    }
+    if (state === 'MET') {
+        return {
+            title: 'SLA cumprido',
+            description: `Atendimento concluído dentro do prazo. Resolução: ${formatDate(ticket.resolvedAt)}.`,
+            tone: 'is-complete'
+        };
+    }
+    if (state === 'BREACHED') {
+        return {
+            title: hasServerRemaining ? `SLA vencido há ${formatSeconds(remaining)}` : 'SLA vencido',
+            description: `Prazo previsto para ${formatDate(ticket.dataVencimento)}.`,
+            tone: 'is-overdue'
+        };
+    }
+    if (state === 'AT_RISK') {
+        return {
+            title: hasServerRemaining ? `${formatSeconds(remaining)} restantes` : 'SLA em risco',
+            description: `Atenção: o prazo termina em ${formatDate(ticket.dataVencimento)}.`,
+            tone: 'is-risk'
+        };
+    }
+    if (state === 'ON_TRACK') {
+        return {
+            title: hasServerRemaining ? `${formatSeconds(remaining)} restantes` : 'SLA dentro do prazo',
+            description: `Prazo previsto para ${formatDate(ticket.dataVencimento)}.`,
+            tone: 'is-ok'
+        };
+    }
+
     const deadline = parseDate(ticket.dataVencimento);
     if (!deadline) {
         return {
@@ -72,51 +132,25 @@ function getSlaInfo(ticket) {
             tone: 'is-neutral'
         };
     }
-
+    const differenceSeconds = Math.trunc((deadline.getTime() - Date.now()) / 1000);
     if (CLOSED_STATUSES.has(ticket.status)) {
-        const completedAt = parseDate(ticket.dataAtualizacao);
-        if (!completedAt) {
-            return {
-                title: 'Chamado finalizado',
-                description: `O prazo registrado era ${formatDate(ticket.dataVencimento)}.`,
-                tone: 'is-complete'
-            };
-        }
-
-        const difference = deadline.getTime() - completedAt.getTime();
-        if (difference >= 0) {
-            return {
-                title: 'Concluído dentro do prazo',
-                description: `Finalizado com ${formatDuration(difference)} de antecedência.`,
-                tone: 'is-complete'
-            };
-        }
         return {
-            title: 'Concluído após o prazo',
-            description: `Finalizado com ${formatDuration(difference)} de atraso.`,
-            tone: 'is-overdue'
+            title: 'Chamado finalizado',
+            description: `O prazo registrado era ${formatDate(ticket.dataVencimento)}.`,
+            tone: 'is-complete'
         };
     }
-
-    const difference = deadline.getTime() - Date.now();
-    if (difference <= 0) {
+    if (differenceSeconds <= 0) {
         return {
-            title: `SLA vencido há ${formatDuration(difference)}`,
+            title: `SLA vencido há ${formatSeconds(differenceSeconds)}`,
             description: `O prazo terminou em ${formatDate(ticket.dataVencimento)}.`,
             tone: 'is-overdue'
         };
     }
-    if (difference <= 24 * 60 * 60 * 1000) {
-        return {
-            title: `${formatDuration(difference)} restantes`,
-            description: `Atenção: o prazo termina em ${formatDate(ticket.dataVencimento)}.`,
-            tone: 'is-risk'
-        };
-    }
     return {
-        title: `${formatDuration(difference)} restantes`,
+        title: `${formatSeconds(differenceSeconds)} restantes`,
         description: `Prazo previsto para ${formatDate(ticket.dataVencimento)}.`,
-        tone: 'is-ok'
+        tone: differenceSeconds <= 86400 ? 'is-risk' : 'is-ok'
     };
 }
 
@@ -159,7 +193,6 @@ function createDetailField(label, value) {
 function createInfoCard(title, iconPath, fields) {
     const article = document.createElement('article');
     article.className = 'detail-info-card';
-
     const header = document.createElement('header');
     header.className = 'detail-info-card-header';
     const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -170,7 +203,6 @@ function createInfoCard(title, iconPath, fields) {
     const heading = document.createElement('h2');
     heading.textContent = title;
     header.append(icon, heading);
-
     const details = document.createElement('dl');
     details.className = 'detail-fields';
     fields.forEach(field => details.appendChild(createDetailField(field.label, field.value)));
@@ -178,20 +210,57 @@ function createInfoCard(title, iconPath, fields) {
     return article;
 }
 
-document.addEventListener('DOMContentLoaded', async () => {
+document.addEventListener('DOMContentLoaded', () => {
     const session = api.requireAuth();
     if (!session) return;
 
+    const role = String(session.role || '').toUpperCase();
+    const isTeamMember = TEAM_ROLES.has(role);
     const root = document.getElementById('ticketDetail');
     const ticketId = new URLSearchParams(window.location.search).get('id') || '';
+    const actionModal = document.getElementById('ticketActionModal');
+    const actionTitle = document.getElementById('ticketActionTitle');
+    const actionDescription = document.getElementById('ticketActionDescription');
+    const actionFeedback = document.getElementById('ticketActionFeedback');
+    const actionConfirm = document.getElementById('confirmTicketAction');
+    const pauseField = document.getElementById('ticketPauseReasonField');
+    const pauseReason = document.getElementById('ticketPauseReason');
+    const toastRegion = document.getElementById('ticketToastRegion');
+    const state = {
+        ticket: null,
+        comments: [],
+        commentsLoading: true,
+        commentsError: '',
+        technicians: [],
+        techniciansLoading: false,
+        techniciansLoaded: false,
+        techniciansError: '',
+        selectedTechnicianId: '',
+        pendingAction: null,
+        lastFocusedElement: null
+    };
+
+    function setFeedback(message, tone = '') {
+        actionFeedback.textContent = message;
+        actionFeedback.className = `feedback ${tone}`.trim();
+        actionFeedback.hidden = !message;
+    }
+
+    function showToast(message, tone = '') {
+        const toast = document.createElement('div');
+        toast.className = `toast ${tone}`.trim();
+        toast.textContent = message;
+        toastRegion.appendChild(toast);
+        window.setTimeout(() => toast.remove(), 3800);
+    }
 
     function renderError(title, message) {
         root.replaceChildren();
         root.setAttribute('aria-busy', 'false');
         const card = document.createElement('section');
         card.className = 'page-card detail-state-card';
-        const state = document.createElement('div');
-        state.className = 'detail-error-state';
+        const errorState = document.createElement('div');
+        errorState.className = 'detail-error-state';
         const heading = document.createElement('h1');
         heading.textContent = title;
         const description = document.createElement('p');
@@ -200,12 +269,352 @@ document.addEventListener('DOMContentLoaded', async () => {
         back.className = 'btn btn-primary';
         back.href = 'chamados.html';
         back.textContent = 'Voltar aos chamados';
-        state.append(heading, description, back);
-        card.appendChild(state);
+        errorState.append(heading, description, back);
+        card.appendChild(errorState);
         root.appendChild(card);
     }
 
-    function renderTicket(ticket) {
+    function userCanOperate(ticket) {
+        return role === 'GERENTE' || (role === 'TECNICO' && ticket.tecnico?.id === session.id);
+    }
+
+    function createActionButton(label, tone, action) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = `btn btn-compact ${tone}`;
+        button.textContent = label;
+        button.addEventListener('click', event => openActionModal(action, event.currentTarget));
+        return button;
+    }
+
+    function ticketCanBeAssigned(ticket) {
+        return !ticket.tecnico && ASSIGNABLE_STATUSES.has(ticket.status);
+    }
+
+    function createManagerAssignment(ticket) {
+        const panel = document.createElement('form');
+        panel.className = 'workflow-assignment';
+        panel.setAttribute('aria-label', 'Atribuir responsável técnico');
+        const label = document.createElement('label');
+        label.className = 'form-label';
+        label.htmlFor = 'workflowTechnicianSelect';
+        label.textContent = 'Responsável técnico';
+        const controls = document.createElement('div');
+        controls.className = 'workflow-assignment-controls';
+        const select = document.createElement('select');
+        select.id = 'workflowTechnicianSelect';
+        select.className = 'form-control';
+        select.required = true;
+        const submit = document.createElement('button');
+        submit.type = 'submit';
+        submit.className = 'btn btn-primary btn-compact';
+        submit.textContent = 'Atribuir';
+
+        if (state.techniciansLoading) {
+            select.replaceChildren(new Option('Carregando técnicos...', ''));
+            select.disabled = true;
+            submit.disabled = true;
+        } else if (state.techniciansError) {
+            select.replaceChildren(new Option('Falha ao carregar técnicos', ''));
+            select.disabled = true;
+            submit.type = 'button';
+            submit.className = 'btn btn-secondary btn-compact';
+            submit.textContent = 'Tentar novamente';
+            submit.addEventListener('click', loadTechnicians);
+        } else {
+            const options = [new Option('Selecione um técnico', '')];
+            state.technicians.forEach(technician => {
+                options.push(new Option(`${technician.name} · ${technician.email}`, technician.id));
+            });
+            select.replaceChildren(...options);
+            if (state.technicians.some(technician => technician.id === state.selectedTechnicianId)) {
+                select.value = state.selectedTechnicianId;
+            }
+            submit.disabled = !select.value;
+            select.disabled = state.technicians.length === 0;
+        }
+        select.addEventListener('change', () => {
+            state.selectedTechnicianId = select.value;
+            submit.disabled = !select.value;
+        });
+        controls.append(select, submit);
+        panel.append(label, controls);
+        if (!state.techniciansLoading && !state.techniciansError && state.techniciansLoaded && !state.technicians.length) {
+            const empty = document.createElement('p');
+            empty.className = 'workflow-assignment-status';
+            empty.textContent = 'Nenhum técnico ativo está disponível.';
+            panel.appendChild(empty);
+        }
+        if (state.techniciansError) {
+            const error = document.createElement('p');
+            error.className = 'workflow-assignment-status is-error';
+            error.textContent = state.techniciansError;
+            panel.appendChild(error);
+        }
+        panel.addEventListener('submit', event => {
+            event.preventDefault();
+            const technician = state.technicians.find(item => item.id === select.value);
+            if (!technician) {
+                select.focus();
+                return;
+            }
+            openActionModal({
+                kind: 'assign',
+                technicianId: technician.id,
+                title: 'Atribuir responsável',
+                description: `Confirme a atribuição deste chamado para ${technician.name}. O atendimento será iniciado automaticamente.`,
+                confirmLabel: 'Atribuir técnico',
+                successMessage: `Chamado atribuído para ${technician.name}.`
+            }, submit);
+        });
+        return panel;
+    }
+
+    function createWorkflowCard(ticket) {
+        const card = document.createElement('article');
+        card.className = 'detail-info-card workflow-card';
+        const heading = document.createElement('div');
+        heading.className = 'workflow-card-heading';
+        const title = document.createElement('h2');
+        title.textContent = 'Ações do chamado';
+        const subtitle = document.createElement('p');
+        subtitle.textContent = 'As transições são validadas pelo servidor.';
+        heading.append(title, subtitle);
+        const actions = document.createElement('div');
+        actions.className = 'workflow-actions';
+        const canOperate = userCanOperate(ticket);
+        const canAssign = ticketCanBeAssigned(ticket);
+
+        let assignmentPanel = null;
+        if (canAssign && role === 'TECNICO') {
+            actions.appendChild(createActionButton('Assumir chamado', 'btn-primary', {
+                kind: 'assign',
+                technicianId: session.id,
+                title: 'Assumir chamado',
+                description: 'Confirme que você será o responsável por este atendimento. O chamado passará para Em atendimento.',
+                confirmLabel: 'Assumir chamado',
+                successMessage: 'Chamado assumido com sucesso.'
+            }));
+        }
+        if (canAssign && role === 'GERENTE') {
+            assignmentPanel = createManagerAssignment(ticket);
+        }
+
+        if (canOperate) {
+            (STATUS_TRANSITIONS[ticket.status] || []).forEach(nextStatus => {
+                actions.appendChild(createActionButton(
+                    `Mover para ${STATUS_LABELS[nextStatus]}`,
+                    nextStatus === 'RESOLVIDO' ? 'btn-success' : 'btn-secondary',
+                    {
+                        kind: 'status',
+                        status: nextStatus,
+                        title: 'Alterar status do chamado',
+                        description: `Confirme a transição de ${STATUS_LABELS[ticket.status]} para ${STATUS_LABELS[nextStatus]}.`,
+                        confirmLabel: nextStatus === 'RESOLVIDO' ? 'Marcar como resolvido' : 'Alterar status'
+                    }
+                ));
+            });
+        }
+
+        const canCloseOrReopen = role === 'GERENTE' || role === 'CLIENTE';
+        if (ticket.status === 'RESOLVIDO' && canCloseOrReopen) {
+            actions.appendChild(createActionButton('Fechar chamado', 'btn-success', {
+                kind: 'close',
+                title: 'Fechar chamado',
+                description: 'O fechamento confirma que o atendimento foi concluído. O chamado poderá ser reaberto posteriormente.',
+                confirmLabel: 'Fechar chamado'
+            }));
+            actions.appendChild(createActionButton('Reabrir atendimento', 'btn-secondary', {
+                kind: 'reopen',
+                title: 'Reabrir atendimento',
+                description: 'A resolução será desfeita, o chamado voltará ao fluxo de atendimento e receberá um novo prazo de SLA.',
+                confirmLabel: 'Reabrir atendimento'
+            }));
+        }
+
+        if (ticket.status === 'FECHADO' && canCloseOrReopen) {
+            actions.appendChild(createActionButton('Reabrir chamado', 'btn-secondary', {
+                kind: 'reopen',
+                title: 'Reabrir chamado',
+                description: 'O chamado voltará ao fluxo de atendimento e terá o SLA retomado conforme as regras vigentes.',
+                confirmLabel: 'Reabrir chamado'
+            }));
+        }
+
+        if (canOperate && !CLOSED_STATUSES.has(ticket.status)) {
+            if (ticket.slaPaused) {
+                actions.appendChild(createActionButton('Retomar SLA', 'btn-primary', {
+                    kind: 'resume',
+                    title: 'Retomar contagem do SLA',
+                    description: 'A contagem continuará a partir do tempo preservado no momento da pausa.',
+                    confirmLabel: 'Retomar SLA'
+                }));
+            } else {
+                actions.appendChild(createActionButton('Pausar SLA', 'btn-secondary', {
+                    kind: 'pause',
+                    title: 'Pausar contagem do SLA',
+                    description: 'Use a pausa somente quando o atendimento estiver impedido por uma dependência externa. Informe o motivo para registrar a decisão.',
+                    confirmLabel: 'Pausar SLA'
+                }));
+            }
+        }
+
+        if (!actions.childElementCount) {
+            const empty = document.createElement('p');
+            empty.className = 'workflow-empty';
+            empty.textContent = role === 'TECNICO' && ticket.tecnico
+                ? 'Este chamado está atribuído a outro técnico.'
+                : (role === 'TECNICO' && !ticket.tecnico
+                    ? 'O chamado está sem responsável, mas não pode ser assumido neste status.'
+                    : 'Nenhuma ação está disponível neste status.');
+            actions.appendChild(empty);
+        }
+        card.append(heading);
+        if (assignmentPanel) card.appendChild(assignmentPanel);
+        card.appendChild(actions);
+        return card;
+    }
+
+    async function loadTechnicians() {
+        if (role !== 'GERENTE') return;
+        state.techniciansLoading = true;
+        state.techniciansError = '';
+        if (state.ticket) renderTicket();
+        try {
+            const response = await api.request('/users');
+            state.technicians = Array.isArray(response)
+                ? response
+                    .filter(user => user.role === 'TECNICO' && user.active !== false)
+                    .sort((left, right) => String(left.name).localeCompare(String(right.name), 'pt-BR'))
+                : [];
+            state.techniciansLoaded = true;
+        } catch (error) {
+            console.error('Erro ao carregar técnicos:', error);
+            state.technicians = [];
+            state.techniciansLoaded = false;
+            state.techniciansError = error.message || 'Não foi possível carregar os técnicos ativos.';
+        } finally {
+            state.techniciansLoading = false;
+            if (state.ticket) renderTicket();
+        }
+    }
+
+    function createCommentCard(comment, internal) {
+        const article = document.createElement('article');
+        article.className = `ticket-comment ${internal ? 'is-internal' : 'is-public'}`;
+        const header = document.createElement('header');
+        const author = document.createElement('div');
+        const authorName = document.createElement('strong');
+        authorName.textContent = comment.author?.name || 'Usuário';
+        const authorMeta = document.createElement('span');
+        authorMeta.textContent = comment.author?.email || 'Conta do Speed Desk';
+        author.append(authorName, authorMeta);
+        const date = document.createElement('time');
+        const createdAt = comment.createdAt || comment.dataCriacao;
+        date.dateTime = createdAt || '';
+        date.textContent = formatDate(createdAt);
+        header.append(author, date);
+        const content = document.createElement('p');
+        content.textContent = comment.content || '';
+        article.append(header, content);
+        return article;
+    }
+
+    function createCommentColumn({ internal, title, description, placeholder }) {
+        const section = document.createElement('section');
+        section.className = `comment-channel ${internal ? 'is-internal' : 'is-public'}`;
+        const header = document.createElement('header');
+        const heading = document.createElement('h3');
+        heading.textContent = title;
+        const copy = document.createElement('p');
+        copy.textContent = description;
+        header.append(heading, copy);
+
+        const list = document.createElement('div');
+        list.className = 'ticket-comments-list';
+        const comments = state.comments.filter(comment => Boolean(comment.internal) === internal);
+        if (state.commentsLoading) {
+            const loading = document.createElement('p');
+            loading.className = 'comment-empty';
+            loading.textContent = 'Carregando mensagens...';
+            list.appendChild(loading);
+        } else if (state.commentsError) {
+            const error = document.createElement('p');
+            error.className = 'comment-empty is-error';
+            error.textContent = state.commentsError;
+            list.appendChild(error);
+        } else if (!comments.length) {
+            const empty = document.createElement('p');
+            empty.className = 'comment-empty';
+            empty.textContent = internal ? 'Nenhuma nota interna registrada.' : 'Nenhum comentário público registrado.';
+            list.appendChild(empty);
+        } else {
+            comments.forEach(comment => list.appendChild(createCommentCard(comment, internal)));
+        }
+
+        const form = document.createElement('form');
+        form.className = 'comment-composer';
+        const label = document.createElement('label');
+        const textareaId = internal ? 'internalCommentContent' : 'publicCommentContent';
+        label.className = 'form-label';
+        label.htmlFor = textareaId;
+        label.textContent = internal ? 'Nova nota interna' : 'Novo comentário';
+        const textarea = document.createElement('textarea');
+        textarea.id = textareaId;
+        textarea.className = 'form-control';
+        textarea.rows = 4;
+        textarea.maxLength = 4000;
+        textarea.required = true;
+        textarea.placeholder = placeholder;
+        const footer = document.createElement('div');
+        footer.className = 'comment-composer-footer';
+        const hint = document.createElement('span');
+        hint.textContent = internal ? 'Visível apenas para gerente e técnicos.' : 'Visível ao solicitante e à equipe.';
+        const submit = document.createElement('button');
+        submit.type = 'submit';
+        submit.className = `btn btn-compact ${internal ? 'btn-secondary' : 'btn-primary'}`;
+        submit.textContent = internal ? 'Adicionar nota' : 'Enviar comentário';
+        footer.append(hint, submit);
+        form.append(label, textarea, footer);
+        form.addEventListener('submit', event => submitComment(event, internal, textarea, submit));
+        section.append(header, list, form);
+        return section;
+    }
+
+    function createCommentsSection() {
+        const section = document.createElement('section');
+        section.className = 'ticket-detail-section ticket-conversation-section';
+        const heading = document.createElement('div');
+        heading.className = 'conversation-heading';
+        const title = document.createElement('h2');
+        title.textContent = 'Comunicação do chamado';
+        const description = document.createElement('p');
+        description.textContent = isTeamMember
+            ? 'Comentários públicos e notas internas permanecem separados.'
+            : 'Use este espaço para conversar com a equipe responsável.';
+        heading.append(title, description);
+        const channels = document.createElement('div');
+        channels.className = `comment-channels ${isTeamMember ? 'has-internal' : ''}`;
+        channels.appendChild(createCommentColumn({
+            internal: false,
+            title: 'Comentários públicos',
+            description: 'Comunicação compartilhada com o solicitante.',
+            placeholder: 'Escreva uma atualização, dúvida ou resposta...'
+        }));
+        if (isTeamMember) {
+            channels.appendChild(createCommentColumn({
+                internal: true,
+                title: 'Notas internas',
+                description: 'Contexto reservado para a equipe de atendimento.',
+                placeholder: 'Registre diagnóstico, hipótese ou orientação interna...'
+            }));
+        }
+        section.append(heading, channels);
+        return section;
+    }
+
+    function renderTicket() {
+        const ticket = state.ticket;
         const code = getTicketCode(ticket);
         document.title = `${code} — Speed Desk`;
         root.replaceChildren();
@@ -213,10 +622,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const layout = document.createElement('div');
         layout.className = 'ticket-detail-layout';
-
         const main = document.createElement('article');
         main.className = 'page-card ticket-detail-main';
-
         const hero = document.createElement('header');
         hero.className = 'ticket-detail-hero';
         const eyebrow = document.createElement('div');
@@ -224,25 +631,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         const codeElement = document.createElement('span');
         codeElement.className = 'ticket-detail-code';
         codeElement.textContent = code;
-        const statusBadge = createBadge(
-            STATUS_LABELS[ticket.status] || ticket.status || 'Recebido',
-            `badge-status ${statusClass(ticket.status)}`
+        eyebrow.append(
+            codeElement,
+            createBadge(STATUS_LABELS[ticket.status] || ticket.status || 'Recebido', `badge-status ${statusClass(ticket.status)}`)
         );
-        eyebrow.append(codeElement, statusBadge);
-
         const title = document.createElement('h1');
         title.textContent = ticket.titulo || 'Chamado sem título';
-
         const badges = document.createElement('div');
         badges.className = 'ticket-detail-badges';
         badges.append(
             createBadge(TYPE_LABELS[ticket.ticketType] || ticket.ticketType || 'Geral', 'badge-ticket-type'),
-            createBadge(PRIORITY_LABELS[ticket.prioridade] || ticket.prioridade || 'Baixa', priorityClass(ticket.prioridade))
+            createBadge(PRIORITY_LABELS[ticket.prioridade] || ticket.prioridade || 'Baixa', priorityClass(ticket.prioridade)),
+            createBadge(ticket.category?.name || 'Sem categoria', 'badge-category')
         );
-        badges.appendChild(createBadge(
-            ticket.category?.name || 'Sem categoria',
-            'badge-category'
-        ));
         hero.append(eyebrow, title, badges);
 
         const descriptionSection = document.createElement('section');
@@ -263,7 +664,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         dates.append(
             createDetailField('Criado em', formatDate(ticket.dataCriacao)),
             createDetailField('Atualizado em', formatDate(ticket.dataAtualizacao)),
-            createDetailField('Vencimento do SLA', formatDate(ticket.dataVencimento))
+            createDetailField('Vencimento do SLA', formatDate(ticket.dataVencimento)),
+            createDetailField('Resolvido em', formatDate(ticket.resolvedAt)),
+            createDetailField('Fechado em', formatDate(ticket.closedAt)),
+            createDetailField('Versão do registro', String(ticket.version ?? 'Não informada'))
         );
         datesSection.append(datesTitle, dates);
 
@@ -274,18 +678,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         const idValue = document.createElement('code');
         idValue.textContent = ticket.id;
         identificationSection.append(idTitle, idValue);
-        main.append(hero, descriptionSection, datesSection, identificationSection);
+        main.append(hero, descriptionSection, datesSection, identificationSection, createCommentsSection());
 
         const aside = document.createElement('aside');
         aside.className = 'ticket-detail-aside';
-        aside.setAttribute('aria-label', 'Informações relacionadas ao chamado');
-
+        aside.setAttribute('aria-label', 'Informações e ações relacionadas ao chamado');
         const slaInfo = getSlaInfo(ticket);
         const slaCard = document.createElement('article');
         slaCard.className = `detail-sla-card ${slaInfo.tone}`;
         const slaLabel = document.createElement('span');
         slaLabel.className = 'detail-sla-label';
-        slaLabel.textContent = 'SLA do chamado';
+        slaLabel.textContent = 'SLA calculado pelo servidor';
         const slaTitle = document.createElement('strong');
         slaTitle.textContent = slaInfo.title;
         const slaDescription = document.createElement('p');
@@ -301,18 +704,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                 { label: 'Organização', value: ticket.cliente?.organization?.name || 'Sem organização' }
             ]
         );
-
         const technicianCard = createInfoCard(
             'Responsável técnico',
             '<path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><path d="M20 8v6M23 11h-6"></path>',
             ticket.tecnico
-                ? [
-                    { label: 'Nome', value: ticket.tecnico.name },
-                    { label: 'E-mail', value: ticket.tecnico.email }
-                ]
+                ? [{ label: 'Nome', value: ticket.tecnico.name }, { label: 'E-mail', value: ticket.tecnico.email }]
                 : [{ label: 'Situação', value: 'Sem técnico atribuído' }]
         );
-
         const assetCard = createInfoCard(
             'Equipamento relacionado',
             '<rect x="3" y="5" width="18" height="13" rx="2"></rect><path d="M8 21h8M12 18v3"></path>',
@@ -324,32 +722,206 @@ document.addEventListener('DOMContentLoaded', async () => {
                 ]
                 : [{ label: 'Situação', value: 'Nenhum equipamento vinculado' }]
         );
-
-        aside.append(slaCard, clientCard, technicianCard, assetCard);
+        aside.append(slaCard, createWorkflowCard(ticket), clientCard, technicianCard, assetCard);
         layout.append(main, aside);
         root.appendChild(layout);
     }
 
-    if (!UUID_PATTERN.test(ticketId)) {
-        renderError(
-            'Chamado não identificado',
-            'O endereço não contém um identificador de chamado válido.'
-        );
-        return;
+    async function loadComments() {
+        state.commentsLoading = true;
+        state.commentsError = '';
+        try {
+            const response = await api.request(`/tickets/${encodeURIComponent(ticketId)}/comments`);
+            const comments = Array.isArray(response) ? response : [];
+            state.comments = role === 'CLIENTE'
+                ? comments.filter(comment => !comment.internal)
+                : comments;
+        } catch (error) {
+            console.error('Erro ao carregar comentários:', error);
+            state.comments = [];
+            state.commentsError = error.message || 'Não foi possível carregar as mensagens.';
+        } finally {
+            state.commentsLoading = false;
+            if (state.ticket) renderTicket();
+        }
     }
 
-    try {
-        const ticket = await api.request(`/tickets/${encodeURIComponent(ticketId)}`);
-        if (!ticket?.id) {
-            renderError('Chamado indisponível', 'A API não devolveu os dados esperados para este chamado.');
+    async function submitComment(event, internal, textarea, submitButton) {
+        event.preventDefault();
+        const content = textarea.value.trim();
+        if (!content || submitButton.disabled) {
+            textarea.focus();
             return;
         }
-        renderTicket(ticket);
-    } catch (error) {
-        console.error('Erro ao carregar detalhes do chamado:', error);
-        renderError(
-            error.status === 404 ? 'Chamado não encontrado' : 'Não foi possível carregar o chamado',
-            error.message || 'Tente novamente em alguns instantes.'
-        );
+        if (internal && !isTeamMember) return;
+        submitButton.disabled = true;
+        const originalLabel = submitButton.textContent;
+        submitButton.textContent = 'Enviando...';
+        try {
+            const created = await api.request(`/tickets/${encodeURIComponent(ticketId)}/comments`, {
+                method: 'POST',
+                body: JSON.stringify({ content, internal })
+            });
+            state.comments = [...state.comments, created];
+            showToast(internal ? 'Nota interna adicionada.' : 'Comentário enviado.', 'success');
+            renderTicket();
+            const nextTextarea = document.getElementById(internal ? 'internalCommentContent' : 'publicCommentContent');
+            nextTextarea?.focus();
+        } catch (error) {
+            showToast(error.message || 'Não foi possível enviar a mensagem.', 'error');
+            submitButton.disabled = false;
+            submitButton.textContent = originalLabel;
+        }
     }
+
+    function openActionModal(action, trigger) {
+        state.pendingAction = action;
+        state.lastFocusedElement = trigger;
+        actionTitle.textContent = action.title;
+        actionDescription.textContent = action.description;
+        actionConfirm.textContent = action.confirmLabel;
+        actionConfirm.className = `btn ${action.kind === 'close' ? 'btn-success' : 'btn-primary'}`;
+        pauseField.hidden = action.kind !== 'pause';
+        pauseReason.required = action.kind === 'pause';
+        pauseReason.value = '';
+        setFeedback('');
+        actionModal.hidden = false;
+        actionModal.removeAttribute('inert');
+        actionModal.setAttribute('aria-hidden', 'false');
+        window.requestAnimationFrame(() => {
+            actionModal.classList.add('active');
+            (action.kind === 'pause' ? pauseReason : actionConfirm).focus();
+        });
+    }
+
+    function closeActionModal(force = false) {
+        if (actionConfirm.disabled && !force) return;
+        actionModal.classList.remove('active');
+        actionModal.setAttribute('aria-hidden', 'true');
+        actionModal.setAttribute('inert', '');
+        actionModal.hidden = true;
+        state.pendingAction = null;
+        setFeedback('');
+        const focusTarget = state.lastFocusedElement;
+        state.lastFocusedElement = null;
+        if (focusTarget instanceof HTMLElement && document.contains(focusTarget)) focusTarget.focus();
+    }
+
+    async function executePendingAction() {
+        const action = state.pendingAction;
+        if (!action || actionConfirm.disabled) return;
+        const reason = pauseReason.value.trim();
+        if (action.kind === 'pause' && (!reason || reason.length > 500)) {
+            setFeedback('Informe um motivo com no máximo 500 caracteres.', 'error');
+            pauseReason.focus();
+            return;
+        }
+
+        const requestByKind = {
+            status: () => api.request(`/tickets/${ticketId}/status`, {
+                method: 'PATCH',
+                body: JSON.stringify({ status: action.status })
+            }),
+            assign: () => api.request(`/tickets/${ticketId}/assumir/${action.technicianId}`, {
+                method: 'PATCH'
+            }),
+            close: () => api.request(`/tickets/${ticketId}/close`, { method: 'POST' }),
+            reopen: () => api.request(`/tickets/${ticketId}/reopen`, { method: 'POST' }),
+            pause: () => api.request(`/tickets/${ticketId}/sla/pause`, {
+                method: 'POST',
+                body: JSON.stringify({ reason })
+            }),
+            resume: () => api.request(`/tickets/${ticketId}/sla/resume`, { method: 'POST' })
+        };
+        const execute = requestByKind[action.kind];
+        if (!execute) return;
+
+        actionConfirm.disabled = true;
+        const defaultLabel = actionConfirm.textContent;
+        actionConfirm.textContent = 'Processando...';
+        try {
+            const updated = await execute();
+            if (updated?.id) state.ticket = updated;
+            else state.ticket = await api.request(`/tickets/${encodeURIComponent(ticketId)}`);
+            if (action.kind === 'assign') state.selectedTechnicianId = '';
+            actionConfirm.disabled = false;
+            actionConfirm.textContent = defaultLabel;
+            closeActionModal();
+            renderTicket();
+            if (
+                role === 'GERENTE'
+                && ticketCanBeAssigned(state.ticket)
+                && !state.techniciansLoaded
+                && !state.techniciansLoading
+            ) {
+                loadTechnicians();
+            }
+            showToast(action.successMessage || 'Chamado atualizado com sucesso.', 'success');
+        } catch (error) {
+            if (error.status === 409) {
+                setFeedback('O chamado foi atualizado por outra operação. Recarregue os dados e tente novamente.', 'error');
+            } else {
+                setFeedback(error.message || 'Não foi possível concluir a ação.', 'error');
+            }
+        } finally {
+            actionConfirm.disabled = false;
+            actionConfirm.textContent = defaultLabel;
+        }
+    }
+
+    function trapModalFocus(event) {
+        if (event.key !== 'Tab' || !actionModal.classList.contains('active')) return;
+        const focusable = [...actionModal.querySelectorAll('button:not(:disabled), textarea:not(:disabled), input:not(:disabled), select:not(:disabled), [href]')]
+            .filter(element => !element.hidden && element.offsetParent !== null);
+        if (!focusable.length) return;
+        const first = focusable[0];
+        const last = focusable.at(-1);
+        if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault();
+            last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault();
+            first.focus();
+        }
+    }
+
+    document.getElementById('closeTicketActionModal').addEventListener('click', () => closeActionModal());
+    document.getElementById('cancelTicketAction').addEventListener('click', () => closeActionModal());
+    actionConfirm.addEventListener('click', executePendingAction);
+    actionModal.addEventListener('click', event => {
+        if (event.target === actionModal) closeActionModal();
+    });
+    document.addEventListener('keydown', event => {
+        if (event.key === 'Escape' && actionModal.classList.contains('active')) closeActionModal();
+        trapModalFocus(event);
+    });
+
+    async function loadPage() {
+        if (!UUID_PATTERN.test(ticketId)) {
+            renderError('Chamado não identificado', 'O endereço não contém um identificador de chamado válido.');
+            return;
+        }
+        try {
+            const ticket = await api.request(`/tickets/${encodeURIComponent(ticketId)}`);
+            if (!ticket?.id) {
+                renderError('Chamado indisponível', 'A API não devolveu os dados esperados para este chamado.');
+                return;
+            }
+            state.ticket = ticket;
+            const shouldLoadTechnicians = role === 'GERENTE' && ticketCanBeAssigned(ticket);
+            state.techniciansLoading = shouldLoadTechnicians;
+            renderTicket();
+            const loaders = [loadComments()];
+            if (shouldLoadTechnicians) loaders.push(loadTechnicians());
+            await Promise.allSettled(loaders);
+        } catch (error) {
+            console.error('Erro ao carregar detalhes do chamado:', error);
+            renderError(
+                error.status === 404 ? 'Chamado não encontrado' : 'Não foi possível carregar o chamado',
+                error.message || 'Tente novamente em alguns instantes.'
+            );
+        }
+    }
+
+    loadPage();
 });

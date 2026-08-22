@@ -3054,6 +3054,367 @@ textarea.form-control {
     margin-top: 18px;
 }
 
+/* Ticket workflow, conversations and SLA policies */
+.catalog-sla.is-paused,
+.ticket-sla.is-paused {
+    color: var(--brand-accent);
+}
+
+.ticket-sla.is-overdue {
+    color: var(--danger);
+}
+
+.ticket-sla.is-complete {
+    color: var(--success);
+}
+
+.detail-sla-card.is-paused {
+    border-color: var(--brand-border);
+    background: linear-gradient(145deg, var(--brand-soft), var(--surface));
+}
+
+.detail-sla-card.is-paused::after {
+    background: var(--brand-accent);
+    box-shadow: 0 0 0 6px var(--brand-soft);
+}
+
+.workflow-card {
+    display: grid;
+    gap: 16px;
+}
+
+.workflow-card-heading {
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--border);
+}
+
+.workflow-card-heading h2 {
+    color: var(--text-primary);
+    font-size: 13px;
+    font-weight: 800;
+}
+
+.workflow-card-heading p,
+.workflow-empty {
+    margin-top: 5px;
+    color: var(--text-secondary);
+    font-size: 10px;
+    line-height: 1.55;
+}
+
+.workflow-actions {
+    display: grid;
+    gap: 9px;
+}
+
+.workflow-actions .btn {
+    width: 100%;
+    justify-content: center;
+    white-space: normal;
+}
+
+.workflow-assignment {
+    display: grid;
+    gap: 8px;
+    padding: 12px;
+    border: 1px solid var(--brand-border);
+    border-radius: var(--radius-sm);
+    background: var(--brand-soft);
+}
+
+.workflow-assignment .form-label {
+    margin-bottom: 0;
+}
+
+.workflow-assignment-controls {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+}
+
+.workflow-assignment-controls .form-control {
+    min-width: 0;
+}
+
+.workflow-assignment-status {
+    color: var(--text-secondary);
+    font-size: 9px;
+    line-height: 1.5;
+}
+
+.workflow-assignment-status.is-error {
+    color: var(--danger);
+}
+
+.ticket-conversation-section {
+    padding-bottom: 28px;
+}
+
+.conversation-heading {
+    display: flex;
+    align-items: start;
+    justify-content: space-between;
+    gap: 20px;
+    margin-bottom: 18px;
+}
+
+.conversation-heading h2 {
+    margin-bottom: 0;
+}
+
+.conversation-heading p {
+    max-width: 360px;
+    color: var(--text-secondary);
+    font-size: 10px;
+    line-height: 1.55;
+    text-align: right;
+}
+
+.comment-channels {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+}
+
+.comment-channels.has-internal {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.comment-channel {
+    display: flex;
+    min-width: 0;
+    padding: 16px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface-subtle);
+    flex-direction: column;
+}
+
+.comment-channel.is-internal {
+    border-color: rgba(255, 176, 32, 0.22);
+    background: linear-gradient(145deg, var(--warning-soft), var(--surface-subtle) 45%);
+}
+
+.comment-channel > header {
+    margin-bottom: 14px;
+}
+
+.comment-channel h3 {
+    color: var(--text-primary);
+    font-size: 12px;
+    font-weight: 800;
+}
+
+.comment-channel > header p {
+    margin-top: 4px;
+    color: var(--text-secondary);
+    font-size: 9px;
+    line-height: 1.5;
+}
+
+.ticket-comments-list {
+    display: grid;
+    max-height: 390px;
+    gap: 9px;
+    margin-bottom: 16px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+}
+
+.ticket-comment {
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+}
+
+.ticket-comment.is-internal {
+    border-color: rgba(255, 176, 32, 0.22);
+}
+
+.ticket-comment header {
+    display: flex;
+    align-items: start;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+
+.ticket-comment header > div {
+    display: grid;
+    min-width: 0;
+    gap: 2px;
+}
+
+.ticket-comment strong {
+    overflow: hidden;
+    color: var(--text-primary);
+    font-size: 10px;
+    font-weight: 800;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ticket-comment header span,
+.ticket-comment time {
+    color: var(--text-tertiary);
+    font-size: 8px;
+}
+
+.ticket-comment time {
+    flex: 0 0 auto;
+    text-align: right;
+}
+
+.ticket-comment > p {
+    color: var(--text-secondary);
+    font-size: 10px;
+    line-height: 1.65;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+}
+
+.comment-empty {
+    padding: 18px 12px;
+    border: 1px dashed var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text-tertiary);
+    font-size: 10px;
+    line-height: 1.5;
+    text-align: center;
+}
+
+.comment-empty.is-error {
+    border-color: rgba(255, 65, 108, 0.3);
+    color: var(--danger);
+}
+
+.comment-composer {
+    display: grid;
+    gap: 8px;
+    margin-top: auto;
+    padding-top: 14px;
+    border-top: 1px solid var(--border);
+}
+
+.comment-composer textarea {
+    min-height: 92px;
+    resize: vertical;
+}
+
+.comment-composer-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.comment-composer-footer span {
+    color: var(--text-tertiary);
+    font-size: 8px;
+    line-height: 1.4;
+}
+
+.ticket-pause-reason {
+    margin-top: 18px;
+}
+
+.ticket-pause-reason textarea {
+    resize: vertical;
+}
+
+.field-hint {
+    display: block;
+    margin-top: 6px;
+    color: var(--text-tertiary);
+    font-size: 9px;
+}
+
+.settings-section-wide {
+    grid-column: 1 / -1;
+}
+
+.section-header-split {
+    display: flex;
+    align-items: start;
+    justify-content: space-between;
+    gap: 18px;
+}
+
+.sla-policies-form {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.sla-policy-card {
+    min-width: 0;
+    padding: 14px;
+    border: 1px solid var(--border);
+    border-top: 3px solid var(--brand-accent);
+    border-radius: var(--radius-md);
+    background: var(--surface-subtle);
+}
+
+.sla-policy-card.priority-baixa {
+    border-top-color: var(--info);
+}
+
+.sla-policy-card.priority-normal {
+    border-top-color: var(--brand-accent);
+}
+
+.sla-policy-card.priority-alta {
+    border-top-color: var(--warning);
+}
+
+.sla-policy-card.priority-critica {
+    border-top-color: var(--danger);
+}
+
+.sla-policy-card legend {
+    padding-inline: 5px;
+    color: var(--text-primary);
+    font-size: 12px;
+    font-weight: 800;
+}
+
+.sla-policy-summary {
+    min-height: 32px;
+    margin: 2px 0 12px;
+    color: var(--text-secondary);
+    font-size: 9px;
+    line-height: 1.5;
+}
+
+.sla-policy-fields {
+    display: grid;
+    gap: 10px;
+}
+
+.sla-policy-fields .form-group {
+    margin-bottom: 0;
+}
+
+.sla-policy-actions {
+    display: flex;
+    grid-column: 1 / -1;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding-top: 4px;
+}
+
+.sla-policy-actions p {
+    color: var(--text-secondary);
+    font-size: 10px;
+}
+
+.settings-section > .feedback,
+.sla-policies-form + .feedback {
+    margin-top: 16px;
+}
+
 @media (max-width: 1180px) {
     :root {
         --sidebar-width: 256px;
@@ -3077,6 +3438,10 @@ textarea.form-control {
 
     .settings-grid {
         grid-template-columns: minmax(0, 1fr);
+    }
+
+    .sla-policies-form {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
     .catalog-filters {
@@ -3446,6 +3811,37 @@ textarea.form-control {
 
     .settings-section {
         padding: 18px;
+    }
+
+    .section-header-split,
+    .conversation-heading,
+    .sla-policy-actions,
+    .comment-composer-footer {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .conversation-heading p {
+        max-width: none;
+        text-align: left;
+    }
+
+    .comment-channels.has-internal,
+    .sla-policies-form {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .comment-composer-footer .btn,
+    .sla-policy-actions .btn {
+        width: 100%;
+    }
+
+    .workflow-assignment-controls {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .workflow-assignment-controls .btn {
+        width: 100%;
     }
 
     .modal-content {

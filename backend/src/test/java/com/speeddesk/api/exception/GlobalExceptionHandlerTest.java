@@ -6,6 +6,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 
 import java.net.URI;
 import java.util.UUID;
@@ -84,5 +85,25 @@ class GlobalExceptionHandlerTest {
 
         assertEquals(HttpStatus.FORBIDDEN, response.getStatusCode());
         assertEquals("Acesso negado", response.getBody().getTitle());
+    }
+
+    @Test
+    void returnsConflictForOptimisticLockingFailure() {
+        MockHttpServletRequest request = new MockHttpServletRequest(
+                "PATCH",
+                "/api/tickets/123/status"
+        );
+
+        ResponseEntity<ProblemDetail> response =
+                exceptionHandler.handleOptimisticLockingFailure(
+                        new ObjectOptimisticLockingFailureException(
+                                "Ticket",
+                                UUID.randomUUID()
+                        ),
+                        request
+                );
+
+        assertEquals(HttpStatus.CONFLICT, response.getStatusCode());
+        assertEquals("Conflito de concorrencia", response.getBody().getTitle());
     }
 }
