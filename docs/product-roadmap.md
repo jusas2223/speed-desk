@@ -31,6 +31,10 @@ Este arquivo é a fonte de verdade do escopo escolhido. Ele separa o que já exi
 - área dedicada de chamados e consulta detalhada por UUID com autorização de proprietário;
 - `HW1/HW4/HW7/HW9` fluxo de hardware com elegibilidade, garantia, etapas sequenciais, histórico técnico por ativo e checklist pós-reparo;
 - `SW1–SW5/SW7` fluxo de software com versão, ambiente, plataforma/sistema operacional, reprodução, resultados e logs estruturados;
+- `INC1` incidentes operacionais com severidade, status, serviço afetado e vínculos opcionais a chamados;
+- `N1` notificações privadas por usuário, leitura individual/coletiva e eventos de chamados e incidentes;
+- `AN3` exportações CSV de chamados, ativos e incidentes exclusivas do gerente;
+- `RT1` atualizações autenticadas em tempo real por SSE para notificações, chamados, comentários e incidentes;
 - testes automatizados do backend e integração frontend/backend validada localmente.
 
 ### Parcialmente implementado
@@ -108,12 +112,14 @@ Software:
 
 Os dados especializados aparecem apenas no tipo de chamado correspondente. O cliente proprietário pode manter os detalhes de software, enquanto ações operacionais de hardware e inclusão de logs exigem o técnico atribuído ou um gerente. O bloco não adiciona diagnóstico `HW2`, RMA, peças, logística, QR, correlação `SW6`, base de erros ou incidentes de software.
 
-### 6. Operação, comunicação e relatórios
+### 6. Operação, comunicação e relatórios — concluído
 
-- `INC1` gestão geral de incidentes;
-- `N1` notificações dentro do sistema;
-- `AN3` exportação de relatórios;
-- `RT1` atualizações em tempo real.
+- `INC1` gestão geral de incidentes — concluído;
+- `N1` notificações dentro do sistema — concluído;
+- `AN3` exportação de relatórios — concluído;
+- `RT1` atualizações em tempo real — concluído com SSE autenticado por Bearer Token.
+
+Incidentes são operacionais: técnicos consultam e gerentes criam ou atualizam. As notificações pertencem exclusivamente ao destinatário, não usam e-mail e apontam para o recurso relacionado. As exportações são geradas em UTF-8 pela API Spring, sem acesso do frontend ao banco.
 
 ### 7. Segurança e documentação da API
 
@@ -129,8 +135,8 @@ Os dados especializados aparecem apenas no tipo de chamado correspondente. O cli
 
 ### 9. Banco remoto e ambiente de entrega
 
-- criar migration controlada para alinhar o PostgreSQL/Supabase ao schema atual;
-- validar índices, constraints, RLS e acesso exclusivo pela API Spring;
+- migrations controladas alinharam o PostgreSQL/Supabase ao schema atual;
+- índices, constraints, RLS e acesso exclusivo pela API Spring foram validados;
 - manter em aberto as decisões de ambientes e hospedagem que ainda não foram aprovadas.
 
 ## Arquitetura futura do frontend

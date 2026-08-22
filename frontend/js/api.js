@@ -84,7 +84,7 @@ const api = {
 
     async request(endpoint, options = {}) {
         const url = `${this.BASE_URL}${endpoint}`;
-        const { publicRequest, ...fetchOptions } = options;
+        const { publicRequest, rawResponse, ...fetchOptions } = options;
         const headers = { ...fetchOptions.headers };
 
         // Adiciona Content-Type json se houver body em formato string JSON
@@ -147,6 +147,8 @@ const api = {
             // Retorna vazio para 204 No Content
             if (response.status === 204) return {};
 
+            if (rawResponse) return response;
+
             // Pode haver retorno sem conteúdo, catch evita quebrar
             return await response.json().catch(() => ({}));
         } catch (error) {
@@ -165,6 +167,10 @@ const api = {
             body: JSON.stringify({ email, password }),
             publicRequest: true
         });
+    },
+
+    async download(endpoint) {
+        return this.request(endpoint, { rawResponse: true });
     }
 };
 

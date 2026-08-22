@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Gestão de incidentes operacionais do Speed Desk.">
+    <title>Incidentes — Speed Desk</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css?v=20260822.1">
+    <script>(()=>{const t=localStorage.getItem('speeddesk-theme');const v=t==='light'||t==='dark'?t:(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');document.documentElement.dataset.theme=v;document.documentElement.style.colorScheme=v;})();</script>
+</head>
+<body>
+    <div class="velocity-background" aria-hidden="true"><div class="velocity-lines"></div></div>
+    <div class="app-shell">
+        <aside class="sidebar" id="sidebar-container"></aside>
+        <div class="main-column">
+            <header class="topbar">
+                <div class="topbar-start">
+                    <button id="mobileMenuBtn" class="icon-button mobile-menu-button" type="button" aria-label="Abrir menu"><svg class="icon" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"></path></svg></button>
+                    <span class="topbar-context">Central de operações</span>
+                </div>
+                <div class="topbar-actions">
+                    <button class="icon-button notification-button" type="button" aria-label="Notificações"><svg class="icon" viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.7 21a2 2 0 0 1-3.4 0"></path></svg><span class="notification-dot"></span></button>
+                    <button id="toggleThemeBtn" class="icon-button" type="button" aria-label="Alternar tema"><svg class="icon theme-icon theme-icon-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M2 12h2M20 12h2"></path></svg><svg class="icon theme-icon theme-icon-moon" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg></button>
+                    <div class="topbar-profile"><span class="user-avatar" data-topbar-avatar></span><span class="topbar-user-copy"><span class="topbar-user-name" data-topbar-name>Usuário</span><span class="topbar-user-status">Sessão ativa</span></span></div>
+                </div>
+            </header>
+            <main class="content">
+                <header class="page-heading">
+                    <div class="page-heading-main"><div class="page-title-row"><h1 class="page-title">Incidentes</h1><span class="live-badge">Tempo real</span></div><p class="page-description">Centralize indisponibilidades, serviços afetados e chamados relacionados.</p></div>
+                    <button id="newIncidentButton" class="btn btn-primary" type="button" hidden><svg class="icon" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"></path></svg>Novo incidente</button>
+                </header>
+
+                <section class="page-card operational-filter-card">
+                    <form id="incidentFilters" class="operational-filter-grid">
+                        <label class="filter-search"><span class="form-label">Busca</span><input id="incidentQuery" class="form-control" type="search" placeholder="Título, descrição ou serviço..."></label>
+                        <label><span class="form-label">Status</span><select id="incidentStatusFilter" class="form-control"><option value="">Todos</option><option value="ABERTO">Aberto</option><option value="INVESTIGANDO">Investigando</option><option value="MONITORANDO">Monitorando</option><option value="RESOLVIDO">Resolvido</option></select></label>
+                        <label><span class="form-label">Severidade</span><select id="incidentSeverityFilter" class="form-control"><option value="">Todas</option><option value="CRITICA">Crítica</option><option value="ALTA">Alta</option><option value="MEDIA">Média</option><option value="BAIXA">Baixa</option></select></label>
+                        <button id="clearIncidentFilters" class="btn btn-secondary" type="button">Limpar</button>
+                    </form>
+                </section>
+
+                <div id="incidentStatus" class="list-status loading" role="status" aria-live="polite">Carregando incidentes...</div>
+                <section id="incidentList" class="incident-grid" aria-live="polite" aria-busy="true"></section>
+            </main>
+        </div>
+    </div>
+
+    <div id="incidentModal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="incidentModalTitle" aria-hidden="true" inert hidden>
+        <div class="modal-content incident-modal-content">
+            <div class="modal-header"><div><h2 id="incidentModalTitle">Novo incidente</h2><p class="modal-description">Registre o impacto operacional e relacione os chamados afetados.</p></div><button id="closeIncidentModal" class="modal-close" type="button" aria-label="Fechar">&times;</button></div>
+            <form id="incidentForm" class="incident-form" novalidate>
+                <input id="incidentId" type="hidden">
+                <div class="form-group form-span-2"><label class="form-label" for="incidentTitle">Título</label><input id="incidentTitle" class="form-control" maxlength="180" required></div>
+                <div class="form-group"><label class="form-label" for="incidentService">Serviço afetado</label><input id="incidentService" class="form-control" maxlength="160" required></div>
+                <div class="form-group"><label class="form-label" for="incidentStartedAt">Início</label><input id="incidentStartedAt" class="form-control" type="datetime-local" required></div>
+                <div class="form-group"><label class="form-label" for="incidentSeverity">Severidade</label><select id="incidentSeverity" class="form-control" required><option value="MEDIA">Média</option><option value="BAIXA">Baixa</option><option value="ALTA">Alta</option><option value="CRITICA">Crítica</option></select></div>
+                <div class="form-group"><label class="form-label" for="incidentState">Status</label><select id="incidentState" class="form-control" required><option value="ABERTO">Aberto</option><option value="INVESTIGANDO">Investigando</option><option value="MONITORANDO">Monitorando</option><option value="RESOLVIDO">Resolvido</option></select></div>
+                <div class="form-group form-span-2"><label class="form-label" for="incidentDescription">Descrição</label><textarea id="incidentDescription" class="form-control" rows="5" maxlength="10000" required></textarea></div>
+                <div class="form-group form-span-2"><label class="form-label" for="incidentTickets">Chamados relacionados <span class="field-optional">opcional</span></label><select id="incidentTickets" class="form-control incident-ticket-select" multiple size="5"></select><span class="form-hint">Use Ctrl para selecionar mais de um chamado.</span></div>
+                <div id="incidentFeedback" class="feedback form-span-2" role="alert" hidden></div>
+                <div class="modal-actions form-span-2"><button id="cancelIncident" class="btn btn-secondary" type="button">Cancelar</button><button id="saveIncident" class="btn btn-primary" type="submit">Salvar incidente</button></div>
+            </form>
+        </div>
+    </div>
+    <div id="incidentToastRegion" class="toast-region" role="status" aria-live="polite"></div>
+    <script type="module" src="js/navigation.js?v=20260822.1"></script>
+    <script type="module" src="js/incidentes.js?v=20260822.1"></script>
+</body>
+</html>

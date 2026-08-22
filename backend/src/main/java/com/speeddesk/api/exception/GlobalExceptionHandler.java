@@ -111,7 +111,9 @@ public class GlobalExceptionHandler {
             AssetNotFoundException.class,
             UserNotFoundException.class,
             OrganizationNotFoundException.class,
-            TicketCategoryNotFoundException.class
+            TicketCategoryNotFoundException.class,
+            IncidentNotFoundException.class,
+            NotificationNotFoundException.class
     })
     public ResponseEntity<ProblemDetail> handleNotFound(
             RuntimeException exception,

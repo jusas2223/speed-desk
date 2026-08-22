@@ -22,6 +22,8 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     List<User> findAllByOrderByNameAsc();
 
+    List<User> findAllByRoleAndActiveTrue(UserRole role);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select user from User user where user.id = :id")
     Optional<User> findByIdForUpdate(@Param("id") UUID id);

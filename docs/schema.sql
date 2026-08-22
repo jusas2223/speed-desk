@@ -366,6 +366,75 @@ CREATE TABLE ticket_software_logs (
         FOREIGN KEY (ticket_id) REFERENCES tickets (id) ON DELETE CASCADE
 );
 
+CREATE TABLE incidents (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    title VARCHAR(180) NOT NULL,
+    description TEXT NOT NULL,
+    affected_service VARCHAR(160) NOT NULL,
+    severity VARCHAR(30) NOT NULL
+        CHECK (severity IN ('BAIXA', 'MEDIA', 'ALTA', 'CRITICA')),
+    status VARCHAR(30) NOT NULL DEFAULT 'ABERTO'
+        CHECK (status IN ('ABERTO', 'INVESTIGANDO', 'MONITORANDO', 'RESOLVIDO')),
+    created_by UUID NOT NULL,
+    started_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    resolved_at TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    version BIGINT NOT NULL DEFAULT 0 CHECK (version >= 0),
+    CONSTRAINT chk_incidents_title
+        CHECK (CHAR_LENGTH(BTRIM(title)) BETWEEN 1 AND 180),
+    CONSTRAINT chk_incidents_description
+        CHECK (CHAR_LENGTH(BTRIM(description)) BETWEEN 1 AND 10000),
+    CONSTRAINT chk_incidents_affected_service
+        CHECK (CHAR_LENGTH(BTRIM(affected_service)) BETWEEN 1 AND 160),
+    CONSTRAINT chk_incidents_dates
+        CHECK (
+            updated_at >= created_at
+            AND (resolved_at IS NULL OR resolved_at >= started_at)
+        ),
+    CONSTRAINT fk_incidents_created_by
+        FOREIGN KEY (created_by) REFERENCES users (id) ON DELETE RESTRICT
+);
+
+CREATE TABLE incident_tickets (
+    incident_id UUID NOT NULL,
+    ticket_id UUID NOT NULL,
+    PRIMARY KEY (incident_id, ticket_id),
+    CONSTRAINT fk_incident_tickets_incident
+        FOREIGN KEY (incident_id) REFERENCES incidents (id) ON DELETE CASCADE,
+    CONSTRAINT fk_incident_tickets_ticket
+        FOREIGN KEY (ticket_id) REFERENCES tickets (id) ON DELETE CASCADE
+);
+
+CREATE TABLE notifications (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    recipient_id UUID NOT NULL,
+    type VARCHAR(40) NOT NULL
+        CHECK (type IN (
+            'TICKET_CREATED',
+            'TICKET_ASSIGNED',
+            'TICKET_STATUS_CHANGED',
+            'COMMENT_ADDED',
+            'INTERNAL_NOTE_ADDED',
+            'SLA_RISK',
+            'INCIDENT_CREATED',
+            'INCIDENT_UPDATED',
+            'SYSTEM'
+        )),
+    title VARCHAR(180) NOT NULL,
+    message VARCHAR(500) NOT NULL,
+    resource_type VARCHAR(40),
+    resource_id UUID,
+    read_at TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT chk_notifications_title
+        CHECK (CHAR_LENGTH(BTRIM(title)) BETWEEN 1 AND 180),
+    CONSTRAINT chk_notifications_message
+        CHECK (CHAR_LENGTH(BTRIM(message)) BETWEEN 1 AND 500),
+    CONSTRAINT fk_notifications_recipient
+        FOREIGN KEY (recipient_id) REFERENCES users (id) ON DELETE CASCADE
+);
+
 CREATE INDEX idx_users_organization_id
     ON users (organization_id);
 
@@ -426,6 +495,25 @@ CREATE INDEX idx_hardware_post_repair_checklists_completed_by
 CREATE INDEX idx_ticket_software_logs_ticket_occurred_at
     ON ticket_software_logs (ticket_id, occurred_at DESC, id DESC);
 
+CREATE INDEX idx_incidents_started_at
+    ON incidents (started_at DESC);
+
+CREATE INDEX idx_incidents_status_severity
+    ON incidents (status, severity, started_at DESC);
+
+CREATE INDEX idx_incidents_created_by
+    ON incidents (created_by);
+
+CREATE INDEX idx_incident_tickets_ticket
+    ON incident_tickets (ticket_id, incident_id);
+
+CREATE INDEX idx_notifications_recipient_created_at
+    ON notifications (recipient_id, created_at DESC);
+
+CREATE INDEX idx_notifications_recipient_unread
+    ON notifications (recipient_id, created_at DESC)
+    WHERE read_at IS NULL;
+
 ALTER TABLE organizations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE password_reset_tokens ENABLE ROW LEVEL SECURITY;
@@ -440,9 +528,13 @@ ALTER TABLE hardware_maintenance_history ENABLE ROW LEVEL SECURITY;
 ALTER TABLE hardware_post_repair_checklists ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ticket_software_details ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ticket_software_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE incidents ENABLE ROW LEVEL SECURITY;
+ALTER TABLE incident_tickets ENABLE ROW LEVEL SECURITY;
+ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
 
 -- O frontend acessa os dados somente pela API Spring. Os grants e a policy
 -- exclusiva do role JDBC speeddesk_app ficam em supabase-access.sql para que
 -- nenhuma senha faça parte deste schema. anon e authenticated permanecem sem
 -- policy; hashes de recuperação, notas internas, registros operacionais de
--- SLA, manutenção e logs técnicos não são expostos pela Data API.
+-- SLA, manutenção, incidentes, notificações e logs técnicos não são expostos
+-- pela Data API.

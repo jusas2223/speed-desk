@@ -4,6 +4,7 @@ import com.speeddesk.api.dto.TicketCommentRequestDTO;
 import com.speeddesk.api.dto.TicketCommentResponseDTO;
 import com.speeddesk.api.entity.Ticket;
 import com.speeddesk.api.entity.TicketComment;
+import com.speeddesk.api.entity.NotificationType;
 import com.speeddesk.api.entity.User;
 import com.speeddesk.api.entity.UserRole;
 import com.speeddesk.api.exception.ForbiddenOperationException;
@@ -21,6 +22,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -31,6 +34,8 @@ public class TicketCommentService {
     private final TicketRepository ticketRepository;
     private final UserRepository userRepository;
     private final AuthorizationService authorizationService;
+    private final NotificationService notificationService;
+    private final RealtimeService realtimeService;
     private final Clock clock;
 
     @Transactional(readOnly = true)
@@ -76,7 +81,44 @@ public class TicketCommentService {
                 .createdAt(OffsetDateTime.now(clock))
                 .build();
 
-        return TicketCommentResponseDTO.from(ticketCommentRepository.saveAndFlush(comment));
+        TicketCommentResponseDTO response = TicketCommentResponseDTO.from(
+                ticketCommentRepository.saveAndFlush(comment)
+        );
+        Set<UUID> recipients = new LinkedHashSet<>();
+        if (request.internal()) {
+            if (ticket.getTecnico() != null) recipients.add(ticket.getTecnico().getId());
+        } else {
+            recipients.add(ticket.getCliente().getId());
+            if (ticket.getTecnico() != null) recipients.add(ticket.getTecnico().getId());
+        }
+        notificationService.notifyUsers(
+                recipients,
+                currentUser.id(),
+                request.internal()
+                        ? NotificationType.INTERNAL_NOTE_ADDED
+                        : NotificationType.COMMENT_ADDED,
+                request.internal() ? "Nova nota interna" : "Novo comentário no chamado",
+                ticket.getTitulo(),
+                "TICKET",
+                ticket.getId()
+        );
+        if (request.internal()) {
+            notificationService.notifyRole(
+                    UserRole.GERENTE,
+                    currentUser.id(),
+                    NotificationType.INTERNAL_NOTE_ADDED,
+                    "Nova nota interna",
+                    ticket.getTitulo(),
+                    "TICKET",
+                    ticket.getId()
+            );
+        }
+        recipients.forEach(recipientId -> realtimeService.publishAfterCommit(
+                recipientId,
+                "comment-added",
+                response
+        ));
+        return response;
     }
 
     private Ticket requireTicket(UUID ticketId) {

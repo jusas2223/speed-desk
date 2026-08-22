@@ -126,11 +126,19 @@ Os logs técnicos estruturados usam `DEBUG`, `INFO`, `WARN` ou `ERROR`, origem, 
 
 ## RLS e Data API do Supabase
 
-O PostgreSQL remoto foi sincronizado por migrations controladas em 22 de agosto de 2026. As 14 tabelas da aplicação estão com RLS habilitado. Cada uma possui a policy `speeddesk_backend_access`, destinada exclusivamente ao role JDBC `speeddesk_app`; esse role recebe somente conexão, uso do schema e operações de dados necessárias ao backend. Ele não possui privilégios de superusuário, criação de banco, criação de role ou alteração de schema.
+O PostgreSQL remoto foi sincronizado por migrations controladas em 22 de agosto de 2026. As 17 tabelas da aplicação estão com RLS habilitado. Cada uma possui a policy `speeddesk_backend_access`, destinada exclusivamente ao role JDBC `speeddesk_app`; esse role recebe somente conexão, uso do schema e operações de dados necessárias ao backend. Ele não possui privilégios de superusuário, criação de banco, criação de role ou alteração de schema.
 
 `anon` e `authenticated` não aparecem em nenhuma policy da aplicação. Portanto, a Data API continua bloqueada, e o frontend acessa dados somente pela API Spring. Nenhuma chave `service_role`, senha JDBC ou segredo JWT deve ser exposto no navegador. A senha do role `speeddesk_app` é criada fora das migrations e mantida apenas como variável de ambiente local ou do runtime.
 
 O script reproduzível sem segredo está em `docs/supabase-access.sql`. Novas tabelas devem receber RLS, grants para `speeddesk_app` e a mesma policy na migration que as criar. Detalhes, checklists, históricos e logs são removidos por `ON DELETE CASCADE` quando o chamado é excluído; usuários responsáveis continuam protegidos por `ON DELETE RESTRICT`. Índices acompanham os acessos por ticket, ativo, data de manutenção e ocorrência do log, e o serial do ativo usa índice único sobre `LOWER(serial_tag)`.
+
+## Incidentes, notificações, relatórios e tempo real
+
+As rotas de incidentes aceitam leitura apenas de `TECNICO` e `GERENTE`; criação e alteração são exclusivas de `GERENTE`. O vínculo N:N com chamados é opcional e não amplia a autorização de leitura do chamado. Incidentes removidos limpam somente seus vínculos, e o criador permanece protegido por `ON DELETE RESTRICT`.
+
+Cada notificação possui um único destinatário. Consulta, contagem e marcação de leitura derivam o usuário exclusivamente do JWT; não existe parâmetro de destinatário controlado pelo cliente. A exclusão administrativa do usuário remove suas notificações por `ON DELETE CASCADE`. O frontend recebe eventos por `GET /api/realtime/stream` usando o Bearer Token no cabeçalho e reconecta sem colocar o JWT na URL.
+
+As exportações `/api/reports/*.csv` são exclusivas de `GERENTE`, geradas em UTF-8 pela API Java e entregues com `Cache-Control: no-store`. O frontend nunca recebe credenciais do Supabase e não consulta a Data API diretamente.
 
 ## Desenvolvimento offline com o perfil `localdev`
 

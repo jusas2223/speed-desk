@@ -105,6 +105,17 @@ public class SecurityConfig {
                                 HttpMethod.PUT,
                                 "/api/sla-policies/*"
                         ).hasAuthority(authority(UserRole.GERENTE))
+                        .requestMatchers(HttpMethod.POST, "/api/incidents")
+                        .hasAuthority(authority(UserRole.GERENTE))
+                        .requestMatchers(HttpMethod.PUT, "/api/incidents/*")
+                        .hasAuthority(authority(UserRole.GERENTE))
+                        .requestMatchers(HttpMethod.GET, "/api/incidents/**")
+                        .hasAnyAuthority(
+                                authority(UserRole.TECNICO),
+                                authority(UserRole.GERENTE)
+                        )
+                        .requestMatchers("/api/reports/**")
+                        .hasAuthority(authority(UserRole.GERENTE))
                         .requestMatchers("/api/**").authenticated()
                         .anyRequest().denyAll())
                 .exceptionHandling(exceptions -> exceptions

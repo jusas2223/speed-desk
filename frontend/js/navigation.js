@@ -1,5 +1,6 @@
 import api from './api.js';
 import { bindThemeToggle, initializeTheme } from './theme.js';
+import { startRealtime } from './realtime.js';
 
 const ICONS = Object.freeze({
     panel: '<rect x="3" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="3" width="7" height="7" rx="1"></rect><rect x="3" y="14" width="7" height="7" rx="1"></rect><rect x="14" y="14" width="7" height="7" rx="1"></rect>',
@@ -60,7 +61,7 @@ const MENU_ITEMS = Object.freeze({
         },
         { label: 'Hardware', icon: 'hardware', href: 'chamados.html?ticketType=HARDWARE' },
         { label: 'Software', icon: 'software', href: 'chamados.html?ticketType=SOFTWARE' },
-        { label: 'Incidentes', icon: 'incident', future: true }
+        { label: 'Incidentes', icon: 'incident', href: 'incidentes.html', page: 'incidentes.html' }
     ],
     GERENTE: [
         { label: 'Painel', icon: 'panel', href: 'dashboard.html', page: 'dashboard.html' },
@@ -78,14 +79,14 @@ const MENU_ITEMS = Object.freeze({
             href: 'assets.html',
             pages: ['assets.html', 'ativo.html']
         },
-        { label: 'Incidentes', icon: 'incident', future: true },
-        { label: 'Relatórios', icon: 'report', future: true },
+        { label: 'Incidentes', icon: 'incident', href: 'incidentes.html', page: 'incidentes.html' },
+        { label: 'Relatórios', icon: 'report', href: 'relatorios.html', page: 'relatorios.html' },
         { label: 'Configurações', icon: 'settings', href: 'configuracoes.html', page: 'configuracoes.html' }
     ]
 });
 
 const ACCOUNT_ITEMS = Object.freeze([
-    { label: 'Notificações', icon: 'bell', future: true },
+    { label: 'Notificações', icon: 'bell', href: 'notificacoes.html', page: 'notificacoes.html', notifications: true },
     { label: 'Meu perfil', icon: 'profile', href: 'perfil.html', page: 'perfil.html' },
     { label: 'Assistente IA', icon: 'bot', future: true },
     { label: 'Sair', icon: 'logout', logout: true }
@@ -140,6 +141,14 @@ function createNavigationItem(item, currentPage) {
         count.className = 'nav-count';
         count.dataset.ticketNavCount = '';
         count.textContent = sessionStorage.getItem(TICKET_COUNT_STORAGE_KEY) || '0';
+        element.appendChild(count);
+    }
+
+    if (item.notifications) {
+        const count = document.createElement('span');
+        count.className = 'nav-count';
+        count.dataset.notificationCount = '';
+        count.hidden = true;
         element.appendChild(count);
     }
 
@@ -263,6 +272,29 @@ export function updateTicketNavigationCount(value) {
     });
 }
 
+function renderNotificationCount(value) {
+    const count = Math.max(0, Number(value) || 0);
+    document.querySelectorAll('[data-notification-count]').forEach(element => {
+        element.textContent = count > 99 ? '99+' : String(count);
+        element.hidden = count === 0;
+    });
+    document.querySelectorAll('.notification-button').forEach(button => {
+        button.classList.toggle('has-notifications', count > 0);
+        button.setAttribute('aria-label', count > 0
+            ? `${count} notificação(ões) não lida(s)`
+            : 'Notificações');
+    });
+}
+
+async function initializeNotifications() {
+    try {
+        const summary = await api.request('/notifications/summary');
+        renderNotificationCount(summary.unreadCount);
+    } catch (error) {
+        console.warn('Resumo de notificações indisponível:', error.message);
+    }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     initializeTheme();
 
@@ -276,6 +308,21 @@ document.addEventListener('DOMContentLoaded', () => {
     populateTopbar(session);
     bindThemeToggle(document.getElementById('toggleThemeBtn'));
     bindMobileNavigation(sidebar);
+    startRealtime(session);
+    initializeNotifications();
+
+    document.querySelectorAll('.notification-button').forEach(button => {
+        button.disabled = false;
+        button.title = 'Abrir notificações';
+        button.addEventListener('click', () => {
+            window.location.href = 'notificacoes.html';
+        });
+    });
+
+    window.addEventListener('speeddesk:realtime', event => {
+        if (event.detail?.eventName === 'notification') initializeNotifications();
+        if (event.detail?.eventName === 'notifications-read') renderNotificationCount(0);
+    });
 
     const logoutButton = document.getElementById('logoutBtn');
     logoutButton?.addEventListener('click', event => {

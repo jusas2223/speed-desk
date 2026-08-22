@@ -236,13 +236,13 @@ Os testes automatizados usam H2 em memória e não tentam conectar ao Supabase.
 
 O H2 atende ao desenvolvimento offline, especialmente no ambiente de rede da faculdade. O PostgreSQL hospedado no Supabase continua sendo o banco remoto oficial do projeto e é usado pelo perfil padrão por meio das variáveis `SPEEDDESK_DB_*`.
 
-O projeto remoto `ProjetoSpeedDesk` foi sincronizado em 22 de agosto de 2026 por migrations controladas. Ele possui as 14 tabelas atuais, RLS habilitado e uma policy exclusiva para o role JDBC `speeddesk_app`; os roles da Data API não recebem acesso. O arquivo `docs/schema.sql` continua sendo a representação PostgreSQL de referência, e `docs/supabase-access.sql` documenta os grants e policies do backend sem conter senha.
+O projeto remoto `ProjetoSpeedDesk` foi sincronizado em 22 de agosto de 2026 por migrations controladas. Ele possui as 17 tabelas atuais, RLS habilitado e uma policy exclusiva para o role JDBC `speeddesk_app`; os roles da Data API não recebem acesso. O arquivo `docs/schema.sql` continua sendo a representação PostgreSQL de referência, e `docs/supabase-access.sql` documenta os grants e policies do backend sem conter senha.
 
 As decisões definitivas sobre separação de ambientes, publicação do frontend e implantação do backend continuam em aberto. Novas alterações estruturais devem ser aplicadas como migrations antes de iniciar o perfil padrão, que usa `spring.jpa.hibernate.ddl-auto=validate` e nunca modifica o schema automaticamente.
 
 ## Roadmap
 
-- implementar notificações, incidentes, exportações, tempo real, PWA e IA;
+- implementar PWA e os dois recursos de IA;
 - adicionar idempotência, limite de requisições e documentação OpenAPI/Swagger;
 - definir a estratégia final de ambientes e manter o schema remoto sincronizado por migrations controladas.
 

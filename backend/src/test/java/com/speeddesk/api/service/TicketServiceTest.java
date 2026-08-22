@@ -64,6 +64,8 @@ class TicketServiceTest {
     private TicketSlaPauseRepository ticketSlaPauseRepository;
     private SlaPolicyService slaPolicyService;
     private AuthorizationService authorizationService;
+    private NotificationService notificationService;
+    private RealtimeService realtimeService;
     private TicketService ticketService;
 
     @BeforeEach
@@ -75,6 +77,13 @@ class TicketServiceTest {
         ticketSlaPauseRepository = mock(TicketSlaPauseRepository.class);
         slaPolicyService = mock(SlaPolicyService.class);
         authorizationService = mock(AuthorizationService.class);
+        notificationService = mock(NotificationService.class);
+        realtimeService = mock(RealtimeService.class);
+        when(authorizationService.currentUser()).thenReturn(new AuthenticatedUser(
+                UUID.randomUUID(),
+                "actor@speeddesk.local",
+                UserRole.GERENTE
+        ));
         when(slaPolicyService.snapshot(any(TicketPriority.class)))
                 .thenAnswer(invocation -> SlaPolicyService.defaults(
                         invocation.getArgument(0)
@@ -87,6 +96,8 @@ class TicketServiceTest {
                 ticketSlaPauseRepository,
                 slaPolicyService,
                 authorizationService,
+                notificationService,
+                realtimeService,
                 Clock.fixed(NOW, ZoneOffset.UTC)
         );
     }

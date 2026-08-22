@@ -3,6 +3,7 @@ package com.speeddesk.api.service;
 import com.speeddesk.api.dto.TicketRequestDTO;
 import com.speeddesk.api.dto.TicketResponseDTO;
 import com.speeddesk.api.entity.Asset;
+import com.speeddesk.api.entity.NotificationType;
 import com.speeddesk.api.entity.Ticket;
 import com.speeddesk.api.entity.TicketCategory;
 import com.speeddesk.api.entity.TicketPriority;
@@ -59,6 +60,8 @@ public class TicketService {
     private final TicketSlaPauseRepository ticketSlaPauseRepository;
     private final SlaPolicyService slaPolicyService;
     private final AuthorizationService authorizationService;
+    private final NotificationService notificationService;
+    private final RealtimeService realtimeService;
     private final Clock clock;
 
     @Transactional
@@ -102,7 +105,27 @@ public class TicketService {
                 .slaWarningMinutes(sla.warningMinutes())
                 .build();
 
-        return saveAndRespond(ticket);
+        TicketResponseDTO response = saveAndRespond(ticket);
+        UUID actorId = authorizationService.currentUser().id();
+        notificationService.notifyRole(
+                UserRole.GERENTE,
+                actorId,
+                NotificationType.TICKET_CREATED,
+                "Novo chamado recebido",
+                ticket.getTitulo(),
+                "TICKET",
+                ticket.getId()
+        );
+        notificationService.notifyUsers(
+                Set.of(cliente.getId()),
+                actorId,
+                NotificationType.TICKET_CREATED,
+                "Chamado criado",
+                ticket.getTitulo(),
+                "TICKET",
+                ticket.getId()
+        );
+        return response;
     }
 
     private TicketCategory resolveCategory(UUID categoryId, TicketType ticketType) {
@@ -214,7 +237,18 @@ public class TicketService {
         ticket.setTecnico(tecnico);
         applyTransition(ticket, TicketStatus.EM_ATENDIMENTO, OffsetDateTime.now(clock));
 
-        return saveAndRespond(ticket);
+        TicketResponseDTO response = saveAndRespond(ticket);
+        notificationService.notifyUsers(
+                Set.of(tecnico.getId()),
+                authorizationService.currentUser().id(),
+                NotificationType.TICKET_ASSIGNED,
+                "Chamado atribuído a você",
+                ticket.getTitulo(),
+                "TICKET",
+                ticket.getId()
+        );
+        notifyTicketParticipants(ticket, "Chamado em atendimento");
+        return response;
     }
 
     @Transactional
@@ -223,7 +257,9 @@ public class TicketService {
                 .orElseThrow(() -> new TicketNotFoundException(ticketId));
         authorizationService.requireCanResolve(ticket);
         applyTransition(ticket, TicketStatus.RESOLVIDO, OffsetDateTime.now(clock));
-        return saveAndRespond(ticket);
+        TicketResponseDTO response = saveAndRespond(ticket);
+        notifyTicketParticipants(ticket, "Chamado resolvido");
+        return response;
     }
 
     @Transactional
@@ -231,7 +267,9 @@ public class TicketService {
         Ticket ticket = findTicket(ticketId);
         authorizationService.requireCanOperate(ticket);
         applyTransition(ticket, targetStatus, OffsetDateTime.now(clock));
-        return saveAndRespond(ticket);
+        TicketResponseDTO response = saveAndRespond(ticket);
+        notifyTicketParticipants(ticket, "Status do chamado atualizado");
+        return response;
     }
 
     @Transactional
@@ -251,7 +289,9 @@ public class TicketService {
             ticket.setResolvedAt(now);
         }
         ticket.setClosedAt(now);
-        return saveAndRespond(ticket);
+        TicketResponseDTO response = saveAndRespond(ticket);
+        notifyTicketParticipants(ticket, "Chamado fechado");
+        return response;
     }
 
     @Transactional
@@ -281,7 +321,9 @@ public class TicketService {
         ticket.setSlaPaused(false);
         ticket.setSlaPausedAt(null);
         ticket.setDataVencimento(now.plusMinutes(ticket.getSlaDurationMinutes()));
-        return saveAndRespond(ticket);
+        TicketResponseDTO response = saveAndRespond(ticket);
+        notifyTicketParticipants(ticket, "Chamado reaberto");
+        return response;
     }
 
     @Transactional
@@ -418,7 +460,41 @@ public class TicketService {
     private TicketResponseDTO saveAndRespond(Ticket ticket) {
         Ticket saved = ticketRepository.save(ticket);
         ticketRepository.flush();
-        return response(saved);
+        TicketResponseDTO response = response(saved);
+        realtimeService.publishAfterCommit(
+                saved.getCliente().getId(),
+                "ticket-changed",
+                response
+        );
+        if (saved.getTecnico() != null) {
+            realtimeService.publishAfterCommit(
+                    saved.getTecnico().getId(),
+                    "ticket-changed",
+                    response
+            );
+        }
+        realtimeService.publishToRoleAfterCommit(
+                UserRole.GERENTE,
+                null,
+                "ticket-changed",
+                response
+        );
+        return response;
+    }
+
+    private void notifyTicketParticipants(Ticket ticket, String title) {
+        Set<UUID> recipients = new java.util.LinkedHashSet<>();
+        recipients.add(ticket.getCliente().getId());
+        if (ticket.getTecnico() != null) recipients.add(ticket.getTecnico().getId());
+        notificationService.notifyUsers(
+                recipients,
+                authorizationService.currentUser().id(),
+                NotificationType.TICKET_STATUS_CHANGED,
+                title,
+                ticket.getTitulo(),
+                "TICKET",
+                ticket.getId()
+        );
     }
 
     private static Map<TicketStatus, Set<TicketStatus>> allowedTransitions() {
