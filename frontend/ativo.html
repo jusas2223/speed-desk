@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Detalhes, garantia e histórico técnico de um ativo do Speed Desk.">
+    <title>Detalhes do ativo — Speed Desk</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css?v=20260821.4">
+    <link rel="stylesheet" href="css/assets.css?v=20260821.1">
+    <script>
+        (() => {
+            const savedTheme = localStorage.getItem('speeddesk-theme');
+            const preferredTheme = savedTheme === 'light' || savedTheme === 'dark'
+                ? savedTheme
+                : (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+            document.documentElement.dataset.theme = preferredTheme;
+            document.documentElement.style.colorScheme = preferredTheme;
+        })();
+    </script>
+</head>
+<body>
+    <div class="velocity-background" aria-hidden="true"><div class="velocity-lines"></div></div>
+
+    <div class="app-shell">
+        <aside class="sidebar" id="sidebar-container"></aside>
+
+        <div class="main-column">
+            <header class="topbar">
+                <div class="topbar-start">
+                    <button id="mobileMenuBtn" class="icon-button mobile-menu-button" type="button" aria-label="Abrir menu" aria-expanded="false">
+                        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"></path></svg>
+                    </button>
+                    <div class="topbar-context">
+                        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="13" rx="2"></rect><path d="M8 21h8M12 18v3"></path></svg>
+                        <span>Ficha do ativo</span>
+                    </div>
+                </div>
+                <div class="topbar-actions">
+                    <button id="toggleThemeBtn" class="icon-button" type="button" aria-label="Alternar tema claro e escuro">
+                        <svg class="icon theme-icon theme-icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.66 6.34l1.41-1.41"></path></svg>
+                        <svg class="icon theme-icon theme-icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+                    </button>
+                    <div class="topbar-profile">
+                        <span class="user-avatar" data-topbar-avatar></span>
+                        <span class="topbar-user-copy">
+                            <span class="topbar-user-name" data-topbar-name>Usuário</span>
+                            <span class="topbar-user-status">Sessão ativa</span>
+                        </span>
+                    </div>
+                </div>
+            </header>
+
+            <main class="content asset-detail-page">
+                <div class="asset-detail-toolbar">
+                    <a class="btn btn-secondary btn-compact" href="assets.html">
+                        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"></path></svg>
+                        Voltar aos ativos
+                    </a>
+                    <button id="editAssetBtn" class="btn btn-primary btn-compact" type="button" hidden>
+                        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4z"></path></svg>
+                        Editar ativo
+                    </button>
+                </div>
+
+                <section id="assetDetailLoading" class="page-card asset-detail-state" aria-live="polite">
+                    <span class="asset-detail-loader" aria-hidden="true"></span>
+                    <strong>Carregando ficha do ativo...</strong>
+                </section>
+
+                <section id="assetDetailError" class="page-card asset-detail-state is-error" hidden>
+                    <span class="asset-detail-state-icon" aria-hidden="true">!</span>
+                    <h1>Não foi possível abrir este ativo</h1>
+                    <p id="assetDetailErrorMessage">Confira o endereço e tente novamente.</p>
+                    <a class="btn btn-secondary" href="assets.html">Voltar ao inventário</a>
+                </section>
+
+                <div id="assetDetailContent" class="asset-detail-layout" hidden>
+                    <div class="asset-detail-main">
+                        <article class="page-card asset-detail-card">
+                            <header class="asset-detail-hero">
+                                <div class="asset-detail-eyebrow">
+                                    <span id="assetTypeBadge" class="asset-type-badge tone-brand">Ativo</span>
+                                    <span id="assetStatusBadge" class="asset-status-badge">Situação</span>
+                                </div>
+                                <h1 id="assetModelTitle">Ativo</h1>
+                                <p id="assetHeroMeta">Dados de inventário</p>
+                                <code id="assetIdCode" class="asset-id-code"></code>
+                            </header>
+
+                            <section class="asset-detail-section" aria-labelledby="inventoryTitle">
+                                <div class="asset-section-heading">
+                                    <span class="asset-section-icon" aria-hidden="true">
+                                        <svg class="icon" viewBox="0 0 24 24"><path d="M4 4h16v16H4zM4 9h16M9 4v16"></path></svg>
+                                    </span>
+                                    <div><h2 id="inventoryTitle">Dados de inventário</h2><p>Identificação, ciclo de vida e aquisição do equipamento.</p></div>
+                                </div>
+                                <dl id="assetInventoryFields" class="asset-detail-fields"></dl>
+                            </section>
+
+                            <section class="asset-detail-section" aria-labelledby="ticketsTitle">
+                                <div class="asset-section-heading">
+                                    <span class="asset-section-icon" aria-hidden="true">
+                                        <svg class="icon" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 0 2-2h14a2 2 0 0 0 2 2v3a2 2 0 0 0 0 4v3a2 2 0 0 0-2 2H5a2 2 0 0 0-2-2v-3a2 2 0 0 0 0-4z"></path><path d="M13 5v2M13 17v2M13 10v4"></path></svg>
+                                    </span>
+                                    <div><h2 id="ticketsTitle">Chamados deste ativo</h2><p>Ocorrências relacionadas ao equipamento, da mais recente para a mais antiga.</p></div>
+                                </div>
+                                <div id="assetTickets" class="asset-related-list" aria-live="polite"></div>
+                            </section>
+
+                            <section class="asset-detail-section" aria-labelledby="historyTitle">
+                                <div class="asset-section-heading">
+                                    <span class="asset-section-icon" aria-hidden="true">
+                                        <svg class="icon" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"></path><path d="M3 3v5h5M12 7v5l3 2"></path></svg>
+                                    </span>
+                                    <div><h2 id="historyTitle">Histórico técnico</h2><p>Registros específicos das manutenções de hardware vinculadas ao ativo.</p></div>
+                                </div>
+                                <div id="assetTechnicalHistory" class="asset-history-list" aria-live="polite"></div>
+                            </section>
+                        </article>
+                    </div>
+
+                    <aside class="asset-detail-aside">
+                        <article id="assetWarrantyCard" class="asset-warranty-card">
+                            <span class="asset-detail-card-label">Garantia</span>
+                            <strong id="assetWarrantyTitle">Não informada</strong>
+                            <p id="assetWarrantyDescription">Nenhuma data de garantia foi cadastrada.</p>
+                            <div class="asset-warranty-progress" aria-hidden="true"><span id="assetWarrantyProgress"></span></div>
+                            <dl class="asset-aside-fields">
+                                <div><dt>Data final</dt><dd id="assetWarrantyDate">—</dd></div>
+                                <div><dt>Fornecedor</dt><dd id="assetWarrantyProviderText">—</dd></div>
+                            </dl>
+                        </article>
+
+                        <article class="asset-info-card">
+                            <header class="asset-info-card-header">
+                                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 21a8 8 0 0 0-16 0"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                                <h2>Proprietário</h2>
+                            </header>
+                            <strong id="assetOwnerName">Cliente vinculado</strong>
+                            <span id="assetOwnerMeta">—</span>
+                        </article>
+
+                        <article class="asset-info-card">
+                            <header class="asset-info-card-header">
+                                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8v4l3 2"></path><circle cx="12" cy="12" r="9"></circle></svg>
+                                <h2>Controle do registro</h2>
+                            </header>
+                            <dl class="asset-aside-fields">
+                                <div><dt>Cadastrado em</dt><dd id="assetCreatedAt">—</dd></div>
+                                <div><dt>Atualizado em</dt><dd id="assetUpdatedAt">—</dd></div>
+                                <div><dt>Versão</dt><dd id="assetVersion">—</dd></div>
+                            </dl>
+                        </article>
+                    </aside>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="editAssetModal" role="dialog" aria-modal="true" aria-labelledby="editAssetModalTitle" aria-describedby="editAssetModalDescription" aria-hidden="true" inert hidden>
+        <div class="modal-content asset-modal-content">
+            <header class="modal-header">
+                <div>
+                    <h2 id="editAssetModalTitle">Editar ativo</h2>
+                    <p id="editAssetModalDescription" class="modal-description">Atualize os dados do equipamento sem alterar seu proprietário.</p>
+                </div>
+                <button class="modal-close" id="closeEditAssetModal" type="button" aria-label="Fechar">&times;</button>
+            </header>
+            <form id="editAssetForm">
+                <div class="asset-form-grid">
+                    <label class="form-group asset-field-wide">
+                        <span class="form-label">Modelo</span>
+                        <input type="text" id="editAssetModel" class="form-control" required maxlength="255">
+                    </label>
+                    <label class="form-group">
+                        <span class="form-label">Fabricante</span>
+                        <input type="text" id="editAssetManufacturer" class="form-control" maxlength="255">
+                    </label>
+                    <label class="form-group">
+                        <span class="form-label">Tipo</span>
+                        <select id="editAssetType" class="form-control" required>
+                            <option value="NOTEBOOK">Notebook</option><option value="DESKTOP">Desktop</option><option value="MONITOR">Monitor</option><option value="IMPRESSORA">Impressora</option><option value="SERVIDOR">Servidor</option><option value="EQUIPAMENTO_REDE">Equipamento de rede</option><option value="PERIFERICO">Periférico</option><option value="OUTRO">Outro</option>
+                        </select>
+                    </label>
+                    <label class="form-group">
+                        <span class="form-label">Número de série</span>
+                        <input type="text" id="editAssetSerial" class="form-control" required maxlength="255">
+                    </label>
+                    <label class="form-group">
+                        <span class="form-label">Situação</span>
+                        <select id="editAssetStatus" class="form-control" required>
+                            <option value="ATIVO">Ativo</option><option value="EM_MANUTENCAO">Em manutenção</option><option value="INATIVO">Inativo</option><option value="DESCARTADO">Descartado</option>
+                        </select>
+                    </label>
+                    <label class="form-group asset-field-wide">
+                        <span class="form-label">Proprietário</span>
+                        <input type="text" id="editAssetOwner" class="form-control" disabled>
+                        <span class="form-helper">O proprietário de um ativo é imutável.</span>
+                    </label>
+                    <label class="form-group">
+                        <span class="form-label">Data de compra</span>
+                        <input type="date" id="editAssetPurchaseDate" class="form-control">
+                    </label>
+                    <label class="form-group">
+                        <span class="form-label">Fim da garantia</span>
+                        <input type="date" id="editAssetWarrantyEndDate" class="form-control">
+                    </label>
+                    <label class="form-group asset-field-wide">
+                        <span class="form-label">Fornecedor da garantia</span>
+                        <input type="text" id="editAssetWarrantyProvider" class="form-control" maxlength="255">
+                    </label>
+                </div>
+                <p id="editAssetFormError" class="form-helper error asset-form-error" role="alert" hidden></p>
+                <footer class="modal-actions">
+                    <button type="button" class="btn btn-secondary" id="cancelEditAsset">Cancelar</button>
+                    <button type="submit" class="btn btn-primary" id="submitEditAsset">Salvar alterações</button>
+                </footer>
+            </form>
+        </div>
+    </div>
+
+    <div id="toastRegion" class="toast-region" aria-live="polite" aria-atomic="true"></div>
+    <script type="module" src="js/navigation.js?v=20260821.3"></script>
+    <script type="module" src="js/ativo.js?v=20260821.1"></script>
+</body>
+</html>

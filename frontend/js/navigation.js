@@ -36,7 +36,12 @@ const MENU_ITEMS = Object.freeze({
             pages: ['chamados.html', 'chamado.html'],
             count: true
         },
-        { label: 'Meus equipamentos', icon: 'asset', href: 'assets.html', page: 'assets.html' }
+        {
+            label: 'Meus equipamentos',
+            icon: 'asset',
+            href: 'assets.html',
+            pages: ['assets.html', 'ativo.html']
+        }
     ],
     TECNICO: [
         { label: 'Painel', icon: 'panel', href: 'dashboard.html', page: 'dashboard.html' },
@@ -47,8 +52,14 @@ const MENU_ITEMS = Object.freeze({
             pages: ['chamados.html', 'chamado.html'],
             count: true
         },
-        { label: 'Hardware', icon: 'hardware', future: true },
-        { label: 'Software', icon: 'software', future: true },
+        {
+            label: 'Ativos',
+            icon: 'asset',
+            href: 'assets.html',
+            pages: ['assets.html', 'ativo.html']
+        },
+        { label: 'Hardware', icon: 'hardware', href: 'chamados.html?ticketType=HARDWARE' },
+        { label: 'Software', icon: 'software', href: 'chamados.html?ticketType=SOFTWARE' },
         { label: 'Incidentes', icon: 'incident', future: true }
     ],
     GERENTE: [
@@ -61,7 +72,12 @@ const MENU_ITEMS = Object.freeze({
             count: true
         },
         { label: 'Usuários', icon: 'users', href: 'usuarios.html', page: 'usuarios.html' },
-        { label: 'Ativos', icon: 'asset', future: true },
+        {
+            label: 'Ativos',
+            icon: 'asset',
+            href: 'assets.html',
+            pages: ['assets.html', 'ativo.html']
+        },
         { label: 'Incidentes', icon: 'incident', future: true },
         { label: 'Relatórios', icon: 'report', future: true },
         { label: 'Configurações', icon: 'settings', href: 'configuracoes.html', page: 'configuracoes.html' }

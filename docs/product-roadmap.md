@@ -12,7 +12,7 @@ Este arquivo é a fonte de verdade do escopo escolhido. Ele separa o que já exi
 - configurações pessoais com consulta e edição de perfil e troca autenticada de senha;
 - recuperação de senha por token temporário emitido pelo gerente para entrega manual;
 - vínculo opcional de clientes a organizações integrado ao frontend;
-- cadastro e consulta básicos de ativos;
+- `A1–A6` gestão completa de ativos com datas e garantia, fabricante/modelo, tipo/status, edição, histórico de chamados e alertas;
 - abertura, lista completa, busca, filtros, detalhe protegido e atribuição de chamados;
 - `T4` transições controladas entre os sete estados canônicos;
 - `T5` fechamento e reabertura com autorização do proprietário ou gerente;
@@ -29,13 +29,15 @@ Este arquivo é a fonte de verdade do escopo escolhido. Ele separa o que já exi
 - identidade visual completa com temas claro e escuro, fundo de velocidade e componentes responsivos;
 - shell compartilhado de navegação por perfil, opções futuras desabilitadas e telas integradas de login, painel, usuários, ativos e configurações;
 - área dedicada de chamados e consulta detalhada por UUID com autorização de proprietário;
+- `HW1/HW4/HW7/HW9` fluxo de hardware com elegibilidade, garantia, etapas sequenciais, histórico técnico por ativo e checklist pós-reparo;
+- `SW1–SW5/SW7` fluxo de software com versão, ambiente, plataforma/sistema operacional, reprodução, resultados e logs estruturados;
 - testes automatizados do backend e integração frontend/backend validada localmente.
 
 ### Parcialmente implementado
 
 | Código | Item | O que ainda falta |
 | --- | --- | --- |
-| `CFG2` | Configurações do gerente | Usuários, organizações, categorias e políticas de SLA estão integrados; controles que pertencem aos módulos futuros serão concluídos com esses módulos. |
+| `CFG2` | Configurações do gerente | Usuários, organizações, categorias, políticas de SLA e gestão de ativos estão integrados; controles dos módulos ainda futuros serão concluídos com esses módulos. |
 | `ORG1` | Organizações | Cadastro e listagem básicos implementados. |
 
 ## Macroblocos na ordem recomendada
@@ -75,32 +77,36 @@ O bloco inclui política configurável por prioridade, snapshot por chamado, con
 - `U6` recuperação manual de senha — concluído, sem e-mail conforme o escopo;
 - `ORG2` vínculo de usuários a organizações no frontend — concluído.
 
-### 4. Gestão completa de ativos
+### 4. Gestão completa de ativos — concluído
 
-- `A1` garantia e datas;
-- `A2` fabricante e modelo;
-- `A3` tipo e status;
-- `A4` edição;
-- `A5` histórico de chamados por ativo;
-- `A6` alertas de garantia.
+- `A1` garantia e datas — concluído;
+- `A2` fabricante e modelo — concluído;
+- `A3` tipo e status — concluído;
+- `A4` edição — concluído sem permitir a troca de proprietário;
+- `A5` histórico de chamados por ativo — concluído;
+- `A6` alertas de garantia — concluído para vencimentos em até 30 dias.
 
-### 5. Fluxos especializados de hardware e software
+O catálogo usa tipos e status canônicos, serial único sem diferença entre maiúsculas e minúsculas, escopo por proprietário e projeção de garantia derivada. Técnicos possuem leitura; o cliente edita somente os próprios ativos e o gerente pode administrar o catálogo.
+
+### 5. Fluxos especializados de hardware e software — concluído
 
 Hardware:
 
-- `HW1` garantia e elegibilidade;
-- `HW4` etapas de manutenção;
-- `HW7` histórico técnico completo;
-- `HW9` checklist pós-reparo.
+- `HW1` garantia e elegibilidade — concluído;
+- `HW4` etapas de manutenção — concluído, com avanço sequencial;
+- `HW7` histórico técnico completo — concluído por chamado e consolidado por ativo;
+- `HW9` checklist pós-reparo — concluído e obrigatório antes da etapa final.
 
 Software:
 
-- `SW1` versão;
-- `SW2` ambiente afetado;
-- `SW3` plataforma e sistema operacional;
-- `SW4` passos para reprodução;
-- `SW5` resultado esperado e atual;
-- `SW7` logs técnicos estruturados.
+- `SW1` versão — concluído;
+- `SW2` ambiente afetado — concluído;
+- `SW3` plataforma e sistema operacional — concluído;
+- `SW4` passos para reprodução — concluído;
+- `SW5` resultado esperado e atual — concluído;
+- `SW7` logs técnicos estruturados — concluído nos níveis `DEBUG`, `INFO`, `WARN` e `ERROR`.
+
+Os dados especializados aparecem apenas no tipo de chamado correspondente. O cliente proprietário pode manter os detalhes de software, enquanto ações operacionais de hardware e inclusão de logs exigem o técnico atribuído ou um gerente. O bloco não adiciona diagnóstico `HW2`, RMA, peças, logística, QR, correlação `SW6`, base de erros ou incidentes de software.
 
 ### 6. Operação, comunicação e relatórios
 
@@ -153,7 +159,7 @@ Nem toda funcionalidade deve virar um item de menu. A navegação planejada ser�
 - **Software**;
 - **Incidentes**;
 - notas internas — implementadas;
-- etapas técnicas — pendentes do macrobloco especializado.
+- etapas técnicas de hardware e registros de software — implementados.
 
 ### Gerente
 
@@ -173,7 +179,7 @@ Nem toda funcionalidade deve virar um item de menu. A navegação planejada ser�
 - tempo real;
 - instalação PWA;
 - OpenAPI/Swagger, acessível como documentação técnica;
-- campos especializados de hardware/software dentro do chamado e do ativo.
+- campos especializados de hardware/software dentro do chamado e do ativo — implementados.
 
 ## Itens conscientemente fora do escopo
 
@@ -192,3 +198,5 @@ Nem toda funcionalidade deve virar um item de menu. A navegação planejada ser�
 - omnichannel, telefonia, QR móvel, comunidade, realidade aumentada e manutenção preditiva.
 
 As decisões de ambiente que não foram explicitamente aprovadas ou rejeitadas continuam abertas.
+
+A conclusão dos macroblocos 4 e 5 não reabre nenhum item rejeitado: os registros especializados implementados se limitam ao atendimento aprovado e não introduzem timeline geral, auditoria, anexos, multi-tenant, diagnóstico guiado, RMA, peças, logística, QR, correlação, base de erros ou incidentes de software.

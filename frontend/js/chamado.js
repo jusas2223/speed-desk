@@ -23,6 +23,50 @@ const TYPE_LABELS = Object.freeze({
     SOFTWARE: 'Software'
 });
 
+const HARDWARE_ELIGIBILITY_LABELS = Object.freeze({
+    PENDENTE: 'Avaliação pendente',
+    ELEGIVEL: 'Atendimento elegível',
+    NAO_ELEGIVEL: 'Não elegível'
+});
+
+const HARDWARE_WARRANTY_LABELS = Object.freeze({
+    NAO_AVALIADA: 'Garantia não avaliada',
+    COBERTA: 'Coberto pela garantia',
+    NAO_COBERTA: 'Sem cobertura de garantia'
+});
+
+const HARDWARE_STAGE_LABELS = Object.freeze({
+    RECEBIDO: 'Recebido',
+    EM_ANALISE: 'Em análise',
+    EM_REPARO: 'Em reparo',
+    EM_TESTE: 'Em teste',
+    CONCLUIDO: 'Concluído'
+});
+
+const HARDWARE_STAGES = Object.freeze([
+    'RECEBIDO',
+    'EM_ANALISE',
+    'EM_REPARO',
+    'EM_TESTE',
+    'CONCLUIDO'
+]);
+
+const HARDWARE_HISTORY_TYPE_LABELS = Object.freeze({
+    ETAPA: 'Mudança de etapa',
+    MANUTENCAO: 'Registro técnico',
+    CHECKLIST: 'Checklist pós-reparo'
+});
+
+const SOFTWARE_ENVIRONMENT_LABELS = Object.freeze({
+    PRODUCAO: 'Produção',
+    HOMOLOGACAO: 'Homologação',
+    DESENVOLVIMENTO: 'Desenvolvimento',
+    TESTE: 'Teste',
+    OUTRO: 'Outro'
+});
+
+const SOFTWARE_LOG_LEVELS = Object.freeze(['DEBUG', 'INFO', 'WARN', 'ERROR']);
+
 const STATUS_TRANSITIONS = Object.freeze({
     RECEBIDO: ['EM_TRIAGEM', 'EM_ATENDIMENTO'],
     EM_TRIAGEM: ['EM_ATENDIMENTO', 'AGUARDANDO_CLIENTE'],
@@ -236,6 +280,19 @@ document.addEventListener('DOMContentLoaded', () => {
         techniciansLoaded: false,
         techniciansError: '',
         selectedTechnicianId: '',
+        specialized: {
+            loading: false,
+            error: '',
+            hardware: {
+                details: null,
+                history: [],
+                checklist: null
+            },
+            software: {
+                details: null,
+                logs: []
+            }
+        },
         pendingAction: null,
         lastFocusedElement: null
     };
@@ -613,6 +670,746 @@ document.addEventListener('DOMContentLoaded', () => {
         return section;
     }
 
+    function createSpecializedHeading(title, description, eyebrow) {
+        const header = document.createElement('header');
+        header.className = 'specialized-heading';
+        const copy = document.createElement('div');
+        const label = document.createElement('span');
+        label.className = 'specialized-eyebrow';
+        label.textContent = eyebrow;
+        const heading = document.createElement('h2');
+        heading.textContent = title;
+        const paragraph = document.createElement('p');
+        paragraph.textContent = description;
+        copy.append(label, heading, paragraph);
+        header.appendChild(copy);
+        return header;
+    }
+
+    function createControlGroup(labelText, control, hintText = '') {
+        const group = document.createElement('div');
+        group.className = 'form-group specialized-form-group';
+        const label = document.createElement('label');
+        label.className = 'form-label';
+        label.htmlFor = control.id;
+        label.textContent = labelText;
+        group.append(label, control);
+        if (hintText) {
+            const hint = document.createElement('span');
+            hint.className = 'field-hint';
+            hint.textContent = hintText;
+            group.appendChild(hint);
+        }
+        return group;
+    }
+
+    function createSelectControl(id, options, selectedValue, disabled = false) {
+        const select = document.createElement('select');
+        select.id = id;
+        select.className = 'form-control';
+        select.required = true;
+        select.disabled = disabled;
+        options.forEach(({ value, label }) => select.add(new Option(label, value)));
+        select.value = selectedValue || options[0]?.value || '';
+        return select;
+    }
+
+    function createTextControl(id, value, { multiline = false, maxLength = 160, rows = 4, disabled = false, placeholder = '' } = {}) {
+        const control = document.createElement(multiline ? 'textarea' : 'input');
+        control.id = id;
+        control.className = 'form-control';
+        if (!multiline) control.type = 'text';
+        if (multiline) control.rows = rows;
+        control.maxLength = maxLength;
+        control.required = true;
+        control.disabled = disabled;
+        control.placeholder = placeholder;
+        control.value = value || '';
+        return control;
+    }
+
+    function createInlineFeedback() {
+        const feedback = document.createElement('div');
+        feedback.className = 'feedback';
+        feedback.setAttribute('role', 'alert');
+        feedback.setAttribute('aria-live', 'assertive');
+        feedback.hidden = true;
+        return feedback;
+    }
+
+    function updateInlineFeedback(feedback, message, tone = 'error') {
+        feedback.textContent = message;
+        feedback.className = `feedback ${tone}`;
+        feedback.hidden = !message;
+    }
+
+    function setSubmitBusy(button, busy, busyLabel = 'Salvando...') {
+        if (!button.dataset.defaultLabel) button.dataset.defaultLabel = button.textContent;
+        button.disabled = busy;
+        button.textContent = busy ? busyLabel : button.dataset.defaultLabel;
+    }
+
+    function createSpecializedLoadState() {
+        const panel = document.createElement('div');
+        panel.className = `specialized-load-state${state.specialized.error ? ' is-error' : ''}`;
+        panel.setAttribute('role', state.specialized.error ? 'alert' : 'status');
+        const message = document.createElement('p');
+        message.textContent = state.specialized.error || 'Carregando informações especializadas...';
+        panel.appendChild(message);
+        if (state.specialized.error) {
+            const retry = document.createElement('button');
+            retry.type = 'button';
+            retry.className = 'btn btn-secondary btn-compact';
+            retry.textContent = 'Tentar novamente';
+            retry.addEventListener('click', loadSpecializedData);
+            panel.appendChild(retry);
+        }
+        return panel;
+    }
+
+    function createHardwareProgress(currentStage) {
+        const list = document.createElement('ol');
+        list.className = 'hardware-stage-progress';
+        list.setAttribute('aria-label', 'Progresso da manutenção');
+        const currentIndex = Math.max(0, HARDWARE_STAGES.indexOf(currentStage));
+        HARDWARE_STAGES.forEach((stage, index) => {
+            const item = document.createElement('li');
+            if (index < currentIndex) item.className = 'is-complete';
+            if (index === currentIndex) {
+                item.className = 'is-current';
+                item.setAttribute('aria-current', 'step');
+            }
+            const marker = document.createElement('span');
+            marker.setAttribute('aria-hidden', 'true');
+            marker.textContent = index < currentIndex ? '✓' : String(index + 1);
+            const label = document.createElement('strong');
+            label.textContent = HARDWARE_STAGE_LABELS[stage];
+            item.append(marker, label);
+            list.appendChild(item);
+        });
+        return list;
+    }
+
+    function createHardwareSummary(details, checklist) {
+        const summary = document.createElement('div');
+        summary.className = 'specialized-summary-grid';
+        [
+            ['Elegibilidade', HARDWARE_ELIGIBILITY_LABELS[details.eligibilityStatus] || details.eligibilityStatus],
+            ['Garantia', HARDWARE_WARRANTY_LABELS[details.warrantyCoverage] || details.warrantyCoverage],
+            ['Etapa atual', HARDWARE_STAGE_LABELS[details.maintenanceStage] || details.maintenanceStage],
+            ['Pós-reparo', checklist.completed ? 'Checklist concluído' : 'Checklist pendente']
+        ].forEach(([labelText, valueText]) => {
+            const item = document.createElement('div');
+            const label = document.createElement('span');
+            label.textContent = labelText;
+            const value = document.createElement('strong');
+            value.textContent = valueText || 'Não informado';
+            item.append(label, value);
+            summary.appendChild(item);
+        });
+        return summary;
+    }
+
+    function createHardwareDetailsForm(details, checklist, canEdit) {
+        const form = document.createElement('form');
+        form.id = 'hardwareDetailsForm';
+        form.className = 'specialized-form';
+        form.setAttribute('aria-label', 'Elegibilidade, garantia e etapa de manutenção');
+        const grid = document.createElement('div');
+        grid.className = 'specialized-form-grid';
+
+        const eligibility = createSelectControl('hardwareEligibility', Object.entries(HARDWARE_ELIGIBILITY_LABELS)
+            .map(([value, label]) => ({ value, label })), details.eligibilityStatus, !canEdit);
+        const warranty = createSelectControl('hardwareWarranty', Object.entries(HARDWARE_WARRANTY_LABELS)
+            .map(([value, label]) => ({ value, label })), details.warrantyCoverage, !canEdit);
+        const currentStage = details.maintenanceStage || 'RECEBIDO';
+        const currentIndex = Math.max(0, HARDWARE_STAGES.indexOf(currentStage));
+        const availableStages = HARDWARE_STAGES
+            .filter((_, index) => index === currentIndex || index === currentIndex + 1)
+            .map(value => ({ value, label: HARDWARE_STAGE_LABELS[value] }));
+        const stageHint = currentStage === 'EM_TESTE' && !checklist.completed
+            ? 'Conclua os cinco itens do checklist antes de avançar para Concluído.'
+            : 'As etapas avançam uma posição por vez.';
+        const stage = createSelectControl('hardwareStage', availableStages, currentStage, !canEdit);
+        const notes = createTextControl('hardwareEligibilityNotes', details.eligibilityNotes, {
+            multiline: true,
+            maxLength: 2000,
+            rows: 4,
+            disabled: !canEdit,
+            placeholder: 'Registre restrições, cobertura ou justificativa da avaliação...'
+        });
+        notes.required = false;
+        const notesGroup = createControlGroup('Observações de elegibilidade', notes, 'Opcional, até 2.000 caracteres.');
+        notesGroup.classList.add('specialized-form-span');
+
+        grid.append(
+            createControlGroup('Elegibilidade do atendimento', eligibility),
+            createControlGroup('Cobertura da garantia', warranty),
+            createControlGroup('Etapa de manutenção', stage, stageHint),
+            notesGroup
+        );
+        form.appendChild(grid);
+
+        if (canEdit) {
+            const actions = document.createElement('div');
+            actions.className = 'specialized-form-actions';
+            const feedback = createInlineFeedback();
+            const submit = document.createElement('button');
+            submit.type = 'submit';
+            submit.className = 'btn btn-primary btn-compact';
+            submit.textContent = 'Salvar atendimento';
+            actions.append(feedback, submit);
+            form.appendChild(actions);
+            form.addEventListener('submit', async event => {
+                event.preventDefault();
+                updateInlineFeedback(feedback, '');
+                setSubmitBusy(submit, true);
+                try {
+                    const updated = await api.request(`/tickets/${encodeURIComponent(ticketId)}/hardware`, {
+                        method: 'PUT',
+                        body: JSON.stringify({
+                            eligibilityStatus: eligibility.value,
+                            warrantyCoverage: warranty.value,
+                            eligibilityNotes: notes.value.trim() || null,
+                            maintenanceStage: stage.value
+                        })
+                    });
+                    state.specialized.hardware.details = updated;
+                    try {
+                        const history = await api.request(`/tickets/${encodeURIComponent(ticketId)}/hardware/history`);
+                        state.specialized.hardware.history = Array.isArray(history) ? history : [];
+                    } catch (historyError) {
+                        console.error('Atendimento salvo, mas o histórico não pôde ser recarregado:', historyError);
+                    }
+                    showToast('Atendimento de hardware atualizado.', 'success');
+                    renderTicket();
+                } catch (error) {
+                    updateInlineFeedback(feedback, error.message || 'Não foi possível atualizar o atendimento.');
+                    setSubmitBusy(submit, false);
+                }
+            });
+        } else {
+            const note = document.createElement('p');
+            note.className = 'specialized-permission-note';
+            note.textContent = 'Somente o gerente ou o técnico responsável pode alterar estes dados.';
+            form.appendChild(note);
+        }
+        return form;
+    }
+
+    function createChecklistItem(id, labelText, checked, disabled) {
+        const label = document.createElement('label');
+        label.className = 'specialized-check-item';
+        const input = document.createElement('input');
+        input.id = id;
+        input.type = 'checkbox';
+        input.checked = Boolean(checked);
+        input.disabled = disabled;
+        const marker = document.createElement('span');
+        marker.setAttribute('aria-hidden', 'true');
+        const copy = document.createElement('strong');
+        copy.textContent = labelText;
+        label.append(input, marker, copy);
+        return { label, input };
+    }
+
+    function createHardwareChecklist(details, checklist, canOperate) {
+        const article = document.createElement('article');
+        article.className = 'specialized-subcard';
+        const heading = document.createElement('header');
+        const title = document.createElement('h3');
+        title.textContent = 'Checklist pós-reparo';
+        const status = document.createElement('span');
+        status.className = `specialized-status-chip ${checklist.completed ? 'is-success' : 'is-pending'}`;
+        status.textContent = checklist.completed ? 'Concluído' : 'Pendente';
+        heading.append(title, status);
+        const allowedStage = ['EM_TESTE', 'CONCLUIDO'].includes(details.maintenanceStage);
+        const canEdit = canOperate && allowedStage;
+        const form = document.createElement('form');
+        form.className = 'specialized-checklist';
+        const definitions = [
+            ['equipmentTurnsOn', 'Equipamento liga corretamente'],
+            ['functionalityValidated', 'Funcionalidade principal validada'],
+            ['connectivityValidated', 'Conectividade validada'],
+            ['cleaningCompleted', 'Limpeza concluída'],
+            ['clientDataPreserved', 'Dados do cliente preservados']
+        ];
+        const controls = {};
+        const checklistGrid = document.createElement('div');
+        checklistGrid.className = 'specialized-check-grid';
+        definitions.forEach(([key, labelText]) => {
+            const item = createChecklistItem(`hardwareChecklist-${key}`, labelText, checklist[key], !canEdit);
+            controls[key] = item.input;
+            checklistGrid.appendChild(item.label);
+        });
+        const notes = createTextControl('hardwareChecklistNotes', checklist.notes, {
+            multiline: true,
+            maxLength: 2000,
+            rows: 3,
+            disabled: !canEdit,
+            placeholder: 'Observações finais do teste e da entrega...'
+        });
+        notes.required = false;
+        form.append(checklistGrid, createControlGroup('Observações do checklist', notes, 'Opcional, até 2.000 caracteres.'));
+        if (canEdit) {
+            const actions = document.createElement('div');
+            actions.className = 'specialized-form-actions';
+            const feedback = createInlineFeedback();
+            const submit = document.createElement('button');
+            submit.type = 'submit';
+            submit.className = 'btn btn-primary btn-compact';
+            submit.textContent = 'Salvar checklist';
+            actions.append(feedback, submit);
+            form.appendChild(actions);
+            form.addEventListener('submit', async event => {
+                event.preventDefault();
+                updateInlineFeedback(feedback, '');
+                setSubmitBusy(submit, true);
+                try {
+                    const body = { notes: notes.value.trim() || null };
+                    definitions.forEach(([key]) => { body[key] = controls[key].checked; });
+                    const updated = await api.request(`/tickets/${encodeURIComponent(ticketId)}/hardware/checklist`, {
+                        method: 'PUT',
+                        body: JSON.stringify(body)
+                    });
+                    state.specialized.hardware.checklist = updated;
+                    if (updated.completed && !checklist.completed) {
+                        try {
+                            const history = await api.request(`/tickets/${encodeURIComponent(ticketId)}/hardware/history`);
+                            state.specialized.hardware.history = Array.isArray(history) ? history : [];
+                        } catch (historyError) {
+                            console.error('Checklist salvo, mas o histórico não pôde ser recarregado:', historyError);
+                        }
+                    }
+                    showToast(updated.completed ? 'Checklist pós-reparo concluído.' : 'Checklist atualizado.', 'success');
+                    renderTicket();
+                } catch (error) {
+                    updateInlineFeedback(feedback, error.message || 'Não foi possível salvar o checklist.');
+                    setSubmitBusy(submit, false);
+                }
+            });
+        } else {
+            const note = document.createElement('p');
+            note.className = 'specialized-permission-note';
+            note.textContent = canOperate
+                ? 'O checklist será liberado quando a manutenção chegar à etapa Em teste.'
+                : 'O checklist pode ser alterado somente pelo responsável técnico ou gerente.';
+            form.appendChild(note);
+        }
+        article.append(heading, form);
+        return article;
+    }
+
+    function createHardwareHistory(history, canOperate) {
+        const article = document.createElement('article');
+        article.className = 'specialized-subcard';
+        const heading = document.createElement('header');
+        const title = document.createElement('h3');
+        title.textContent = 'Histórico técnico';
+        const count = document.createElement('span');
+        count.className = 'specialized-count';
+        count.textContent = `${history.length} registro${history.length === 1 ? '' : 's'}`;
+        heading.append(title, count);
+        const list = document.createElement('div');
+        list.className = 'specialized-timeline';
+        if (!history.length) {
+            const empty = document.createElement('p');
+            empty.className = 'specialized-empty';
+            empty.textContent = 'Nenhum registro técnico foi criado ainda.';
+            list.appendChild(empty);
+        } else {
+            history.forEach(entry => {
+                const item = document.createElement('article');
+                const marker = document.createElement('span');
+                marker.className = `specialized-timeline-marker type-${String(entry.entryType || '').toLowerCase()}`;
+                marker.setAttribute('aria-hidden', 'true');
+                const content = document.createElement('div');
+                const meta = document.createElement('div');
+                meta.className = 'specialized-timeline-meta';
+                const type = document.createElement('strong');
+                type.textContent = HARDWARE_HISTORY_TYPE_LABELS[entry.entryType] || entry.entryType || 'Registro';
+                const stage = document.createElement('span');
+                stage.textContent = HARDWARE_STAGE_LABELS[entry.maintenanceStage] || entry.maintenanceStage || '';
+                const date = document.createElement('time');
+                date.dateTime = entry.createdAt || '';
+                date.textContent = formatDate(entry.createdAt);
+                meta.append(type, stage, date);
+                const description = document.createElement('p');
+                description.textContent = entry.description || '';
+                const actor = document.createElement('small');
+                actor.textContent = `Por ${entry.performedBy?.name || 'Equipe Speed Desk'}`;
+                content.append(meta, description, actor);
+                item.append(marker, content);
+                list.appendChild(item);
+            });
+        }
+        article.append(heading, list);
+
+        if (canOperate) {
+            const form = document.createElement('form');
+            form.className = 'specialized-history-form';
+            const description = createTextControl('hardwareHistoryDescription', '', {
+                multiline: true,
+                maxLength: 4000,
+                rows: 3,
+                placeholder: 'Descreva o procedimento, teste ou resultado técnico...'
+            });
+            const field = createControlGroup('Novo registro de manutenção', description, 'Até 4.000 caracteres.');
+            const actions = document.createElement('div');
+            actions.className = 'specialized-form-actions';
+            const feedback = createInlineFeedback();
+            const submit = document.createElement('button');
+            submit.type = 'submit';
+            submit.className = 'btn btn-secondary btn-compact';
+            submit.textContent = 'Adicionar ao histórico';
+            actions.append(feedback, submit);
+            form.append(field, actions);
+            form.addEventListener('submit', async event => {
+                event.preventDefault();
+                const value = description.value.trim();
+                if (!value) {
+                    description.focus();
+                    return;
+                }
+                updateInlineFeedback(feedback, '');
+                setSubmitBusy(submit, true, 'Adicionando...');
+                try {
+                    const created = await api.request(`/tickets/${encodeURIComponent(ticketId)}/hardware/history`, {
+                        method: 'POST',
+                        body: JSON.stringify({ description: value })
+                    });
+                    state.specialized.hardware.history = [...state.specialized.hardware.history, created];
+                    showToast('Registro adicionado ao histórico técnico.', 'success');
+                    renderTicket();
+                } catch (error) {
+                    updateInlineFeedback(feedback, error.message || 'Não foi possível adicionar o registro.');
+                    setSubmitBusy(submit, false);
+                }
+            });
+            article.appendChild(form);
+        }
+        return article;
+    }
+
+    function createHardwareSection() {
+        const section = document.createElement('section');
+        section.className = 'ticket-detail-section specialized-section hardware-section';
+        section.appendChild(createSpecializedHeading(
+            'Atendimento de hardware',
+            'Garantia, elegibilidade, manutenção e validação pós-reparo em um fluxo único.',
+            'Fluxo técnico HW'
+        ));
+        if (state.specialized.loading || state.specialized.error) {
+            section.appendChild(createSpecializedLoadState());
+            return section;
+        }
+        const details = state.specialized.hardware.details || {
+            eligibilityStatus: 'PENDENTE',
+            warrantyCoverage: 'NAO_AVALIADA',
+            maintenanceStage: 'RECEBIDO'
+        };
+        const checklist = state.specialized.hardware.checklist || {};
+        const history = state.specialized.hardware.history || [];
+        const canOperate = userCanOperate(state.ticket);
+        section.append(
+            createHardwareProgress(details.maintenanceStage),
+            createHardwareSummary(details, checklist),
+            createHardwareDetailsForm(details, checklist, canOperate)
+        );
+        const columns = document.createElement('div');
+        columns.className = 'specialized-columns';
+        columns.append(
+            createHardwareChecklist(details, checklist, canOperate),
+            createHardwareHistory(history, canOperate)
+        );
+        section.appendChild(columns);
+        return section;
+    }
+
+    function createSoftwareDetailsForm(details, canEdit) {
+        const form = document.createElement('form');
+        form.id = 'softwareDetailsForm';
+        form.className = 'specialized-form';
+        form.setAttribute('aria-label', 'Contexto técnico do software');
+        const grid = document.createElement('div');
+        grid.className = 'specialized-form-grid';
+        const version = createTextControl('softwareVersion', details.softwareVersion, {
+            maxLength: 120,
+            disabled: !canEdit,
+            placeholder: 'Ex.: 2026.8.1'
+        });
+        const environmentOptions = [
+            { value: '', label: 'Selecione o ambiente' },
+            ...Object.entries(SOFTWARE_ENVIRONMENT_LABELS)
+                .map(([value, label]) => ({ value, label }))
+        ];
+        const environment = createSelectControl(
+            'softwareEnvironment',
+            environmentOptions,
+            details.environment || '',
+            !canEdit
+        );
+        const platform = createTextControl('softwarePlatform', details.platform, {
+            maxLength: 160,
+            disabled: !canEdit,
+            placeholder: 'Ex.: Web, desktop, mobile'
+        });
+        const operatingSystem = createTextControl('softwareOperatingSystem', details.operatingSystem, {
+            maxLength: 160,
+            disabled: !canEdit,
+            placeholder: 'Ex.: Windows 11 24H2'
+        });
+        grid.append(
+            createControlGroup('Versão do software', version),
+            createControlGroup('Ambiente afetado', environment),
+            createControlGroup('Plataforma', platform),
+            createControlGroup('Sistema operacional', operatingSystem)
+        );
+        const narratives = document.createElement('div');
+        narratives.className = 'specialized-narratives';
+        const reproduction = createTextControl('softwareReproductionSteps', details.reproductionSteps, {
+            multiline: true,
+            maxLength: 10000,
+            rows: 5,
+            disabled: !canEdit,
+            placeholder: 'Liste os passos necessários para reproduzir o problema...'
+        });
+        const expected = createTextControl('softwareExpectedResult', details.expectedResult, {
+            multiline: true,
+            maxLength: 10000,
+            rows: 4,
+            disabled: !canEdit,
+            placeholder: 'Descreva o comportamento esperado...'
+        });
+        const actual = createTextControl('softwareActualResult', details.actualResult, {
+            multiline: true,
+            maxLength: 10000,
+            rows: 4,
+            disabled: !canEdit,
+            placeholder: 'Descreva o que realmente acontece...'
+        });
+        narratives.append(
+            createControlGroup('Passos para reprodução', reproduction),
+            createControlGroup('Resultado esperado', expected),
+            createControlGroup('Resultado atual', actual)
+        );
+        form.append(grid, narratives);
+
+        if (canEdit) {
+            const actions = document.createElement('div');
+            actions.className = 'specialized-form-actions';
+            const feedback = createInlineFeedback();
+            const submit = document.createElement('button');
+            submit.type = 'submit';
+            submit.className = 'btn btn-primary btn-compact';
+            submit.textContent = details.configured ? 'Salvar contexto técnico' : 'Configurar contexto técnico';
+            actions.append(feedback, submit);
+            form.appendChild(actions);
+            form.addEventListener('submit', async event => {
+                event.preventDefault();
+                if (!form.reportValidity()) return;
+                updateInlineFeedback(feedback, '');
+                setSubmitBusy(submit, true);
+                try {
+                    const updated = await api.request(`/tickets/${encodeURIComponent(ticketId)}/software`, {
+                        method: 'PUT',
+                        body: JSON.stringify({
+                            softwareVersion: version.value.trim(),
+                            environment: environment.value,
+                            platform: platform.value.trim(),
+                            operatingSystem: operatingSystem.value.trim(),
+                            reproductionSteps: reproduction.value.trim(),
+                            expectedResult: expected.value.trim(),
+                            actualResult: actual.value.trim()
+                        })
+                    });
+                    state.specialized.software.details = updated;
+                    showToast('Contexto técnico do software atualizado.', 'success');
+                    renderTicket();
+                } catch (error) {
+                    updateInlineFeedback(feedback, error.message || 'Não foi possível salvar o contexto técnico.');
+                    setSubmitBusy(submit, false);
+                }
+            });
+        } else {
+            const note = document.createElement('p');
+            note.className = 'specialized-permission-note';
+            note.textContent = 'Somente o solicitante, o técnico responsável ou um gerente pode alterar estes dados.';
+            form.appendChild(note);
+        }
+        return form;
+    }
+
+    function createSoftwareLogs(logs, canCreate) {
+        const article = document.createElement('article');
+        article.className = 'specialized-subcard software-logs-card';
+        const heading = document.createElement('header');
+        const title = document.createElement('h3');
+        title.textContent = 'Logs técnicos estruturados';
+        const count = document.createElement('span');
+        count.className = 'specialized-count';
+        count.textContent = `${logs.length} log${logs.length === 1 ? '' : 's'}`;
+        heading.append(title, count);
+        const list = document.createElement('div');
+        list.className = 'software-log-list';
+        if (!logs.length) {
+            const empty = document.createElement('p');
+            empty.className = 'specialized-empty';
+            empty.textContent = 'Nenhum log técnico registrado.';
+            list.appendChild(empty);
+        } else {
+            logs.forEach(log => {
+                const item = document.createElement('article');
+                item.className = `software-log level-${String(log.level || 'info').toLowerCase()}`;
+                const header = document.createElement('header');
+                const level = document.createElement('strong');
+                level.textContent = log.level || 'INFO';
+                const source = document.createElement('code');
+                source.textContent = log.source || 'Aplicação';
+                const date = document.createElement('time');
+                date.dateTime = log.occurredAt || '';
+                date.textContent = formatDate(log.occurredAt);
+                header.append(level, source, date);
+                const message = document.createElement('pre');
+                message.textContent = log.message || '';
+                item.append(header, message);
+                list.appendChild(item);
+            });
+        }
+        article.append(heading, list);
+
+        if (canCreate) {
+            const form = document.createElement('form');
+            form.className = 'software-log-form';
+            const grid = document.createElement('div');
+            grid.className = 'software-log-form-grid';
+            const level = createSelectControl('softwareLogLevel', SOFTWARE_LOG_LEVELS
+                .map(value => ({ value, label: value })), 'INFO');
+            const source = createTextControl('softwareLogSource', '', {
+                maxLength: 120,
+                placeholder: 'Ex.: navegador, API, ERP'
+            });
+            const occurredAt = document.createElement('input');
+            occurredAt.id = 'softwareLogOccurredAt';
+            occurredAt.type = 'datetime-local';
+            occurredAt.className = 'form-control';
+            grid.append(
+                createControlGroup('Nível', level),
+                createControlGroup('Origem', source),
+                createControlGroup('Data e hora', occurredAt, 'Opcional; vazio usa o horário atual.')
+            );
+            const message = createTextControl('softwareLogMessage', '', {
+                multiline: true,
+                maxLength: 10000,
+                rows: 4,
+                placeholder: 'Cole ou descreva a mensagem técnica sem incluir credenciais...'
+            });
+            const actions = document.createElement('div');
+            actions.className = 'specialized-form-actions';
+            const feedback = createInlineFeedback();
+            const submit = document.createElement('button');
+            submit.type = 'submit';
+            submit.className = 'btn btn-secondary btn-compact';
+            submit.textContent = 'Registrar log';
+            actions.append(feedback, submit);
+            form.append(grid, createControlGroup('Mensagem', message, 'Até 10.000 caracteres.'), actions);
+            form.addEventListener('submit', async event => {
+                event.preventDefault();
+                if (!form.reportValidity()) return;
+                updateInlineFeedback(feedback, '');
+                setSubmitBusy(submit, true, 'Registrando...');
+                try {
+                    const body = {
+                        level: level.value,
+                        source: source.value.trim(),
+                        message: message.value.trim()
+                    };
+                    if (occurredAt.value) body.occurredAt = new Date(occurredAt.value).toISOString();
+                    const created = await api.request(`/tickets/${encodeURIComponent(ticketId)}/software/logs`, {
+                        method: 'POST',
+                        body: JSON.stringify(body)
+                    });
+                    state.specialized.software.logs = [created, ...state.specialized.software.logs];
+                    showToast('Log técnico registrado.', 'success');
+                    renderTicket();
+                } catch (error) {
+                    updateInlineFeedback(feedback, error.message || 'Não foi possível registrar o log.');
+                    setSubmitBusy(submit, false);
+                }
+            });
+            article.appendChild(form);
+        }
+        return article;
+    }
+
+    function createSoftwareSection() {
+        const section = document.createElement('section');
+        section.className = 'ticket-detail-section specialized-section software-section';
+        section.appendChild(createSpecializedHeading(
+            'Contexto de software',
+            'Ambiente afetado, reprodução do problema e evidências técnicas organizadas.',
+            'Fluxo técnico SW'
+        ));
+        if (state.specialized.loading || state.specialized.error) {
+            section.appendChild(createSpecializedLoadState());
+            return section;
+        }
+        const details = state.specialized.software.details || { configured: false };
+        const logs = state.specialized.software.logs || [];
+        const isOwner = role === 'CLIENTE' && state.ticket.cliente?.id === session.id;
+        const canMaintainDetails = role === 'GERENTE' || isOwner || userCanOperate(state.ticket);
+        const canCreateLogs = userCanOperate(state.ticket);
+        const status = document.createElement('div');
+        status.className = 'software-context-status';
+        const chip = document.createElement('span');
+        chip.className = `specialized-status-chip ${details.configured ? 'is-success' : 'is-pending'}`;
+        chip.textContent = details.configured ? 'Contexto configurado' : 'Configuração pendente';
+        const update = document.createElement('span');
+        update.textContent = details.updatedAt ? `Atualizado em ${formatDate(details.updatedAt)}` : 'Ainda não há dados técnicos salvos.';
+        status.append(chip, update);
+        section.append(status, createSoftwareDetailsForm(details, canMaintainDetails), createSoftwareLogs(logs, canCreateLogs));
+        return section;
+    }
+
+    function createSpecializedSection() {
+        if (state.ticket.ticketType === 'HARDWARE') return createHardwareSection();
+        if (state.ticket.ticketType === 'SOFTWARE') return createSoftwareSection();
+        return null;
+    }
+
+    async function loadSpecializedData() {
+        const type = state.ticket?.ticketType;
+        if (type !== 'HARDWARE' && type !== 'SOFTWARE') return;
+        state.specialized.loading = true;
+        state.specialized.error = '';
+        renderTicket();
+        try {
+            if (type === 'HARDWARE') {
+                const [details, history, checklist] = await Promise.all([
+                    api.request(`/tickets/${encodeURIComponent(ticketId)}/hardware`),
+                    api.request(`/tickets/${encodeURIComponent(ticketId)}/hardware/history`),
+                    api.request(`/tickets/${encodeURIComponent(ticketId)}/hardware/checklist`)
+                ]);
+                state.specialized.hardware.details = details;
+                state.specialized.hardware.history = Array.isArray(history) ? history : [];
+                state.specialized.hardware.checklist = checklist;
+            } else {
+                const [details, logs] = await Promise.all([
+                    api.request(`/tickets/${encodeURIComponent(ticketId)}/software`),
+                    api.request(`/tickets/${encodeURIComponent(ticketId)}/software/logs`)
+                ]);
+                state.specialized.software.details = details;
+                state.specialized.software.logs = Array.isArray(logs) ? logs : [];
+            }
+        } catch (error) {
+            console.error(`Erro ao carregar dados de ${type.toLowerCase()}:`, error);
+            state.specialized.error = error.message || 'Não foi possível carregar os dados especializados.';
+        } finally {
+            state.specialized.loading = false;
+            if (state.ticket) renderTicket();
+        }
+    }
+
     function renderTicket() {
         const ticket = state.ticket;
         const code = getTicketCode(ticket);
@@ -678,7 +1475,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const idValue = document.createElement('code');
         idValue.textContent = ticket.id;
         identificationSection.append(idTitle, idValue);
-        main.append(hero, descriptionSection, datesSection, identificationSection, createCommentsSection());
+        main.append(hero, descriptionSection);
+        const specializedSection = createSpecializedSection();
+        if (specializedSection) main.appendChild(specializedSection);
+        main.append(datesSection, identificationSection, createCommentsSection());
 
         const aside = document.createElement('aside');
         aside.className = 'ticket-detail-aside';
@@ -908,11 +1708,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
             state.ticket = ticket;
+            state.specialized.loading = ticket.ticketType === 'HARDWARE' || ticket.ticketType === 'SOFTWARE';
             const shouldLoadTechnicians = role === 'GERENTE' && ticketCanBeAssigned(ticket);
             state.techniciansLoading = shouldLoadTechnicians;
             renderTicket();
             const loaders = [loadComments()];
             if (shouldLoadTechnicians) loaders.push(loadTechnicians());
+            if (state.specialized.loading) loaders.push(loadSpecializedData());
             await Promise.allSettled(loaders);
         } catch (error) {
             console.error('Erro ao carregar detalhes do chamado:', error);

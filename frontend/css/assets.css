@@ -1,0 +1,1080 @@
+/* Asset catalog and detail screens. Kept isolated from the shared design system. */
+.modal-open {
+    overflow: hidden;
+}
+
+.asset-topbar-start {
+    width: min(100%, 760px);
+}
+
+.asset-topbar-search {
+    width: min(100%, 650px);
+}
+
+.asset-catalog-page,
+.asset-detail-page {
+    width: 100%;
+    max-width: 1680px;
+    margin-inline: auto;
+}
+
+.asset-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 14px;
+    margin-bottom: 22px;
+}
+
+.asset-summary-card {
+    position: relative;
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 13px;
+    overflow: hidden;
+    padding: 17px;
+    border: 1px solid var(--brand-border);
+    border-radius: var(--radius-lg);
+    background: linear-gradient(145deg, var(--surface), var(--surface-subtle));
+    box-shadow: var(--shadow-sm);
+}
+
+.asset-summary-card::after {
+    position: absolute;
+    right: -32px;
+    bottom: -42px;
+    width: 100px;
+    height: 100px;
+    border: 1px solid var(--brand-border);
+    border-radius: 50%;
+    content: "";
+    opacity: 0.42;
+}
+
+.asset-summary-card-alert {
+    border-color: rgba(255, 65, 108, 0.26);
+}
+
+.asset-summary-icon,
+.asset-type-icon,
+.asset-section-icon {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--brand-border);
+    background: var(--brand-soft);
+    color: var(--brand-accent);
+}
+
+.asset-summary-icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 13px;
+}
+
+.asset-summary-icon.tone-success {
+    border-color: rgba(16, 217, 166, 0.26);
+    background: var(--success-soft);
+    color: var(--success);
+}
+
+.asset-summary-icon.tone-warning {
+    border-color: rgba(255, 176, 32, 0.26);
+    background: var(--warning-soft);
+    color: var(--warning);
+}
+
+.asset-summary-icon.tone-danger {
+    border-color: rgba(255, 65, 108, 0.26);
+    background: var(--danger-soft);
+    color: var(--danger);
+}
+
+.asset-summary-copy {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    min-width: 0;
+    gap: 3px;
+}
+
+.asset-summary-copy span {
+    overflow: hidden;
+    color: var(--text-secondary);
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0.045em;
+    text-overflow: ellipsis;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.asset-summary-copy strong {
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    font-size: 22px;
+    font-weight: 800;
+}
+
+.asset-catalog {
+    overflow: visible;
+}
+
+.asset-filter-area {
+    padding: 20px 22px 22px;
+    border-bottom: 1px solid var(--border);
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    background: linear-gradient(145deg, var(--surface), var(--surface-subtle));
+}
+
+.asset-filter-heading,
+.asset-results-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+}
+
+.asset-filter-heading {
+    margin-bottom: 18px;
+}
+
+.asset-filter-heading h2,
+.asset-results-head h2 {
+    color: var(--text-primary);
+    font-size: 15px;
+    font-weight: 800;
+}
+
+.asset-filter-heading p,
+.asset-results-head p {
+    margin-top: 4px;
+    color: var(--text-secondary);
+    font-size: 11px;
+}
+
+.asset-filter-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(145px, 1fr)) auto;
+    gap: 13px;
+    align-items: end;
+}
+
+.asset-filter-field {
+    display: grid;
+    min-width: 0;
+    gap: 7px;
+}
+
+.asset-filter-submit {
+    min-height: 46px;
+}
+
+.asset-results-head {
+    padding: 17px 22px;
+    border-bottom: 1px solid var(--border);
+}
+
+.asset-table-scroll {
+    border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+    background: var(--surface);
+}
+
+.asset-table {
+    min-width: 1160px;
+}
+
+.asset-table td {
+    height: 84px;
+}
+
+.asset-table th:first-child,
+.asset-table td:first-child {
+    width: 280px;
+}
+
+.asset-catalog-row.has-warranty-alert {
+    background: linear-gradient(90deg, var(--danger-soft), transparent 160px);
+}
+
+.asset-primary {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 11px;
+}
+
+.asset-type-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 11px;
+    font-family: var(--font-mono);
+    font-size: 9px;
+    font-weight: 800;
+}
+
+.asset-type-icon.tone-info,
+.asset-type-badge.tone-info {
+    border-color: rgba(78, 145, 255, 0.27);
+    background: var(--info-soft);
+    color: var(--info);
+}
+
+.asset-type-icon.tone-warning,
+.asset-type-badge.tone-warning {
+    border-color: rgba(255, 176, 32, 0.27);
+    background: var(--warning-soft);
+    color: var(--warning);
+}
+
+.asset-type-icon.tone-danger,
+.asset-type-badge.tone-danger {
+    border-color: rgba(255, 65, 108, 0.27);
+    background: var(--danger-soft);
+    color: var(--danger);
+}
+
+.asset-type-icon.tone-cyan,
+.asset-type-badge.tone-cyan {
+    border-color: rgba(56, 189, 248, 0.27);
+    background: var(--cyan-soft);
+    color: var(--cyan);
+}
+
+.asset-type-icon.tone-neutral,
+.asset-type-badge.tone-neutral {
+    border-color: var(--border);
+    background: var(--surface-hover);
+    color: var(--text-secondary);
+}
+
+.asset-primary-copy {
+    display: grid;
+    min-width: 0;
+    gap: 4px;
+}
+
+.asset-model-link {
+    overflow: hidden;
+    color: var(--text-primary);
+    font-size: 12px;
+    font-weight: 800;
+    text-decoration: none;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    transition: color 150ms ease;
+}
+
+.asset-model-link:hover {
+    color: var(--brand-accent);
+}
+
+.asset-manufacturer,
+.asset-cell-secondary {
+    display: block;
+    overflow: hidden;
+    color: var(--text-tertiary);
+    font-size: 9px;
+    font-weight: 500;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.asset-cell-primary {
+    display: block;
+    overflow: hidden;
+    max-width: 190px;
+    color: var(--text-primary);
+    font-size: 10px;
+    font-weight: 700;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.asset-cell-secondary {
+    max-width: 190px;
+    margin-top: 4px;
+}
+
+.asset-type-badge,
+.asset-status-badge,
+.asset-warranty-badge,
+.asset-ticket-status {
+    display: inline-flex;
+    align-items: center;
+    width: fit-content;
+    padding: 5px 8px;
+    border: 1px solid var(--brand-border);
+    border-radius: 999px;
+    background: var(--brand-soft);
+    color: var(--brand-accent);
+    font-size: 8px;
+    font-weight: 800;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+.asset-status-badge.status-ativo {
+    border-color: rgba(16, 217, 166, 0.28);
+    background: var(--success-soft);
+    color: var(--success);
+}
+
+.asset-status-badge.status-em_manutencao {
+    border-color: rgba(255, 176, 32, 0.28);
+    background: var(--warning-soft);
+    color: var(--warning);
+}
+
+.asset-status-badge.status-inativo,
+.asset-status-badge.status-descartado {
+    border-color: var(--border);
+    background: var(--surface-hover);
+    color: var(--text-secondary);
+}
+
+.asset-warranty {
+    display: grid;
+    justify-items: start;
+    gap: 5px;
+}
+
+.asset-warranty-badge.warranty-vigente {
+    border-color: rgba(16, 217, 166, 0.28);
+    background: var(--success-soft);
+    color: var(--success);
+}
+
+.asset-warranty-badge.warranty-expira_em_breve {
+    border-color: rgba(255, 65, 108, 0.3);
+    background: var(--danger-soft);
+    color: var(--danger);
+}
+
+.asset-warranty-badge.warranty-expirada {
+    border-color: rgba(255, 176, 32, 0.28);
+    background: var(--warning-soft);
+    color: var(--warning);
+}
+
+.asset-warranty-badge.warranty-nao_informada,
+.asset-warranty-badge.warranty-nao_elegivel {
+    border-color: var(--border);
+    background: var(--surface-hover);
+    color: var(--text-secondary);
+}
+
+.asset-warranty-detail {
+    color: var(--text-tertiary);
+    font-size: 8px;
+    font-weight: 600;
+}
+
+.asset-serial {
+    padding: 5px 7px;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    background: var(--surface-subtle);
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+    font-size: 9px;
+}
+
+.asset-row-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 7px;
+}
+
+.asset-icon-action {
+    display: grid;
+    width: 34px;
+    height: 34px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface-subtle);
+    color: var(--brand-accent);
+    cursor: pointer;
+    font-size: 17px;
+    place-items: center;
+    transition: border-color 150ms ease, background-color 150ms ease;
+}
+
+.asset-icon-action:hover {
+    border-color: var(--brand-border);
+    background: var(--brand-soft);
+}
+
+.asset-state-row td {
+    height: auto;
+    padding: 0;
+    border-bottom: 0;
+}
+
+.asset-table-state {
+    display: grid;
+    min-height: 180px;
+    place-items: center;
+    padding: 30px;
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 600;
+    text-align: center;
+}
+
+.asset-state-row.is-error .asset-table-state {
+    color: var(--danger);
+}
+
+.asset-modal-content {
+    width: min(100%, 680px);
+}
+
+.asset-form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0 14px;
+}
+
+.asset-form-grid .form-group {
+    min-width: 0;
+}
+
+.asset-field-wide {
+    grid-column: 1 / -1;
+}
+
+.asset-form-error {
+    min-height: 0;
+    padding: 10px 12px;
+    border: 1px solid rgba(255, 65, 108, 0.3);
+    background: var(--danger-soft);
+    color: var(--danger);
+}
+
+/* Asset detail */
+.asset-detail-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    margin-bottom: 20px;
+}
+
+.asset-detail-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(290px, 350px);
+    gap: 20px;
+    align-items: start;
+}
+
+.asset-detail-main {
+    min-width: 0;
+}
+
+.asset-detail-card {
+    overflow: hidden;
+}
+
+.asset-detail-hero {
+    position: relative;
+    overflow: hidden;
+    padding: 28px;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(145deg, var(--brand-soft), transparent 72%);
+}
+
+.asset-detail-hero::after {
+    position: absolute;
+    top: -115px;
+    right: -75px;
+    width: 290px;
+    height: 290px;
+    border: 1px solid var(--brand-border);
+    border-radius: 50%;
+    content: "";
+    opacity: 0.5;
+}
+
+.asset-detail-eyebrow {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+}
+
+.asset-detail-hero h1 {
+    position: relative;
+    z-index: 1;
+    margin: 15px 0 6px;
+    color: var(--text-primary);
+    font-size: clamp(24px, 3vw, 36px);
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    line-height: 1.15;
+    overflow-wrap: anywhere;
+}
+
+.asset-detail-hero > p {
+    position: relative;
+    z-index: 1;
+    color: var(--text-secondary);
+    font-size: 12px;
+}
+
+.asset-id-code {
+    position: relative;
+    z-index: 1;
+    display: block;
+    width: fit-content;
+    max-width: 100%;
+    overflow: hidden;
+    margin-top: 17px;
+    padding: 6px 9px;
+    border: 1px solid var(--brand-border);
+    border-radius: 8px;
+    background: var(--surface-subtle);
+    color: var(--text-tertiary);
+    font-family: var(--font-mono);
+    font-size: 8px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.asset-detail-section {
+    padding: 24px 28px;
+    border-bottom: 1px solid var(--border);
+}
+
+.asset-detail-section:last-child {
+    border-bottom: 0;
+}
+
+.asset-section-heading {
+    display: flex;
+    align-items: flex-start;
+    gap: 11px;
+    margin-bottom: 18px;
+}
+
+.asset-section-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+}
+
+.asset-section-icon .icon {
+    width: 15px;
+    height: 15px;
+}
+
+.asset-section-heading h2 {
+    color: var(--text-primary);
+    font-size: 13px;
+    font-weight: 800;
+}
+
+.asset-section-heading p {
+    margin-top: 3px;
+    color: var(--text-secondary);
+    font-size: 9px;
+    line-height: 1.55;
+}
+
+.asset-detail-fields {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 11px;
+}
+
+.asset-detail-field {
+    min-width: 0;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface-subtle);
+}
+
+.asset-detail-field dt,
+.asset-aside-fields dt {
+    margin-bottom: 5px;
+    color: var(--text-tertiary);
+    font-size: 8px;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.asset-detail-field dd,
+.asset-aside-fields dd {
+    color: var(--text-primary);
+    font-size: 10px;
+    font-weight: 700;
+    overflow-wrap: anywhere;
+}
+
+.asset-detail-aside {
+    display: grid;
+    gap: 14px;
+}
+
+.asset-warranty-card,
+.asset-info-card {
+    padding: 20px;
+    border: 1px solid var(--brand-border);
+    border-radius: var(--radius-lg);
+    background: var(--surface);
+    box-shadow: var(--shadow-sm);
+}
+
+.asset-warranty-card {
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(145deg, var(--brand-soft), var(--surface) 72%);
+}
+
+.asset-warranty-card::after {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--brand-accent);
+    content: "";
+    box-shadow: 0 0 0 6px var(--brand-soft);
+}
+
+.asset-warranty-card.warranty-card-vigente,
+.asset-warranty-card.warranty-card-expira_em_breve {
+    border-color: rgba(16, 217, 166, 0.25);
+}
+
+.asset-warranty-card.warranty-card-vigente::after {
+    background: var(--success);
+    box-shadow: 0 0 0 6px var(--success-soft);
+}
+
+.asset-warranty-card.warranty-card-expira_em_breve {
+    border-color: rgba(255, 65, 108, 0.32);
+    background: linear-gradient(145deg, var(--danger-soft), var(--surface) 72%);
+}
+
+.asset-warranty-card.warranty-card-expira_em_breve::after,
+.asset-warranty-card.warranty-card-expirada::after {
+    background: var(--danger);
+    box-shadow: 0 0 0 6px var(--danger-soft);
+}
+
+.asset-detail-card-label {
+    display: block;
+    margin-bottom: 10px;
+    color: var(--text-tertiary);
+    font-size: 8px;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.asset-warranty-card > strong {
+    display: block;
+    max-width: calc(100% - 32px);
+    color: var(--text-primary);
+    font-size: 14px;
+    font-weight: 800;
+}
+
+.asset-warranty-card > p {
+    margin-top: 7px;
+    color: var(--text-secondary);
+    font-size: 10px;
+    line-height: 1.65;
+}
+
+.asset-warranty-progress {
+    height: 5px;
+    overflow: hidden;
+    margin: 16px 0;
+    border-radius: 999px;
+    background: var(--surface-hover);
+}
+
+.asset-warranty-progress span {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, var(--brand-primary), var(--brand-accent));
+    transition: width 300ms ease;
+}
+
+.warranty-card-vigente .asset-warranty-progress span {
+    background: var(--success);
+}
+
+.warranty-card-expira_em_breve .asset-warranty-progress span,
+.warranty-card-expirada .asset-warranty-progress span {
+    background: var(--danger);
+}
+
+.asset-aside-fields {
+    display: grid;
+    gap: 10px;
+}
+
+.asset-aside-fields > div {
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+}
+
+.asset-info-card-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 14px;
+    color: var(--brand-accent);
+}
+
+.asset-info-card-header .icon {
+    width: 16px;
+    height: 16px;
+}
+
+.asset-info-card-header h2 {
+    color: var(--text-primary);
+    font-size: 11px;
+    font-weight: 800;
+}
+
+.asset-info-card > strong,
+.asset-info-card > span {
+    display: block;
+    overflow-wrap: anywhere;
+}
+
+.asset-info-card > strong {
+    color: var(--text-primary);
+    font-size: 12px;
+}
+
+.asset-info-card > span {
+    margin-top: 4px;
+    color: var(--text-secondary);
+    font-size: 9px;
+}
+
+.asset-related-list,
+.asset-history-list {
+    display: grid;
+    gap: 9px;
+}
+
+.asset-related-ticket {
+    display: grid;
+    gap: 5px;
+    padding: 13px 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface-subtle);
+    text-decoration: none;
+    transition: border-color 150ms ease, background-color 150ms ease, transform 150ms ease;
+}
+
+.asset-related-ticket:hover {
+    border-color: var(--brand-border);
+    background: var(--surface-hover);
+    transform: translateX(2px);
+}
+
+.asset-related-ticket-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.asset-related-ticket code {
+    color: var(--brand-accent);
+    font-family: var(--font-mono);
+    font-size: 8px;
+    font-weight: 800;
+}
+
+.asset-related-ticket > strong {
+    overflow: hidden;
+    color: var(--text-primary);
+    font-size: 11px;
+    font-weight: 800;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.asset-related-ticket-meta {
+    color: var(--text-tertiary);
+    font-size: 8px;
+}
+
+.asset-ticket-status.ticket-status-resolvido,
+.asset-ticket-status.ticket-status-fechado {
+    border-color: rgba(16, 217, 166, 0.25);
+    background: var(--success-soft);
+    color: var(--success);
+}
+
+.asset-ticket-status.ticket-status-aguardando_cliente,
+.asset-ticket-status.ticket-status-aguardando_peca {
+    border-color: rgba(255, 176, 32, 0.25);
+    background: var(--warning-soft);
+    color: var(--warning);
+}
+
+.asset-history-item {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 12px;
+    padding: 13px 0;
+}
+
+.asset-history-item:not(:last-child) {
+    border-bottom: 1px solid var(--border);
+}
+
+.asset-history-marker {
+    width: 9px;
+    height: 9px;
+    margin-top: 4px;
+    border-radius: 50%;
+    background: var(--brand-accent);
+    box-shadow: 0 0 0 5px var(--brand-soft);
+}
+
+.asset-history-marker.history-checklist {
+    background: var(--success);
+    box-shadow: 0 0 0 5px var(--success-soft);
+}
+
+.asset-history-marker.history-etapa {
+    background: var(--info);
+    box-shadow: 0 0 0 5px var(--info-soft);
+}
+
+.asset-history-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.asset-history-heading strong {
+    color: var(--text-primary);
+    font-size: 10px;
+}
+
+.asset-history-heading time,
+.asset-history-meta {
+    color: var(--text-tertiary);
+    font-size: 8px;
+}
+
+.asset-history-item p {
+    margin: 6px 0;
+    color: var(--text-secondary);
+    font-size: 10px;
+    line-height: 1.65;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+}
+
+.asset-history-meta {
+    display: block;
+}
+
+.asset-history-ticket-link {
+    display: inline-block;
+    margin-top: 7px;
+    color: var(--brand-accent);
+    font-size: 9px;
+    font-weight: 800;
+    text-decoration: none;
+}
+
+.asset-history-ticket-link:hover {
+    text-decoration: underline;
+}
+
+.asset-related-state {
+    display: grid;
+    min-height: 90px;
+    place-items: center;
+    padding: 18px;
+    border: 1px dashed var(--border);
+    border-radius: var(--radius-md);
+    color: var(--text-secondary);
+    font-size: 10px;
+    text-align: center;
+}
+
+.asset-related-state.is-error {
+    border-color: rgba(255, 65, 108, 0.3);
+    color: var(--danger);
+}
+
+.asset-detail-state {
+    display: grid;
+    min-height: 360px;
+    place-items: center;
+    align-content: center;
+    gap: 13px;
+    padding: 36px;
+    color: var(--text-secondary);
+    text-align: center;
+}
+
+.asset-detail-state h1 {
+    color: var(--text-primary);
+    font-size: 22px;
+}
+
+.asset-detail-state p {
+    max-width: 520px;
+    font-size: 11px;
+}
+
+.asset-detail-state-icon {
+    display: grid;
+    width: 46px;
+    height: 46px;
+    border: 1px solid rgba(255, 65, 108, 0.3);
+    border-radius: 14px;
+    background: var(--danger-soft);
+    color: var(--danger);
+    font-family: var(--font-mono);
+    font-size: 18px;
+    font-weight: 800;
+    place-items: center;
+}
+
+.asset-detail-loader {
+    width: 28px;
+    height: 28px;
+    border: 3px solid var(--brand-border);
+    border-top-color: var(--brand-accent);
+    border-radius: 50%;
+    animation: assetSpin 750ms linear infinite;
+}
+
+@keyframes assetSpin {
+    to { transform: rotate(360deg); }
+}
+
+@media (max-width: 1320px) {
+    .asset-summary-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .asset-filter-grid {
+        grid-template-columns: repeat(3, minmax(145px, 1fr));
+    }
+
+    .asset-filter-submit {
+        width: 100%;
+    }
+
+    .asset-detail-fields {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 1040px) {
+    .asset-detail-layout {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .asset-detail-aside {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 760px) {
+    .asset-summary-grid,
+    .asset-filter-grid,
+    .asset-detail-aside {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .asset-filter-heading,
+    .asset-detail-toolbar {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .asset-filter-heading .btn,
+    .asset-detail-toolbar .btn {
+        width: 100%;
+    }
+
+    .asset-form-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .asset-field-wide {
+        grid-column: auto;
+    }
+
+    .asset-detail-hero,
+    .asset-detail-section {
+        padding: 22px;
+    }
+
+    .asset-detail-aside .asset-warranty-card {
+        grid-column: 1 / -1;
+    }
+}
+
+@media (max-width: 520px) {
+    .asset-summary-grid,
+    .asset-filter-grid,
+    .asset-detail-fields,
+    .asset-detail-aside {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .asset-summary-card {
+        padding: 14px;
+    }
+
+    .asset-filter-area,
+    .asset-results-head {
+        padding-inline: 16px;
+    }
+
+    .asset-detail-hero,
+    .asset-detail-section {
+        padding: 18px;
+    }
+
+    .asset-related-ticket-top,
+    .asset-history-heading {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 5px;
+    }
+
+    .asset-related-ticket > strong {
+        white-space: normal;
+    }
+
+    .asset-modal-content {
+        padding: 19px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .asset-detail-loader,
+    .asset-warranty-progress span {
+        animation: none;
+        transition: none;
+    }
+}

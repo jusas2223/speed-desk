@@ -3,12 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Equipamentos cadastrados no Speed Desk.">
-    <title>Meus Equipamentos — Speed Desk</title>
+    <meta name="description" content="Catálogo e gestão de ativos do Speed Desk.">
+    <title>Ativos — Speed Desk</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/style.css?v=20260821.2">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css?v=20260821.4">
+    <link rel="stylesheet" href="css/assets.css?v=20260821.1">
     <script>
         (() => {
             const savedTheme = localStorage.getItem('speeddesk-theme');
@@ -30,14 +31,15 @@
 
         <div class="main-column">
             <header class="topbar">
-                <div class="topbar-start">
+                <div class="topbar-start asset-topbar-start">
                     <button id="mobileMenuBtn" class="icon-button mobile-menu-button" type="button" aria-label="Abrir menu" aria-expanded="false">
                         <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"></path></svg>
                     </button>
-                    <div class="topbar-search" aria-label="Pesquisa de equipamentos em breve">
+                    <label class="topbar-search asset-topbar-search" for="assetQuery">
                         <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.35-4.35"></path></svg>
-                        <input class="topbar-search-input" type="search" placeholder="Pesquisar equipamentos — em breve" disabled>
-                    </div>
+                        <span class="visually-hidden">Pesquisar ativos</span>
+                        <input id="assetQuery" class="topbar-search-input" type="search" placeholder="Pesquisar por modelo, fabricante, serial ou cliente..." autocomplete="off">
+                    </label>
                 </div>
 
                 <div class="topbar-actions">
@@ -55,40 +57,129 @@
                 </div>
             </header>
 
-            <main class="content">
+            <main class="content asset-catalog-page">
                 <header class="page-heading">
                     <div class="page-heading-main">
                         <div class="page-title-row">
-                            <h1 class="page-title">Meus Equipamentos</h1>
-                            <span id="assetCount" class="live-badge">0 cadastrados</span>
+                            <h1 id="assetsPageTitle" class="page-title">Ativos</h1>
+                            <span id="assetCount" class="live-badge" aria-live="polite">Carregando</span>
                         </div>
-                        <p class="page-description">Equipamentos vinculados ao seu cadastro e disponíveis para abertura de chamados.</p>
+                        <p id="assetsPageDescription" class="page-description">Inventário central de equipamentos, garantias e histórico de atendimento.</p>
                     </div>
-                    <button id="btnOpenModal" class="btn btn-primary" type="button">
+                    <button id="btnOpenModal" class="btn btn-primary" type="button" hidden>
                         <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
-                        Adicionar equipamento
+                        Novo ativo
                     </button>
                 </header>
 
-                <section class="page-card" aria-labelledby="assetsTableTitle">
-                    <header class="page-card-header">
-                        <div>
-                            <h2 id="assetsTableTitle">Inventário pessoal</h2>
-                            <p>Consulte os equipamentos que podem ser relacionados a um chamado.</p>
-                        </div>
-                    </header>
+                <section class="asset-summary-grid" aria-label="Resumo do inventário">
+                    <article class="asset-summary-card">
+                        <span class="asset-summary-icon tone-brand" aria-hidden="true">
+                            <svg class="icon" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="13" rx="2"></rect><path d="M8 21h8M12 18v3"></path></svg>
+                        </span>
+                        <span class="asset-summary-copy"><span>Resultado atual</span><strong id="summaryTotal">—</strong></span>
+                    </article>
+                    <article class="asset-summary-card">
+                        <span class="asset-summary-icon tone-success" aria-hidden="true">
+                            <svg class="icon" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"></path></svg>
+                        </span>
+                        <span class="asset-summary-copy"><span>Ativos em operação</span><strong id="summaryActive">—</strong></span>
+                    </article>
+                    <article class="asset-summary-card">
+                        <span class="asset-summary-icon tone-warning" aria-hidden="true">
+                            <svg class="icon" viewBox="0 0 24 24"><path d="M12 3v3M18.4 5.6l-2.1 2.1M21 12h-3M5.6 5.6l2.1 2.1M3 12h3"></path><path d="M7 17h10M9 21h6"></path></svg>
+                        </span>
+                        <span class="asset-summary-copy"><span>Em manutenção</span><strong id="summaryMaintenance">—</strong></span>
+                    </article>
+                    <article class="asset-summary-card asset-summary-card-alert">
+                        <span class="asset-summary-icon tone-danger" aria-hidden="true">
+                            <svg class="icon" viewBox="0 0 24 24"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"></path><path d="M12 9v4M12 17h.01"></path></svg>
+                        </span>
+                        <span class="asset-summary-copy"><span>Garantias a vencer</span><strong id="summaryWarranty">—</strong></span>
+                    </article>
+                </section>
 
-                    <div class="table-scroll">
-                        <table class="data-table">
+                <section class="page-card asset-catalog" aria-labelledby="assetFiltersTitle">
+                    <div class="asset-filter-area">
+                        <div class="asset-filter-heading">
+                            <div>
+                                <h2 id="assetFiltersTitle">Filtrar inventário</h2>
+                                <p>Combine tipo, situação e garantia para localizar o equipamento certo.</p>
+                            </div>
+                            <button id="clearFiltersBtn" class="btn btn-secondary btn-compact" type="button">Limpar filtros</button>
+                        </div>
+
+                        <form id="assetFilters" class="asset-filter-grid">
+                            <label class="asset-filter-field">
+                                <span class="form-label">Tipo</span>
+                                <select id="assetTypeFilter" class="form-control" name="tipo">
+                                    <option value="">Todos os tipos</option>
+                                    <option value="NOTEBOOK">Notebook</option>
+                                    <option value="DESKTOP">Desktop</option>
+                                    <option value="MONITOR">Monitor</option>
+                                    <option value="IMPRESSORA">Impressora</option>
+                                    <option value="SERVIDOR">Servidor</option>
+                                    <option value="EQUIPAMENTO_REDE">Equipamento de rede</option>
+                                    <option value="PERIFERICO">Periférico</option>
+                                    <option value="OUTRO">Outro</option>
+                                </select>
+                            </label>
+                            <label class="asset-filter-field">
+                                <span class="form-label">Situação</span>
+                                <select id="assetStatusFilter" class="form-control" name="status">
+                                    <option value="">Todas as situações</option>
+                                    <option value="ATIVO">Ativo</option>
+                                    <option value="EM_MANUTENCAO">Em manutenção</option>
+                                    <option value="INATIVO">Inativo</option>
+                                    <option value="DESCARTADO">Descartado</option>
+                                </select>
+                            </label>
+                            <label class="asset-filter-field">
+                                <span class="form-label">Garantia</span>
+                                <select id="assetWarrantyFilter" class="form-control" name="warrantyState">
+                                    <option value="">Todas as garantias</option>
+                                    <option value="VIGENTE">Vigente</option>
+                                    <option value="EXPIRA_EM_BREVE">Expira em breve</option>
+                                    <option value="EXPIRADA">Expirada</option>
+                                    <option value="NAO_INFORMADA">Não informada</option>
+                                    <option value="NAO_ELEGIVEL">Não elegível</option>
+                                </select>
+                            </label>
+                            <label id="assetClientFilterGroup" class="asset-filter-field" hidden>
+                                <span class="form-label">Proprietário</span>
+                                <select id="assetClientFilter" class="form-control" name="clienteId" disabled>
+                                    <option value="">Todos os clientes</option>
+                                </select>
+                            </label>
+                            <button class="btn btn-primary asset-filter-submit" type="submit">
+                                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16M7 12h10M10 19h4"></path></svg>
+                                Aplicar
+                            </button>
+                        </form>
+                    </div>
+
+                    <div class="asset-results-head">
+                        <div>
+                            <h2>Equipamentos</h2>
+                            <p id="assetResultsSummary" aria-live="polite">Preparando o inventário...</p>
+                        </div>
+                    </div>
+
+                    <div class="table-scroll asset-table-scroll">
+                        <table class="data-table asset-table">
                             <thead>
                                 <tr>
                                     <th scope="col">Equipamento</th>
+                                    <th scope="col">Proprietário</th>
                                     <th scope="col">Tipo</th>
-                                    <th scope="col">Número de série</th>
+                                    <th scope="col">Situação</th>
+                                    <th scope="col">Garantia</th>
+                                    <th scope="col">Serial</th>
+                                    <th scope="col"><span class="visually-hidden">Ações</span></th>
                                 </tr>
                             </thead>
-                            <tbody id="assetsTableBody">
-                                <tr><td colspan="3">Carregando equipamentos...</td></tr>
+                            <tbody id="assetsTableBody" aria-live="polite" aria-busy="true">
+                                <tr class="asset-state-row"><td colspan="7">Carregando ativos...</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -97,28 +188,76 @@
         </div>
     </div>
 
-    <div class="modal-overlay" id="newAssetModal" role="dialog" aria-modal="true" aria-labelledby="newAssetTitle" aria-hidden="true" inert hidden>
-        <div class="modal-content">
+    <div class="modal-overlay" id="assetModal" role="dialog" aria-modal="true" aria-labelledby="assetModalTitle" aria-describedby="assetModalDescription" aria-hidden="true" inert hidden>
+        <div class="modal-content asset-modal-content">
             <header class="modal-header">
-                <h2 id="newAssetTitle">Adicionar Equipamento</h2>
+                <div>
+                    <h2 id="assetModalTitle">Novo ativo</h2>
+                    <p id="assetModalDescription" class="modal-description">Cadastre os dados de inventário e garantia do equipamento.</p>
+                </div>
                 <button class="modal-close" id="btnCloseModal" type="button" aria-label="Fechar">&times;</button>
             </header>
-            <form id="newAssetForm">
-                <div class="form-group">
-                    <label for="nome" class="form-label">Nome do equipamento</label>
-                    <input type="text" id="nome" class="form-control" required maxlength="255" placeholder="Ex.: Notebook Dell Inspiron">
+            <form id="assetForm">
+                <div class="asset-form-grid">
+                    <label class="form-group asset-field-wide">
+                        <span class="form-label">Modelo</span>
+                        <input type="text" id="assetModel" class="form-control" required maxlength="255" placeholder="Ex.: Latitude 5440" autocomplete="off">
+                    </label>
+                    <label class="form-group">
+                        <span class="form-label">Fabricante</span>
+                        <input type="text" id="assetManufacturer" class="form-control" maxlength="255" placeholder="Ex.: Dell" autocomplete="organization">
+                    </label>
+                    <label class="form-group">
+                        <span class="form-label">Tipo</span>
+                        <select id="assetType" class="form-control" required>
+                            <option value="">Selecione</option>
+                            <option value="NOTEBOOK">Notebook</option>
+                            <option value="DESKTOP">Desktop</option>
+                            <option value="MONITOR">Monitor</option>
+                            <option value="IMPRESSORA">Impressora</option>
+                            <option value="SERVIDOR">Servidor</option>
+                            <option value="EQUIPAMENTO_REDE">Equipamento de rede</option>
+                            <option value="PERIFERICO">Periférico</option>
+                            <option value="OUTRO">Outro</option>
+                        </select>
+                    </label>
+                    <label class="form-group">
+                        <span class="form-label">Número de série</span>
+                        <input type="text" id="assetSerial" class="form-control" required maxlength="255" placeholder="Ex.: SN-4X2K91" autocomplete="off">
+                    </label>
+                    <label class="form-group">
+                        <span class="form-label">Situação</span>
+                        <select id="assetStatus" class="form-control" required>
+                            <option value="ATIVO">Ativo</option>
+                            <option value="EM_MANUTENCAO">Em manutenção</option>
+                            <option value="INATIVO">Inativo</option>
+                            <option value="DESCARTADO">Descartado</option>
+                        </select>
+                    </label>
+                    <label id="assetOwnerGroup" class="form-group asset-field-wide" hidden>
+                        <span class="form-label">Cliente proprietário</span>
+                        <select id="assetOwner" class="form-control" disabled required>
+                            <option value="">Selecione o cliente</option>
+                        </select>
+                        <span id="assetOwnerHelper" class="form-helper">O proprietário não poderá ser trocado após o cadastro.</span>
+                    </label>
+                    <label class="form-group">
+                        <span class="form-label">Data de compra</span>
+                        <input type="date" id="assetPurchaseDate" class="form-control">
+                    </label>
+                    <label class="form-group">
+                        <span class="form-label">Fim da garantia</span>
+                        <input type="date" id="assetWarrantyEndDate" class="form-control">
+                    </label>
+                    <label class="form-group asset-field-wide">
+                        <span class="form-label">Fornecedor da garantia</span>
+                        <input type="text" id="assetWarrantyProvider" class="form-control" maxlength="255" placeholder="Fabricante, loja ou contrato" autocomplete="organization">
+                    </label>
                 </div>
-                <div class="form-group">
-                    <label for="tipo" class="form-label">Tipo</label>
-                    <input type="text" id="tipo" class="form-control" required maxlength="50" placeholder="Ex.: Notebook, monitor ou impressora">
-                </div>
-                <div class="form-group">
-                    <label for="numeroSerie" class="form-label">Número de série</label>
-                    <input type="text" id="numeroSerie" class="form-control" required maxlength="255" placeholder="Ex.: SN12345XYZ">
-                </div>
+                <p id="assetFormError" class="form-helper error asset-form-error" role="alert" hidden></p>
                 <footer class="modal-actions">
                     <button type="button" class="btn btn-secondary" id="btnCancelModal">Cancelar</button>
-                    <button type="submit" class="btn btn-primary" id="btnSubmitAsset">Salvar equipamento</button>
+                    <button type="submit" class="btn btn-primary" id="btnSubmitAsset">Salvar ativo</button>
                 </footer>
             </form>
         </div>
@@ -126,7 +265,7 @@
 
     <div id="toastRegion" class="toast-region" aria-live="polite" aria-atomic="true"></div>
 
-    <script type="module" src="js/navigation.js?v=20260821.2"></script>
-    <script type="module" src="js/assets.js"></script>
+    <script type="module" src="js/navigation.js?v=20260821.3"></script>
+    <script type="module" src="js/assets.js?v=20260821.2"></script>
 </body>
 </html>

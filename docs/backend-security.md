@@ -5,7 +5,7 @@ O backend recebe toda configuração sensível pelo ambiente do processo. Não h
 Exemplo exclusivamente fictício:
 
 ```text
-SPEEDDESK_DB_URL=jdbc:postgresql://db.example.invalid:5432/postgres
+SPEEDDESK_DB_URL=jdbc:postgresql://db.example.invalid:5432/postgres?sslmode=require
 SPEEDDESK_DB_USERNAME=speeddesk_app
 SPEEDDESK_DB_PASSWORD=replace-with-a-local-secret
 SPEEDDESK_JWT_SECRET=replace-with-a-random-secret-containing-at-least-32-bytes
@@ -36,11 +36,11 @@ O backend também valida a assinatura, o emissor, a expiração e as claims obri
 
 | Perfil | Permissões implementadas |
 | --- | --- |
-| `CLIENTE` | Consulta e atualiza o próprio perfil, troca a própria senha, lista, filtra, cria e consulta individualmente somente os próprios chamados e ativos. Pode comentar publicamente e fechar ou reabrir o próprio chamado nos estados permitidos, além de consultar categorias e políticas de SLA. Não pode assumir, operar status/SLA, criar notas internas nem administrar cadastros. |
-| `TECNICO` | Consulta e atualiza o próprio perfil, troca a própria senha, lista, filtra e consulta chamados e ativos de clientes, consulta categorias e políticas de SLA, pode criar recursos para um cliente, comentar chamados, assumir em seu próprio nome e operar status ou SLA somente quando for o técnico atribuído. Não pode fechar/reabrir chamados nem administrar políticas ou cadastros. |
-| `GERENTE` | Consulta e atualiza o próprio perfil, troca a própria senha, administra contas, recuperações manuais, organizações, categorias e políticas de SLA, consulta e cria recursos para clientes e pode atribuir, operar, fechar, reabrir e comentar qualquer chamado conforme as regras de estado. |
+| `CLIENTE` | Consulta e atualiza o próprio perfil, troca a própria senha, lista, filtra, abre e acompanha somente os próprios chamados; cria, consulta e edita somente os próprios ativos. Pode comentar publicamente, manter os detalhes dos próprios chamados de software e fechar ou reabrir o chamado nos estados permitidos, além de consultar categorias e políticas de SLA. Não pode assumir, operar status/SLA ou hardware, criar logs/notas internas nem administrar cadastros. |
+| `TECNICO` | Consulta e atualiza o próprio perfil, troca a própria senha, lista e consulta chamados e ativos de clientes, consulta categorias e políticas de SLA, pode abrir chamados, comentar e assumir em seu próprio nome. Ativos são somente leitura; status, SLA, manutenção de hardware, detalhes e logs de software só podem ser operados quando for o técnico atribuído. Não pode fechar/reabrir chamados nem administrar políticas ou cadastros. |
+| `GERENTE` | Consulta e atualiza o próprio perfil, troca a própria senha, administra contas, recuperações manuais, organizações, categorias, políticas de SLA e ativos. Pode atribuir, operar, fechar, reabrir e comentar qualquer chamado conforme as regras de estado, além de operar todos os fluxos especializados. |
 
-O vínculo de um ativo ou chamado sempre exige um usuário com role `CLIENTE`. Um ativo informado na abertura do chamado precisa pertencer ao mesmo cliente. Apenas usuários `CLIENTE` podem receber uma organização, e esse agrupamento não altera as regras de proprietário nem concede acesso aos dados de outro cliente. Categorias precisam estar ativas e ter o mesmo tipo do chamado. As respostas usam DTOs e não expõem hashes de senha nem entidades JPA internas.
+O vínculo de um ativo ou chamado sempre exige um usuário ativo com role `CLIENTE`. Um ativo informado na abertura do chamado precisa pertencer ao mesmo cliente. Apenas usuários `CLIENTE` podem receber uma organização, e esse agrupamento não altera as regras de proprietário nem concede acesso aos dados de outro cliente. Categorias precisam estar ativas e ter o mesmo tipo do chamado. As respostas usam DTOs e não expõem hashes de senha nem entidades JPA internas.
 
 ### Gestão administrativa de usuários
 
@@ -100,11 +100,37 @@ Chamados, políticas e registros de pausa possuem versão de concorrência otimi
 
 Não existem endpoints para editar ou apagar comentários. Notas internas nunca são devolvidas a um cliente, mesmo que ele seja o proprietário do chamado. A coleção ordenada de comentários é uma conversa do chamado e não representa a linha do tempo geral rejeitada no item `C3`.
 
+### Ativos, garantia e histórico por equipamento
+
+`GET /api/assets`, `/api/assets/{assetId}`, `/api/assets/{assetId}/tickets`, `/api/assets/{assetId}/technical-history` e `/api/assets/warranty-alerts` calculam primeiro o escopo do usuário. Um cliente sempre é limitado ao próprio identificador, mesmo que tente fornecer outro `clienteId`; técnico e gerente podem consultar ativos de clientes. O endpoint legado `GET /api/assets/cliente/{clienteId}` permanece disponível com a mesma proteção.
+
+`POST /api/assets` é permitido ao cliente para si próprio e ao gerente para um cliente ativo. `PUT /api/assets/{assetId}` é permitido somente ao proprietário ou ao gerente, e rejeita qualquer tentativa de trocar o proprietário. Técnicos possuem acesso somente de leitura. Não há endpoint de exclusão.
+
+O modelo aceita apenas os tipos `NOTEBOOK`, `DESKTOP`, `MONITOR`, `IMPRESSORA`, `SERVIDOR`, `EQUIPAMENTO_REDE`, `PERIFERICO` e `OUTRO`, e os status `ATIVO`, `EM_MANUTENCAO`, `INATIVO` e `DESCARTADO`. O serial é normalizado e permanece único sem diferença entre maiúsculas e minúsculas. A data final da garantia não pode anteceder a compra. O estado de garantia não é aceito do navegador: ele é derivado no backend como `NAO_INFORMADA`, `VIGENTE`, `EXPIRA_EM_BREVE` para até 30 dias, `EXPIRADA` ou `NAO_ELEGIVEL` para ativos inativos/descartados.
+
+A resposta mantém os aliases legados `nome`/`numeroSerie` junto aos nomes canônicos `modelo`/`serial`. O conversor de persistência também preserva a leitura do H2 anterior: valores conhecidos como `Computador` ou `Laptop` são convertidos para o tipo canônico correspondente e um tipo histórico desconhecido é lido como `OUTRO`; toda nova escrita usa o nome canônico.
+
+### Atendimento especializado de hardware
+
+As rotas `/api/tickets/{ticketId}/hardware/**` primeiro validam a autorização de leitura e depois exigem que o chamado seja `HARDWARE`. Consultas são permitidas a quem já pode ler o chamado. Atualização de elegibilidade/garantia, inclusão de manutenção e checklist exigem o técnico atribuído ou um gerente.
+
+As etapas avançam uma posição por vez em `RECEBIDO → EM_ANALISE → EM_REPARO → EM_TESTE → CONCLUIDO`; repetir a etapa atual é idempotente quanto à progressão e saltos ou retornos são rejeitados. O checklist só pode ser preenchido em `EM_TESTE` ou `CONCLUIDO`, contém cinco verificações obrigatórias para ser considerado completo e precisa estar concluído antes da etapa final. Depois da conclusão, ele não pode voltar a ficar incompleto enquanto o atendimento permanecer concluído.
+
+Mudanças de etapa, intervenções manuais e conclusão do checklist produzem registros imutáveis em `hardware_maintenance_history`. `GET /api/assets/{assetId}/technical-history` consolida somente esses registros de chamados vinculados ao ativo autorizado. Esse histórico técnico é necessário ao item `HW7`; ele não cria a linha do tempo geral `C3`, auditoria `SEC1`, diagnóstico `HW2`, RMA, peças, logística ou QR, todos fora do escopo.
+
+### Atendimento especializado de software
+
+As rotas `/api/tickets/{ticketId}/software/**` primeiro aplicam a autorização do chamado e rejeitam qualquer tipo diferente de `SOFTWARE`. Os detalhes registram versão, ambiente `PRODUCAO`, `HOMOLOGACAO`, `DESENVOLVIMENTO`, `TESTE` ou `OUTRO`, plataforma, sistema operacional, passos de reprodução e resultados esperado/atual. Cliente proprietário, técnico atribuído e gerente podem manter esses detalhes.
+
+Os logs técnicos estruturados usam `DEBUG`, `INFO`, `WARN` ou `ERROR`, origem, mensagem e instante da ocorrência. Qualquer usuário autorizado pode consultá-los, mas somente o técnico atribuído ou um gerente pode incluir um registro. Logs não possuem edição nem exclusão. Não foram adicionados IDs de correlação (`SW6`), base de erros conhecidos (`SW8`) ou gestão de incidentes de software (`SW9`).
+
 ## RLS e Data API do Supabase
 
-As tabelas remotas existentes estão com RLS habilitado e sem policies, mantendo bloqueado o acesso pela Data API. O schema de referência habilita RLS também em `organizations`, `ticket_categories`, `password_reset_tokens`, `sla_policies`, `ticket_sla_pauses` e `ticket_comments`, mas essas definições novas não foram aplicadas ao Supabase remoto e permanecem pendentes de revisão. A API Spring continua sendo a única porta de entrada da aplicação e acessa o PostgreSQL pela conexão JDBC configurada no backend. O acesso direto ao Supabase pelo frontend está fora do escopo aprovado. Nenhuma chave `service_role` deve ser exposta no navegador.
+O PostgreSQL remoto foi sincronizado por migrations controladas em 22 de agosto de 2026. As 14 tabelas da aplicação estão com RLS habilitado. Cada uma possui a policy `speeddesk_backend_access`, destinada exclusivamente ao role JDBC `speeddesk_app`; esse role recebe somente conexão, uso do schema e operações de dados necessárias ao backend. Ele não possui privilégios de superusuário, criação de banco, criação de role ou alteração de schema.
 
-Os blocos `T1–T7`, `C1–C2`, `SLA1–SLA2` e `U1–U6/CFG1/ORG2` não alteraram grants, Data API nem o banco remoto. As novas tabelas e colunas existem no modelo local e no schema PostgreSQL de referência, mas sua aplicação remota permanece pendente da migration controlada. Como a arquitetura é API-only, o schema não cria policies nem concede acesso a `anon` ou `authenticated`; RLS sem policy mantém as tabelas indisponíveis pela Data API. As chaves estrangeiras usadas em consultas ou cascatas possuem índices, comentários e pausas são removidos com o chamado, e autores/operadores permanecem protegidos por `ON DELETE RESTRICT`.
+`anon` e `authenticated` não aparecem em nenhuma policy da aplicação. Portanto, a Data API continua bloqueada, e o frontend acessa dados somente pela API Spring. Nenhuma chave `service_role`, senha JDBC ou segredo JWT deve ser exposto no navegador. A senha do role `speeddesk_app` é criada fora das migrations e mantida apenas como variável de ambiente local ou do runtime.
+
+O script reproduzível sem segredo está em `docs/supabase-access.sql`. Novas tabelas devem receber RLS, grants para `speeddesk_app` e a mesma policy na migration que as criar. Detalhes, checklists, históricos e logs são removidos por `ON DELETE CASCADE` quando o chamado é excluído; usuários responsáveis continuam protegidos por `ON DELETE RESTRICT`. Índices acompanham os acessos por ticket, ativo, data de manutenção e ocorrência do log, e o serial do ativo usa índice único sobre `LOWER(serial_tag)`.
 
 ## Desenvolvimento offline com o perfil `localdev`
 
@@ -137,7 +163,7 @@ Essa compatibilidade é transitória. Contas legadas que nunca voltarem a fazer 
 ## Pendências de implantação
 
 - Configurar as variáveis de ambiente no runtime oficial do backend.
-- Criar e revisar a migration remota para as alterações acumuladas, incluindo `users.ativo`, `password_reset_tokens`, políticas e snapshots de SLA, pausas, comentários e versões de concorrência, sem expor as novas tabelas pela Data API.
+- Aplicar futuras alterações estruturais por migrations antes de iniciar a versão correspondente do backend.
 - Rotacionar no painel do provedor qualquer credencial externa que já tenha sido versionada.
 - Migrar ou redefinir senhas legadas remanescentes.
 - Definir a estratégia definitiva de ambientes e implantação.

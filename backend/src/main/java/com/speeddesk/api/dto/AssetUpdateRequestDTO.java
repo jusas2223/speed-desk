@@ -9,7 +9,7 @@ import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
 import java.util.UUID;
 
-public record AssetRequestDTO(
+public record AssetUpdateRequestDTO(
         @JsonAlias("nome")
         @NotBlank(message = "O modelo e obrigatorio")
         @Size(max = 255, message = "O modelo deve possuir no máximo 255 caracteres")
@@ -27,6 +27,7 @@ public record AssetRequestDTO(
         @Size(max = 255, message = "O serial deve possuir no máximo 255 caracteres")
         String serial,
 
+        @NotNull(message = "O status e obrigatorio")
         AssetStatus status,
 
         LocalDate purchaseDate,
@@ -36,28 +37,8 @@ public record AssetRequestDTO(
         @Size(max = 255, message = "O fornecedor da garantia deve possuir no máximo 255 caracteres")
         String warrantyProvider,
 
-        @NotNull(message = "O clienteId e obrigatorio")
         UUID clienteId
 ) {
-    public AssetRequestDTO(
-            String nome,
-            String tipo,
-            String numeroSerie,
-            UUID clienteId
-    ) {
-        this(
-                nome,
-                null,
-                tipo,
-                numeroSerie,
-                AssetStatus.ATIVO,
-                null,
-                null,
-                null,
-                clienteId
-        );
-    }
-
     public String nome() {
         return modelo;
     }

@@ -12,6 +12,8 @@ public interface TicketRepository extends JpaRepository<Ticket, UUID> {
 
     List<Ticket> findAllByCliente_IdOrderByDataCriacaoDesc(UUID clientId);
 
+    List<Ticket> findAllByAsset_IdOrderByDataCriacaoDesc(UUID assetId);
+
     boolean existsByCliente_Id(UUID clientId);
 
     boolean existsByTecnico_Id(UUID technicianId);

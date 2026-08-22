@@ -91,6 +91,19 @@ public class GlobalExceptionHandler {
         );
     }
 
+    @ExceptionHandler(DuplicateAssetSerialException.class)
+    public ResponseEntity<ProblemDetail> handleDuplicateAssetSerial(
+            DuplicateAssetSerialException exception,
+            HttpServletRequest request
+    ) {
+        return response(
+                HttpStatus.CONFLICT,
+                "Serial de ativo já cadastrado",
+                exception.getMessage(),
+                request
+        );
+    }
+
     @ExceptionHandler({
             TicketNotFoundException.class,
             TechnicianNotFoundException.class,

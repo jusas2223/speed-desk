@@ -48,13 +48,46 @@ CREATE TABLE password_reset_tokens (
 
 CREATE TABLE assets (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    serial_tag VARCHAR(255) NOT NULL UNIQUE,
+    serial_tag VARCHAR(255) NOT NULL,
     modelo VARCHAR(255) NOT NULL,
-    tipo VARCHAR(255) NOT NULL,
+    fabricante VARCHAR(255),
+    tipo VARCHAR(50) NOT NULL
+        CHECK (tipo IN (
+            'NOTEBOOK',
+            'DESKTOP',
+            'MONITOR',
+            'IMPRESSORA',
+            'SERVIDOR',
+            'EQUIPAMENTO_REDE',
+            'PERIFERICO',
+            'OUTRO'
+        )),
+    status VARCHAR(50) NOT NULL DEFAULT 'ATIVO'
+        CHECK (status IN ('ATIVO', 'EM_MANUTENCAO', 'INATIVO', 'DESCARTADO')),
+    data_compra DATE,
+    garantia_fim DATE,
+    fornecedor_garantia VARCHAR(255),
     user_id UUID NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    version BIGINT NOT NULL DEFAULT 0
+        CHECK (version >= 0),
+    CONSTRAINT chk_assets_serial_tag
+        CHECK (CHAR_LENGTH(BTRIM(serial_tag)) BETWEEN 1 AND 255),
+    CONSTRAINT chk_assets_modelo
+        CHECK (CHAR_LENGTH(BTRIM(modelo)) BETWEEN 1 AND 255),
+    CONSTRAINT chk_assets_garantia_datas
+        CHECK (
+            data_compra IS NULL
+            OR garantia_fim IS NULL
+            OR garantia_fim >= data_compra
+        ),
     CONSTRAINT fk_assets_user
         FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE RESTRICT
 );
+
+CREATE UNIQUE INDEX uq_assets_serial_tag_ci
+    ON assets (LOWER(serial_tag));
 
 CREATE TABLE ticket_categories (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -195,14 +228,155 @@ CREATE TABLE ticket_comments (
         FOREIGN KEY (author_id) REFERENCES users (id) ON DELETE RESTRICT
 );
 
+CREATE TABLE hardware_ticket_details (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    ticket_id UUID NOT NULL UNIQUE,
+    eligibility_status VARCHAR(30) NOT NULL DEFAULT 'PENDENTE'
+        CHECK (eligibility_status IN ('PENDENTE', 'ELEGIVEL', 'NAO_ELEGIVEL')),
+    warranty_coverage VARCHAR(30) NOT NULL DEFAULT 'NAO_AVALIADA'
+        CHECK (warranty_coverage IN ('NAO_AVALIADA', 'COBERTA', 'NAO_COBERTA')),
+    eligibility_notes TEXT,
+    maintenance_stage VARCHAR(30) NOT NULL DEFAULT 'RECEBIDO'
+        CHECK (maintenance_stage IN (
+            'RECEBIDO',
+            'EM_ANALISE',
+            'EM_REPARO',
+            'EM_TESTE',
+            'CONCLUIDO'
+        )),
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    version BIGINT NOT NULL DEFAULT 0
+        CHECK (version >= 0),
+    CONSTRAINT chk_hardware_ticket_details_notes
+        CHECK (
+            eligibility_notes IS NULL
+            OR CHAR_LENGTH(eligibility_notes) <= 2000
+        ),
+    CONSTRAINT chk_hardware_ticket_details_timestamps
+        CHECK (updated_at >= created_at),
+    CONSTRAINT fk_hardware_ticket_details_ticket
+        FOREIGN KEY (ticket_id) REFERENCES tickets (id) ON DELETE CASCADE
+);
+
+CREATE TABLE hardware_maintenance_history (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    ticket_id UUID NOT NULL,
+    entry_type VARCHAR(30) NOT NULL
+        CHECK (entry_type IN ('ETAPA', 'MANUTENCAO', 'CHECKLIST')),
+    maintenance_stage VARCHAR(30) NOT NULL
+        CHECK (maintenance_stage IN (
+            'RECEBIDO',
+            'EM_ANALISE',
+            'EM_REPARO',
+            'EM_TESTE',
+            'CONCLUIDO'
+        )),
+    description TEXT NOT NULL,
+    performed_by UUID NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT chk_hardware_maintenance_history_description
+        CHECK (CHAR_LENGTH(BTRIM(description)) BETWEEN 1 AND 4000),
+    CONSTRAINT fk_hardware_maintenance_history_ticket
+        FOREIGN KEY (ticket_id) REFERENCES tickets (id) ON DELETE CASCADE,
+    CONSTRAINT fk_hardware_maintenance_history_performed_by
+        FOREIGN KEY (performed_by) REFERENCES users (id) ON DELETE RESTRICT
+);
+
+CREATE TABLE hardware_post_repair_checklists (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    ticket_id UUID NOT NULL UNIQUE,
+    equipment_turns_on BOOLEAN NOT NULL DEFAULT FALSE,
+    functionality_validated BOOLEAN NOT NULL DEFAULT FALSE,
+    connectivity_validated BOOLEAN NOT NULL DEFAULT FALSE,
+    cleaning_completed BOOLEAN NOT NULL DEFAULT FALSE,
+    client_data_preserved BOOLEAN NOT NULL DEFAULT FALSE,
+    notes TEXT,
+    completed_at TIMESTAMP WITH TIME ZONE,
+    completed_by UUID,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    version BIGINT NOT NULL DEFAULT 0
+        CHECK (version >= 0),
+    CONSTRAINT chk_hardware_post_repair_checklists_notes
+        CHECK (notes IS NULL OR CHAR_LENGTH(notes) <= 2000),
+    CONSTRAINT chk_hardware_post_repair_checklists_completion
+        CHECK (
+            (completed_at IS NULL AND completed_by IS NULL)
+            OR (completed_at IS NOT NULL AND completed_by IS NOT NULL)
+        ),
+    CONSTRAINT fk_hardware_post_repair_checklists_ticket
+        FOREIGN KEY (ticket_id) REFERENCES tickets (id) ON DELETE CASCADE,
+    CONSTRAINT fk_hardware_post_repair_checklists_completed_by
+        FOREIGN KEY (completed_by) REFERENCES users (id) ON DELETE RESTRICT
+);
+
+CREATE TABLE ticket_software_details (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    ticket_id UUID NOT NULL UNIQUE,
+    software_version VARCHAR(120) NOT NULL,
+    affected_environment VARCHAR(30) NOT NULL
+        CHECK (affected_environment IN (
+            'PRODUCAO',
+            'HOMOLOGACAO',
+            'DESENVOLVIMENTO',
+            'TESTE',
+            'OUTRO'
+        )),
+    platform VARCHAR(160) NOT NULL,
+    operating_system VARCHAR(160) NOT NULL,
+    reproduction_steps TEXT NOT NULL,
+    expected_result TEXT NOT NULL,
+    actual_result TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    version BIGINT NOT NULL DEFAULT 0
+        CHECK (version >= 0),
+    CONSTRAINT chk_ticket_software_details_version
+        CHECK (CHAR_LENGTH(BTRIM(software_version)) BETWEEN 1 AND 120),
+    CONSTRAINT chk_ticket_software_details_platform
+        CHECK (CHAR_LENGTH(BTRIM(platform)) BETWEEN 1 AND 160),
+    CONSTRAINT chk_ticket_software_details_operating_system
+        CHECK (CHAR_LENGTH(BTRIM(operating_system)) BETWEEN 1 AND 160),
+    CONSTRAINT chk_ticket_software_details_reproduction_steps
+        CHECK (CHAR_LENGTH(BTRIM(reproduction_steps)) BETWEEN 1 AND 10000),
+    CONSTRAINT chk_ticket_software_details_expected_result
+        CHECK (CHAR_LENGTH(BTRIM(expected_result)) BETWEEN 1 AND 10000),
+    CONSTRAINT chk_ticket_software_details_actual_result
+        CHECK (CHAR_LENGTH(BTRIM(actual_result)) BETWEEN 1 AND 10000),
+    CONSTRAINT chk_ticket_software_details_timestamps
+        CHECK (updated_at >= created_at),
+    CONSTRAINT fk_ticket_software_details_ticket
+        FOREIGN KEY (ticket_id) REFERENCES tickets (id) ON DELETE CASCADE
+);
+
+CREATE TABLE ticket_software_logs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    ticket_id UUID NOT NULL,
+    level VARCHAR(20) NOT NULL
+        CHECK (level IN ('DEBUG', 'INFO', 'WARN', 'ERROR')),
+    source VARCHAR(120) NOT NULL,
+    message TEXT NOT NULL,
+    occurred_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT chk_ticket_software_logs_source
+        CHECK (CHAR_LENGTH(BTRIM(source)) BETWEEN 1 AND 120),
+    CONSTRAINT chk_ticket_software_logs_message
+        CHECK (CHAR_LENGTH(BTRIM(message)) BETWEEN 1 AND 10000),
+    CONSTRAINT fk_ticket_software_logs_ticket
+        FOREIGN KEY (ticket_id) REFERENCES tickets (id) ON DELETE CASCADE
+);
+
 CREATE INDEX idx_users_organization_id
     ON users (organization_id);
 
 CREATE INDEX idx_password_reset_tokens_user_id
     ON password_reset_tokens (user_id);
 
-CREATE INDEX idx_assets_user_id
-    ON assets (user_id);
+CREATE INDEX idx_assets_user_created_at
+    ON assets (user_id, created_at DESC);
+
+CREATE INDEX idx_assets_created_at
+    ON assets (created_at DESC);
 
 CREATE INDEX idx_tickets_cliente_data_criacao
     ON tickets (cliente_id, data_criacao DESC);
@@ -239,6 +413,19 @@ CREATE INDEX idx_ticket_comments_ticket_created_at
 CREATE INDEX idx_ticket_comments_author_id
     ON ticket_comments (author_id);
 
+CREATE INDEX idx_hardware_maintenance_history_ticket_created_at
+    ON hardware_maintenance_history (ticket_id, created_at DESC, id DESC);
+
+CREATE INDEX idx_hardware_maintenance_history_performed_by
+    ON hardware_maintenance_history (performed_by);
+
+CREATE INDEX idx_hardware_post_repair_checklists_completed_by
+    ON hardware_post_repair_checklists (completed_by)
+    WHERE completed_by IS NOT NULL;
+
+CREATE INDEX idx_ticket_software_logs_ticket_occurred_at
+    ON ticket_software_logs (ticket_id, occurred_at DESC, id DESC);
+
 ALTER TABLE organizations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE password_reset_tokens ENABLE ROW LEVEL SECURITY;
@@ -248,10 +435,14 @@ ALTER TABLE sla_policies ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tickets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ticket_sla_pauses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ticket_comments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE hardware_ticket_details ENABLE ROW LEVEL SECURITY;
+ALTER TABLE hardware_maintenance_history ENABLE ROW LEVEL SECURITY;
+ALTER TABLE hardware_post_repair_checklists ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ticket_software_details ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ticket_software_logs ENABLE ROW LEVEL SECURITY;
 
--- Nenhuma policy é criada neste momento. O frontend acessa os dados somente
--- pela API Spring, e o acesso pela Data API do Supabase deve permanecer
--- bloqueado. Em especial, hashes de recuperação, notas internas e registros
--- operacionais de pausa nunca devem ser expostos ao navegador pela Data API.
--- Se o acesso direto pelo frontend for aprovado futuramente, as policies e os
--- grants mínimos deverão ser definidos antes da habilitação.
+-- O frontend acessa os dados somente pela API Spring. Os grants e a policy
+-- exclusiva do role JDBC speeddesk_app ficam em supabase-access.sql para que
+-- nenhuma senha faça parte deste schema. anon e authenticated permanecem sem
+-- policy; hashes de recuperação, notas internas, registros operacionais de
+-- SLA, manutenção e logs técnicos não são expostos pela Data API.

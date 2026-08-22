@@ -10,5 +10,13 @@ public interface AssetRepository extends JpaRepository<Asset, UUID> {
 
     List<Asset> findAllByCliente_Id(UUID clienteId);
 
+    List<Asset> findAllByOrderByCreatedAtDesc();
+
+    List<Asset> findAllByCliente_IdOrderByCreatedAtDesc(UUID clienteId);
+
+    boolean existsByNumeroSerieIgnoreCase(String numeroSerie);
+
+    boolean existsByNumeroSerieIgnoreCaseAndIdNot(String numeroSerie, UUID id);
+
     boolean existsByCliente_Id(UUID clienteId);
 }
