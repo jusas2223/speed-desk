@@ -100,6 +100,13 @@ const api = {
             }
         }
 
+        const method = (fetchOptions.method || 'GET').toUpperCase();
+        if (!publicRequest
+            && ['POST', 'PUT', 'PATCH'].includes(method)
+            && !headers['Idempotency-Key']) {
+            headers['Idempotency-Key'] = crypto.randomUUID();
+        }
+
         fetchOptions.headers = headers;
 
         try {

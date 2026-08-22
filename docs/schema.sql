@@ -435,6 +435,35 @@ CREATE TABLE notifications (
         FOREIGN KEY (recipient_id) REFERENCES users (id) ON DELETE CASCADE
 );
 
+CREATE TABLE idempotency_records (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    key_hash VARCHAR(64) NOT NULL,
+    actor VARCHAR(255) NOT NULL,
+    method VARCHAR(10) NOT NULL,
+    request_path VARCHAR(500) NOT NULL,
+    request_fingerprint VARCHAR(64) NOT NULL,
+    state VARCHAR(20) NOT NULL
+        CHECK (state IN ('PROCESSING', 'COMPLETED')),
+    response_status INTEGER,
+    response_content_type VARCHAR(160),
+    response_body TEXT,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    CONSTRAINT uq_idempotency_key_actor UNIQUE (key_hash, actor),
+    CONSTRAINT chk_idempotency_key_hash
+        CHECK (CHAR_LENGTH(key_hash) = 64),
+    CONSTRAINT chk_idempotency_fingerprint
+        CHECK (CHAR_LENGTH(request_fingerprint) = 64),
+    CONSTRAINT chk_idempotency_dates
+        CHECK (expires_at > created_at),
+    CONSTRAINT chk_idempotency_response
+        CHECK (
+            (state = 'PROCESSING' AND response_status IS NULL)
+            OR
+            (state = 'COMPLETED' AND response_status BETWEEN 100 AND 599)
+        )
+);
+
 CREATE INDEX idx_users_organization_id
     ON users (organization_id);
 
@@ -514,6 +543,9 @@ CREATE INDEX idx_notifications_recipient_unread
     ON notifications (recipient_id, created_at DESC)
     WHERE read_at IS NULL;
 
+CREATE INDEX idx_idempotency_records_expires_at
+    ON idempotency_records (expires_at);
+
 ALTER TABLE organizations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE password_reset_tokens ENABLE ROW LEVEL SECURITY;
@@ -531,10 +563,11 @@ ALTER TABLE ticket_software_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE incidents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE incident_tickets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE idempotency_records ENABLE ROW LEVEL SECURITY;
 
 -- O frontend acessa os dados somente pela API Spring. Os grants e a policy
 -- exclusiva do role JDBC speeddesk_app ficam em supabase-access.sql para que
 -- nenhuma senha faça parte deste schema. anon e authenticated permanecem sem
 -- policy; hashes de recuperação, notas internas, registros operacionais de
--- SLA, manutenção, incidentes, notificações e logs técnicos não são expostos
+-- SLA, manutenção, incidentes, notificações, idempotência e logs técnicos não são expostos
 -- pela Data API.

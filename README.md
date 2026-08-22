@@ -188,10 +188,11 @@ Quando ausentes, são criadas ativas a organização `Empresa Demonstração` e 
 
 ## Servir o frontend
 
-O frontend usa ES Modules e deve ser servido por HTTP. Com Python disponível, execute na raiz do projeto:
+O frontend usa ES Modules e deve ser servido por HTTP. Com o próprio JDK 26, execute na raiz do projeto:
 
 ```powershell
-python -m http.server 5500 --directory frontend
+$env:JAVA_HOME="C:\Users\Pessoal\.jdks\openjdk-26.0.1"
+& "$env:JAVA_HOME\bin\jwebserver.exe" -p 5500 -d frontend
 ```
 
 Depois, acesse `http://localhost:5500/`. Também é possível usar um servidor estático da IDE na porta 5500. A API local deve estar disponível em `http://localhost:8080`.
@@ -209,6 +210,9 @@ O perfil padrão usa PostgreSQL e exige configuração externa. Os exemplos abai
 | `SPEEDDESK_JWT_EXPIRATION_SECONDS` | Validade do token; padrão de 3600 segundos | `3600` |
 | `SPEEDDESK_CORS_ALLOWED_ORIGINS` | Origens permitidas, separadas por vírgula | `http://127.0.0.1:5500,http://localhost:5500` |
 | `SPEEDDESK_PASSWORD_RESET_EXPIRATION_MINUTES` | Validade da recuperação manual; padrão de 30 e intervalo aceito de 5 a 1440 minutos | `30` |
+| `SPEEDDESK_RATE_LIMIT_ENABLED` | Ativa o limite de requisições; padrão `true` | `true` |
+| `SPEEDDESK_AUTHENTICATED_REQUESTS_PER_MINUTE` | Limite por usuário autenticado; padrão 180 por minuto | `180` |
+| `SPEEDDESK_PUBLIC_REQUESTS_PER_MINUTE` | Limite por IP nas rotas públicas; padrão 20 por minuto | `20` |
 
 Nenhuma credencial real deve ser adicionada aos arquivos do projeto.
 
@@ -236,14 +240,19 @@ Os testes automatizados usam H2 em memória e não tentam conectar ao Supabase.
 
 O H2 atende ao desenvolvimento offline, especialmente no ambiente de rede da faculdade. O PostgreSQL hospedado no Supabase continua sendo o banco remoto oficial do projeto e é usado pelo perfil padrão por meio das variáveis `SPEEDDESK_DB_*`.
 
-O projeto remoto `ProjetoSpeedDesk` foi sincronizado em 22 de agosto de 2026 por migrations controladas. Ele possui as 17 tabelas atuais, RLS habilitado e uma policy exclusiva para o role JDBC `speeddesk_app`; os roles da Data API não recebem acesso. O arquivo `docs/schema.sql` continua sendo a representação PostgreSQL de referência, e `docs/supabase-access.sql` documenta os grants e policies do backend sem conter senha.
+O projeto remoto `ProjetoSpeedDesk` foi sincronizado em 22 de agosto de 2026 por migrations controladas. Ele possui as 18 tabelas atuais, RLS habilitado e uma policy exclusiva para o role JDBC `speeddesk_app`; os roles da Data API não recebem acesso. O arquivo `docs/schema.sql` continua sendo a representação PostgreSQL de referência, e `docs/supabase-access.sql` documenta os grants e policies do backend sem conter senha.
+
+## Documentação da API e proteções operacionais
+
+Com o backend em execução, a especificação OpenAPI fica em `http://localhost:8080/v3/api-docs` e a interface Swagger UI em `http://localhost:8080/swagger-ui.html`. O botão **Authorize** aceita o JWT emitido pelo login.
+
+O frontend envia uma nova `Idempotency-Key` em operações autenticadas `POST`, `PUT` e `PATCH`. Em rotas críticas, o backend guarda somente os hashes da chave e da requisição por 24 horas; uma repetição idêntica devolve a resposta original sem executar a regra de negócio novamente. O rate limit devolve `429`, `Retry-After` e os cabeçalhos `X-RateLimit-*` quando o limite configurado é excedido.
 
 As decisões definitivas sobre separação de ambientes, publicação do frontend e implantação do backend continuam em aberto. Novas alterações estruturais devem ser aplicadas como migrations antes de iniciar o perfil padrão, que usa `spring.jpa.hibernate.ddl-auto=validate` e nunca modifica o schema automaticamente.
 
 ## Roadmap
 
 - implementar PWA e os dois recursos de IA;
-- adicionar idempotência, limite de requisições e documentação OpenAPI/Swagger;
 - definir a estratégia final de ambientes e manter o schema remoto sincronizado por migrations controladas.
 
 O escopo completo, as exclusões e a ordem dos macroblocos estão em [`docs/product-roadmap.md`](docs/product-roadmap.md). O fluxo técnico consolidado do Codex está em [`docs/development-workflow.md`](docs/development-workflow.md). Detalhes de segurança e operação local estão em [`docs/backend-security.md`](docs/backend-security.md).

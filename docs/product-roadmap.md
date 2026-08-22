@@ -35,6 +35,9 @@ Este arquivo é a fonte de verdade do escopo escolhido. Ele separa o que já exi
 - `N1` notificações privadas por usuário, leitura individual/coletiva e eventos de chamados e incidentes;
 - `AN3` exportações CSV de chamados, ativos e incidentes exclusivas do gerente;
 - `RT1` atualizações autenticadas em tempo real por SSE para notificações, chamados, comentários e incidentes;
+- `SEC2` idempotência persistida em operações críticas, com replay seguro por usuário;
+- `SEC3` limite configurável de requisições públicas e autenticadas;
+- `API1` especificação OpenAPI e Swagger UI com autenticação Bearer;
 - testes automatizados do backend e integração frontend/backend validada localmente.
 
 ### Parcialmente implementado
@@ -121,11 +124,11 @@ Os dados especializados aparecem apenas no tipo de chamado correspondente. O cli
 
 Incidentes são operacionais: técnicos consultam e gerentes criam ou atualizam. As notificações pertencem exclusivamente ao destinatário, não usam e-mail e apontam para o recurso relacionado. As exportações são geradas em UTF-8 pela API Spring, sem acesso do frontend ao banco.
 
-### 7. Segurança e documentação da API
+### 7. Segurança e documentação da API — concluído
 
-- `SEC2` idempotência em operações críticas;
-- `SEC3` limite de requisições;
-- `API1` OpenAPI e Swagger.
+- `SEC2` idempotência em operações críticas — concluído;
+- `SEC3` limite de requisições — concluído;
+- `API1` OpenAPI e Swagger — concluído.
 
 ### 8. Experiência avançada
 

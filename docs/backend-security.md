@@ -12,9 +12,12 @@ SPEEDDESK_JWT_SECRET=replace-with-a-random-secret-containing-at-least-32-bytes
 SPEEDDESK_JWT_EXPIRATION_SECONDS=3600
 SPEEDDESK_CORS_ALLOWED_ORIGINS=http://127.0.0.1:5500,http://localhost:5500
 SPEEDDESK_PASSWORD_RESET_EXPIRATION_MINUTES=30
+SPEEDDESK_RATE_LIMIT_ENABLED=true
+SPEEDDESK_AUTHENTICATED_REQUESTS_PER_MINUTE=180
+SPEEDDESK_PUBLIC_REQUESTS_PER_MINUTE=20
 ```
 
-`SPEEDDESK_CORS_ALLOWED_ORIGINS` aceita uma lista separada por vírgulas. Origens curinga são rejeitadas. O segredo JWT deve ter no mínimo 32 bytes em UTF-8 e deve ser aleatório e diferente em cada ambiente. A validade da recuperação manual usa 30 minutos por padrão; `SPEEDDESK_PASSWORD_RESET_EXPIRATION_MINUTES` aceita valores entre 5 e 1440 minutos.
+`SPEEDDESK_CORS_ALLOWED_ORIGINS` aceita uma lista separada por vírgulas. Origens curinga são rejeitadas. O segredo JWT deve ter no mínimo 32 bytes em UTF-8 e deve ser aleatório e diferente em cada ambiente. A validade da recuperação manual usa 30 minutos por padrão; `SPEEDDESK_PASSWORD_RESET_EXPIRATION_MINUTES` aceita valores entre 5 e 1440 minutos. O limite padrão é de 180 requisições por minuto por usuário autenticado e 20 por minuto por endereço remoto nas rotas públicas.
 
 ## Login, JWT e sessão no frontend
 
@@ -126,7 +129,7 @@ Os logs técnicos estruturados usam `DEBUG`, `INFO`, `WARN` ou `ERROR`, origem, 
 
 ## RLS e Data API do Supabase
 
-O PostgreSQL remoto foi sincronizado por migrations controladas em 22 de agosto de 2026. As 17 tabelas da aplicação estão com RLS habilitado. Cada uma possui a policy `speeddesk_backend_access`, destinada exclusivamente ao role JDBC `speeddesk_app`; esse role recebe somente conexão, uso do schema e operações de dados necessárias ao backend. Ele não possui privilégios de superusuário, criação de banco, criação de role ou alteração de schema.
+O PostgreSQL remoto foi sincronizado por migrations controladas em 22 de agosto de 2026. As 18 tabelas da aplicação estão com RLS habilitado. Cada uma possui a policy `speeddesk_backend_access`, destinada exclusivamente ao role JDBC `speeddesk_app`; esse role recebe somente conexão, uso do schema e operações de dados necessárias ao backend. Ele não possui privilégios de superusuário, criação de banco, criação de role ou alteração de schema.
 
 `anon` e `authenticated` não aparecem em nenhuma policy da aplicação. Portanto, a Data API continua bloqueada, e o frontend acessa dados somente pela API Spring. Nenhuma chave `service_role`, senha JDBC ou segredo JWT deve ser exposto no navegador. A senha do role `speeddesk_app` é criada fora das migrations e mantida apenas como variável de ambiente local ou do runtime.
 
@@ -139,6 +142,14 @@ As rotas de incidentes aceitam leitura apenas de `TECNICO` e `GERENTE`; criaçã
 Cada notificação possui um único destinatário. Consulta, contagem e marcação de leitura derivam o usuário exclusivamente do JWT; não existe parâmetro de destinatário controlado pelo cliente. A exclusão administrativa do usuário remove suas notificações por `ON DELETE CASCADE`. O frontend recebe eventos por `GET /api/realtime/stream` usando o Bearer Token no cabeçalho e reconecta sem colocar o JWT na URL.
 
 As exportações `/api/reports/*.csv` são exclusivas de `GERENTE`, geradas em UTF-8 pela API Java e entregues com `Cache-Control: no-store`. O frontend nunca recebe credenciais do Supabase e não consulta a Data API diretamente.
+
+## Idempotência, limite de requisições e OpenAPI
+
+O frontend gera `Idempotency-Key` com `crypto.randomUUID()` nas operações autenticadas `POST`, `PUT` e `PATCH`. As rotas críticas de chamados, usuários, ativos, incidentes, organizações, categorias e políticas de SLA aceitam o cabeçalho opcional. O backend persiste apenas SHA-256 da chave, identidade JWT, método, caminho e fingerprint do corpo. Uma repetição idêntica dentro de 24 horas recebe o mesmo status, tipo e corpo com `Idempotency-Replayed: true`; reutilização com conteúdo diferente ou uma execução concorrente recebe `409`. Respostas `5xx` descartam o registro para permitir nova tentativa.
+
+O rate limit usa janelas fixas de um minuto, identidade JWT para usuários autenticados e endereço remoto para requisições públicas. Ao exceder o limite, a API responde `429 application/problem+json`, `Retry-After`, `X-RateLimit-Limit` e `X-RateLimit-Remaining`. O endereço remoto vem diretamente do servidor; caso um proxy reverso seja adotado futuramente, os cabeçalhos encaminhados devem ser confiados somente depois de configurar proxies conhecidos.
+
+`GET /v3/api-docs` e `/swagger-ui.html` são públicos para consulta técnica. A execução de endpoints documentados mantém as regras JWT e de autorização existentes; o esquema OpenAPI oferece `bearerAuth` para informar o token no botão **Authorize**.
 
 ## Desenvolvimento offline com o perfil `localdev`
 

@@ -4,6 +4,8 @@ import com.speeddesk.api.entity.UserRole;
 import com.speeddesk.api.security.ProblemDetailAccessDeniedHandler;
 import com.speeddesk.api.security.ProblemDetailAuthenticationEntryPoint;
 import com.speeddesk.api.security.CurrentAccountJwtValidator;
+import com.speeddesk.api.security.IdempotencyFilter;
+import com.speeddesk.api.security.RateLimitFilter;
 import jakarta.servlet.DispatcherType;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -29,6 +31,7 @@ import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -45,7 +48,8 @@ import java.util.UUID;
 @EnableConfigurationProperties({
         JwtProperties.class,
         CorsProperties.class,
-        AccountProperties.class
+        AccountProperties.class,
+        RateLimitProperties.class
 })
 public class SecurityConfig {
 
@@ -56,7 +60,9 @@ public class SecurityConfig {
             HttpSecurity http,
             JwtAuthenticationConverter jwtAuthenticationConverter,
             ProblemDetailAuthenticationEntryPoint authenticationEntryPoint,
-            ProblemDetailAccessDeniedHandler accessDeniedHandler
+            ProblemDetailAccessDeniedHandler accessDeniedHandler,
+            RateLimitFilter rateLimitFilter,
+            IdempotencyFilter idempotencyFilter
     ) throws Exception {
         http
                 .cors(Customizer.withDefaults())
@@ -68,6 +74,11 @@ public class SecurityConfig {
                 .authorizeHttpRequests(authorize -> authorize
                         .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                        .requestMatchers(
+                                "/v3/api-docs/**",
+                                "/swagger-ui/**",
+                                "/swagger-ui.html"
+                        ).permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/users/login").permitAll()
                         .requestMatchers(
                                 HttpMethod.POST,
@@ -125,7 +136,9 @@ public class SecurityConfig {
                         .authenticationEntryPoint(authenticationEntryPoint)
                         .accessDeniedHandler(accessDeniedHandler)
                         .jwt(jwt -> jwt
-                                .jwtAuthenticationConverter(jwtAuthenticationConverter)));
+                                .jwtAuthenticationConverter(jwtAuthenticationConverter)))
+                .addFilterAfter(rateLimitFilter, BearerTokenAuthenticationFilter.class)
+                .addFilterAfter(idempotencyFilter, RateLimitFilter.class);
 
         return http.build();
     }
@@ -227,7 +240,17 @@ public class SecurityConfig {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(allowedOrigins);
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("Content-Type", "Authorization"));
+        configuration.setAllowedHeaders(List.of(
+                "Content-Type",
+                "Authorization",
+                "Idempotency-Key"
+        ));
+        configuration.setExposedHeaders(List.of(
+                "Idempotency-Replayed",
+                "Retry-After",
+                "X-RateLimit-Limit",
+                "X-RateLimit-Remaining"
+        ));
         configuration.setAllowCredentials(false);
         configuration.setMaxAge(3600L);
 
