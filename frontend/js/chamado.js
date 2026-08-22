@@ -1725,5 +1725,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    const assistantLink = document.getElementById('assistantTicketLink');
+    if (assistantLink && UUID_PATTERN.test(ticketId)) {
+        assistantLink.href = `assistente.html?ticketId=${encodeURIComponent(ticketId)}`;
+    }
+
     loadPage();
 });

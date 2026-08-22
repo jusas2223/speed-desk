@@ -15,6 +15,11 @@ SPEEDDESK_PASSWORD_RESET_EXPIRATION_MINUTES=30
 SPEEDDESK_RATE_LIMIT_ENABLED=true
 SPEEDDESK_AUTHENTICATED_REQUESTS_PER_MINUTE=180
 SPEEDDESK_PUBLIC_REQUESTS_PER_MINUTE=20
+SPEEDDESK_AI_ENABLED=true
+SPEEDDESK_AI_API_KEY=replace-with-provider-key
+SPEEDDESK_AI_MODEL=gemini-2.5-flash-lite
+SPEEDDESK_AI_BASE_URL=https://generativelanguage.googleapis.com/v1beta
+SPEEDDESK_AI_TIMEOUT_SECONDS=20
 ```
 
 `SPEEDDESK_CORS_ALLOWED_ORIGINS` aceita uma lista separada por vírgulas. Origens curinga são rejeitadas. O segredo JWT deve ter no mínimo 32 bytes em UTF-8 e deve ser aleatório e diferente em cada ambiente. A validade da recuperação manual usa 30 minutos por padrão; `SPEEDDESK_PASSWORD_RESET_EXPIRATION_MINUTES` aceita valores entre 5 e 1440 minutos. O limite padrão é de 180 requisições por minuto por usuário autenticado e 20 por minuto por endereço remoto nas rotas públicas.
@@ -150,6 +155,14 @@ O frontend gera `Idempotency-Key` com `crypto.randomUUID()` nas operações aute
 O rate limit usa janelas fixas de um minuto, identidade JWT para usuários autenticados e endereço remoto para requisições públicas. Ao exceder o limite, a API responde `429 application/problem+json`, `Retry-After`, `X-RateLimit-Limit` e `X-RateLimit-Remaining`. O endereço remoto vem diretamente do servidor; caso um proxy reverso seja adotado futuramente, os cabeçalhos encaminhados devem ser confiados somente depois de configurar proxies conhecidos.
 
 `GET /v3/api-docs` e `/swagger-ui.html` são públicos para consulta técnica. A execução de endpoints documentados mantém as regras JWT e de autorização existentes; o esquema OpenAPI oferece `bearerAuth` para informar o token no botão **Authorize**.
+
+## PWA e assistência inteligente
+
+O Service Worker armazena somente HTML, CSS, JavaScript, manifesto e imagens do próprio frontend. Requisições para a API, respostas autenticadas, JWT, notificações e relatórios não entram no cache. O shell visual pode abrir sem rede; operações de dados continuam exigindo o backend.
+
+`POST /api/ai/triage` e `POST /api/ai/assistant` exigem JWT. Quando um `ticketId` é fornecido ao assistente, a mesma autorização de leitura do chamado é aplicada antes de formar o contexto, impedindo que um cliente use a IA para consultar chamado de outro cliente. O prompt não inclui credenciais, notas internas ou dados que o usuário não esteja autorizado a ler.
+
+A chave Gemini é lida somente de `SPEEDDESK_AI_API_KEY` pelo backend Java e enviada no cabeçalho `x-goog-api-key` diretamente ao provedor. Ela nunca é devolvida ao frontend, persistida no banco ou registrada. Sem chave, com a integração desabilitada ou quando o provedor falha, o backend usa uma assistência local determinística e informa `LOCAL` ou `LOCAL_FALLBACK`; respostas remotas informam `GEMINI`. Toda resposta inclui aviso para revisão humana.
 
 ## Desenvolvimento offline com o perfil `localdev`
 

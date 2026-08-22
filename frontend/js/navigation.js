@@ -1,6 +1,7 @@
 import api from './api.js';
 import { bindThemeToggle, initializeTheme } from './theme.js';
 import { startRealtime } from './realtime.js';
+import './pwa.js';
 
 const ICONS = Object.freeze({
     panel: '<rect x="3" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="3" width="7" height="7" rx="1"></rect><rect x="3" y="14" width="7" height="7" rx="1"></rect><rect x="14" y="14" width="7" height="7" rx="1"></rect>',
@@ -88,7 +89,7 @@ const MENU_ITEMS = Object.freeze({
 const ACCOUNT_ITEMS = Object.freeze([
     { label: 'Notificações', icon: 'bell', href: 'notificacoes.html', page: 'notificacoes.html', notifications: true },
     { label: 'Meu perfil', icon: 'profile', href: 'perfil.html', page: 'perfil.html' },
-    { label: 'Assistente IA', icon: 'bot', future: true },
+    { label: 'Assistente IA', icon: 'bot', href: 'assistente.html', page: 'assistente.html' },
     { label: 'Sair', icon: 'logout', logout: true }
 ]);
 

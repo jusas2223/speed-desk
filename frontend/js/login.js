@@ -1,5 +1,6 @@
 import api from './api.js';
 import { bindThemeToggle, initializeTheme } from './theme.js';
+import './pwa.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     initializeTheme();

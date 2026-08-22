@@ -49,7 +49,8 @@ import java.util.UUID;
         JwtProperties.class,
         CorsProperties.class,
         AccountProperties.class,
-        RateLimitProperties.class
+        RateLimitProperties.class,
+        AiProperties.class
 })
 public class SecurityConfig {
 

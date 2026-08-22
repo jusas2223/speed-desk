@@ -690,6 +690,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const ticketTypeSelect = document.getElementById('ticketType');
     const categorySelect = document.getElementById('categorySelect');
     const categoryStatus = document.getElementById('categoryStatus');
+    const aiTriageButton = document.getElementById('aiTriageButton');
+    const aiTriageResult = document.getElementById('aiTriageResult');
     let ticketCategories = [];
     let categoriesLoaded = false;
 
@@ -766,6 +768,8 @@ document.addEventListener('DOMContentLoaded', () => {
         newTicketModal.setAttribute('inert', '');
         newTicketModal.hidden = true;
         newTicketForm.reset();
+        aiTriageResult.hidden = true;
+        aiTriageResult.replaceChildren();
         ticketTypeSelect.value = 'GERAL';
         if (categoriesLoaded) renderCategoryOptions();
     }
@@ -775,6 +779,59 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('btnCancelModal').addEventListener('click', closeNewTicketModal);
     ticketTypeSelect.addEventListener('change', () => {
         if (categoriesLoaded) renderCategoryOptions();
+    });
+    aiTriageButton.addEventListener('click', async () => {
+        const titleInput = document.getElementById('titulo');
+        const descriptionInput = document.getElementById('descricao');
+        const description = descriptionInput.value.trim();
+        if (!description) {
+            descriptionInput.focus();
+            showToast('Descreva o problema antes de solicitar a triagem.', 'error');
+            return;
+        }
+
+        aiTriageButton.disabled = true;
+        const defaultLabel = aiTriageButton.textContent.trim();
+        aiTriageButton.textContent = 'Analisando...';
+        aiTriageResult.hidden = true;
+        try {
+            const result = await api.request('/ai/triage', {
+                method: 'POST',
+                body: JSON.stringify({ title: titleInput.value.trim(), description })
+            });
+            if (!titleInput.value.trim() && result.suggestedTitle) {
+                titleInput.value = result.suggestedTitle;
+            }
+            ticketTypeSelect.value = result.ticketType || 'GERAL';
+            document.getElementById('prioridade').value = result.priority || 'NORMAL';
+            if (categoriesLoaded) renderCategoryOptions();
+
+            aiTriageResult.replaceChildren();
+            const summary = document.createElement('strong');
+            summary.textContent = `${result.ticketType} · ${result.priority}`;
+            const detail = document.createElement('p');
+            detail.textContent = result.summary || result.reasoning;
+            const sourceLabel = document.createElement('span');
+            sourceLabel.textContent = result.source === 'GEMINI'
+                ? 'Sugestão do Gemini — revise antes de salvar.'
+                : 'Sugestão local — revise antes de salvar.';
+            aiTriageResult.append(summary, detail, sourceLabel);
+            if (Array.isArray(result.suggestedQuestions) && result.suggestedQuestions.length) {
+                const list = document.createElement('ul');
+                result.suggestedQuestions.forEach(question => {
+                    const item = document.createElement('li');
+                    item.textContent = question;
+                    list.appendChild(item);
+                });
+                aiTriageResult.appendChild(list);
+            }
+            aiTriageResult.hidden = false;
+        } catch (error) {
+            showToast(error.message || 'Não foi possível realizar a triagem.', 'error');
+        } finally {
+            aiTriageButton.disabled = false;
+            aiTriageButton.textContent = defaultLabel;
+        }
     });
     newTicketModal.addEventListener('click', event => {
         if (event.target === newTicketModal) closeNewTicketModal();

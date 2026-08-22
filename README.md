@@ -4,7 +4,7 @@ Speed Desk é uma aplicação web de service desk para registrar ativos, abrir c
 
 ## Estado atual
 
-O projeto está em uma versão funcional de evolução. Login, sessão web, autorização por perfil, ciclo administrativo de usuários, configurações pessoais, gestão completa de ativos, núcleo de chamados e fluxos especializados de hardware e software estão implementados. A persistência local offline e a integração frontend/backend são cobertas por testes automatizados no backend. O frontend possui identidade visual responsiva, temas claro e escuro, navegação específica por perfil, área dedicada de chamados, perfil pessoal, catálogo de ativos e diretório administrativo de usuários. Organizações, categorias, tipos de chamado, comentários públicos, notas internas e políticas de SLA também estão integrados ao backend e às telas correspondentes.
+O escopo funcional selecionado está concluído. Login, sessão web, autorização por perfil, usuários, configurações, ativos, chamados, hardware, software, incidentes, notificações, relatórios, tempo real, proteções da API, PWA e assistência inteligente estão integrados. O backend possui testes automatizados e o frontend foi validado em navegador com os perfis locais.
 
 ## Tecnologias
 
@@ -14,6 +14,8 @@ O projeto está em uma versão funcional de evolução. Login, sessão web, auto
 - PostgreSQL no ambiente remoto oficial e H2 no perfil local `localdev`;
 - Maven Wrapper, JUnit 5, Mockito e MockMvc;
 - HTML5, CSS3 e JavaScript com ES Modules e Fetch API.
+- PWA com Web App Manifest e Service Worker;
+- Gemini API opcional consumida somente pelo backend Java, com assistência local quando não configurada.
 
 ## Estrutura
 
@@ -85,6 +87,11 @@ O navegador se comunica somente com a API. A API autentica o JWT, aplica as regr
 - resolução por técnico responsável ou gerente;
 - respostas de erro no formato `ProblemDetail` e validação de entrada;
 - perfil `localdev` com H2 persistente e dados locais de demonstração.
+- incidentes operacionais, notificações privadas, atualizações SSE e exportações CSV;
+- idempotência persistida, rate limiting configurável e documentação OpenAPI/Swagger;
+- PWA instalável com shell estático disponível offline, sem armazenar respostas privadas da API;
+- triagem inteligente na abertura de chamados e assistente contextual com autorização por ticket;
+- integração opcional com Gemini e fallback local explícito para redes restritas ou ambientes sem chave.
 
 Os status canônicos são `RECEBIDO`, `EM_TRIAGEM`, `EM_ATENDIMENTO`, `AGUARDANDO_CLIENTE`, `AGUARDANDO_PECA`, `RESOLVIDO` e `FECHADO`. O fluxo normal permite `RECEBIDO → EM_TRIAGEM/EM_ATENDIMENTO`, `EM_TRIAGEM → EM_ATENDIMENTO/AGUARDANDO_CLIENTE`, `EM_ATENDIMENTO → AGUARDANDO_CLIENTE/AGUARDANDO_PECA/RESOLVIDO` e o retorno dos dois estados de espera para `EM_ATENDIMENTO`. Fechamento e reabertura usam operações próprias e não burlam essa matriz. As prioridades são `BAIXA`, `NORMAL`, `ALTA` e `CRITICA`. Os tipos de chamado são `GERAL`, `HARDWARE` e `SOFTWARE`; requests antigos sem tipo continuam sendo tratados como `GERAL`.
 
@@ -140,6 +147,20 @@ Todos os endpoints abaixo usam o prefixo `http://localhost:8080/api` durante o d
 | `POST` | `/tickets/{ticketId}/software/logs` | Técnico atribuído ou gerente. Registra um log técnico estruturado. |
 | `GET` | `/sla-policies` | Qualquer usuário autenticado. Lista duração e alerta de SLA por prioridade. |
 | `PUT` | `/sla-policies/{priority}` | Somente `GERENTE`. Atualiza a política usada por chamados criados posteriormente. |
+| `GET` | `/incidents` | Técnico ou gerente. Lista incidentes operacionais com filtros. |
+| `GET` | `/incidents/{incidentId}` | Técnico ou gerente. Consulta um incidente e seus chamados vinculados. |
+| `POST` | `/incidents` | Somente `GERENTE`. Cria incidente operacional. |
+| `PUT` | `/incidents/{incidentId}` | Somente `GERENTE`. Atualiza status, severidade e vínculos. |
+| `GET` | `/notifications` | Autenticado. Lista somente as notificações do usuário do JWT. |
+| `GET` | `/notifications/summary` | Autenticado. Informa a quantidade não lida do usuário. |
+| `PATCH` | `/notifications/{notificationId}/read` | Autenticado. Marca uma notificação própria como lida. |
+| `POST` | `/notifications/read-all` | Autenticado. Marca todas as notificações próprias como lidas. |
+| `GET` | `/realtime/stream` | Autenticado. Entrega eventos SSE sem colocar o JWT na URL. |
+| `GET` | `/reports/tickets.csv` | Somente `GERENTE`. Exporta chamados em CSV UTF-8. |
+| `GET` | `/reports/assets.csv` | Somente `GERENTE`. Exporta ativos em CSV UTF-8. |
+| `GET` | `/reports/incidents.csv` | Somente `GERENTE`. Exporta incidentes em CSV UTF-8. |
+| `POST` | `/ai/triage` | Autenticado. Sugere título, tipo, prioridade e perguntas de triagem. |
+| `POST` | `/ai/assistant` | Autenticado. Gera orientação geral ou vinculada a chamado autorizado. |
 
 Transições inválidas, operações incompatíveis com o estado do SLA e disputas de atualização concorrente retornam `409 Conflict` em `ProblemDetail`. Uma política nova não recalcula chamados existentes: duração e alerta ficam registrados no chamado quando ele é criado.
 
@@ -213,6 +234,11 @@ O perfil padrão usa PostgreSQL e exige configuração externa. Os exemplos abai
 | `SPEEDDESK_RATE_LIMIT_ENABLED` | Ativa o limite de requisições; padrão `true` | `true` |
 | `SPEEDDESK_AUTHENTICATED_REQUESTS_PER_MINUTE` | Limite por usuário autenticado; padrão 180 por minuto | `180` |
 | `SPEEDDESK_PUBLIC_REQUESTS_PER_MINUTE` | Limite por IP nas rotas públicas; padrão 20 por minuto | `20` |
+| `SPEEDDESK_AI_ENABLED` | Habilita tentativa de uso do provedor remoto; fallback local continua disponível | `true` |
+| `SPEEDDESK_AI_API_KEY` | Chave Gemini, mantida somente no backend; vazia usa modo local | `replace-with-provider-key` |
+| `SPEEDDESK_AI_MODEL` | Modelo Gemini estável configurável | `gemini-2.5-flash-lite` |
+| `SPEEDDESK_AI_BASE_URL` | Endpoint REST do provedor usado somente pelo backend | `https://generativelanguage.googleapis.com/v1beta` |
+| `SPEEDDESK_AI_TIMEOUT_SECONDS` | Timeout da chamada remota | `20` |
 
 Nenhuma credencial real deve ser adicionada aos arquivos do projeto.
 
@@ -252,7 +278,8 @@ As decisões definitivas sobre separação de ambientes, publicação do fronten
 
 ## Roadmap
 
-- implementar PWA e os dois recursos de IA;
-- definir a estratégia final de ambientes e manter o schema remoto sincronizado por migrations controladas.
+- o escopo funcional escolhido está concluído;
+- permanecem abertas apenas as decisões de ambiente e publicação que o projeto conscientemente não fixou;
+- futuras alterações estruturais devem manter o schema remoto sincronizado por migrations controladas.
 
 O escopo completo, as exclusões e a ordem dos macroblocos estão em [`docs/product-roadmap.md`](docs/product-roadmap.md). O fluxo técnico consolidado do Codex está em [`docs/development-workflow.md`](docs/development-workflow.md). Detalhes de segurança e operação local estão em [`docs/backend-security.md`](docs/backend-security.md).

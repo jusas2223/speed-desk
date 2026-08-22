@@ -38,21 +38,19 @@ Este arquivo é a fonte de verdade do escopo escolhido. Ele separa o que já exi
 - `SEC2` idempotência persistida em operações críticas, com replay seguro por usuário;
 - `SEC3` limite configurável de requisições públicas e autenticadas;
 - `API1` especificação OpenAPI e Swagger UI com autenticação Bearer;
+- `PWA1` instalação como aplicativo, cache seguro do shell estático e carregamento offline;
+- `AI1` triagem inteligente integrada à abertura do chamado;
+- `AI2` assistente de respostas geral ou contextual, com autorização por chamado;
 - testes automatizados do backend e integração frontend/backend validada localmente.
 
-### Parcialmente implementado
-
-| Código | Item | O que ainda falta |
-| --- | --- | --- |
-| `CFG2` | Configurações do gerente | Usuários, organizações, categorias, políticas de SLA e gestão de ativos estão integrados; controles dos módulos ainda futuros serão concluídos com esses módulos. |
-| `ORG1` | Organizações | Cadastro e listagem básicos implementados. |
+Não existem itens parcialmente implementados dentro do escopo aprovado. As decisões de ambiente permanecem abertas por escolha do usuário, e não como pendência funcional.
 
 ## Macroblocos na ordem recomendada
 
 ### 1. Estrutura visual e navegação do produto — concluído
 
 - shell compartilhado e navegação por perfil implementados;
-- áreas futuras exibidas como `Em breve`, sem links quebrados;
+- navegação final organizada por perfil, sem links quebrados;
 - temas claro e escuro, responsividade, mensagens e estados de carregamento padronizados;
 - identidade visual do Google AI Studio adaptada ao frontend real do produto.
 
@@ -72,10 +70,10 @@ Este arquivo é a fonte de verdade do escopo escolhido. Ele separa o que já exi
 
 O bloco inclui política configurável por prioridade, snapshot por chamado, controle de concorrência e telas operacionais. Não inclui linha do tempo (`C3`) nem trilha de auditoria (`SEC1`).
 
-### 3. Gestão de usuários e configurações
+### 3. Gestão de usuários e configurações — concluído
 
 - `CFG1` configurações pessoais — concluído;
-- `CFG2` configurações do gerente;
+- `CFG2` configurações do gerente — concluído;
 - `U1` tela de usuários — concluído;
 - `U2` criação pelo gerente — concluído;
 - `U3` edição — concluído;
@@ -130,11 +128,13 @@ Incidentes são operacionais: técnicos consultam e gerentes criam ou atualizam.
 - `SEC3` limite de requisições — concluído;
 - `API1` OpenAPI e Swagger — concluído.
 
-### 8. Experiência avançada
+### 8. Experiência avançada — concluído
 
-- `PWA1` aplicação web instalável;
-- `AI1` triagem de chamados com IA;
-- `AI2` assistente de respostas com IA.
+- `PWA1` aplicação web instalável — concluído;
+- `AI1` triagem de chamados com IA — concluído;
+- `AI2` assistente de respostas com IA — concluído.
+
+O shell estático da PWA pode ser carregado sem rede, mas respostas privadas da API nunca são armazenadas pelo Service Worker. A assistência usa Gemini exclusivamente pelo backend quando `SPEEDDESK_AI_API_KEY` está configurada; sem chave ou em falha do provedor, oferece fallback local identificado na resposta.
 
 ### 9. Banco remoto e ambiente de entrega
 
@@ -142,7 +142,7 @@ Incidentes são operacionais: técnicos consultam e gerentes criam ou atualizam.
 - índices, constraints, RLS e acesso exclusivo pela API Spring foram validados;
 - manter em aberto as decisões de ambientes e hospedagem que ainda não foram aprovadas.
 
-## Arquitetura futura do frontend
+## Arquitetura do frontend
 
 Nem toda funcionalidade deve virar um item de menu. A navegação planejada será:
 
@@ -152,7 +152,7 @@ Nem toda funcionalidade deve virar um item de menu. A navegação planejada ser�
 - **Chamados**: lista, filtros, busca e detalhes;
 - **Notificações**;
 - **Meu perfil**: dados pessoais e troca de senha — implementado;
-- **Assistente IA** quando o módulo estiver disponível.
+- **Assistente IA** geral ou com contexto de um chamado autorizado — implementado.
 
 ### Cliente
 
