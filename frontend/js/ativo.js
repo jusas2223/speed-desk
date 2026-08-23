@@ -33,7 +33,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!session) return;
 
     const role = String(session.role || '').toUpperCase();
-    const canEdit = role === 'CLIENTE' || role === 'GERENTE';
+    const canEdit = role === 'CLIENTE';
     const params = new URLSearchParams(window.location.search);
     const assetId = params.get('id');
     const clientsById = new Map([[session.id, session]]);
@@ -111,13 +111,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             api.request(`/assets/${encodeURIComponent(assetId)}/tickets`),
             api.request(`/assets/${encodeURIComponent(assetId)}/technical-history`)
         ];
-        if (role === 'GERENTE') requests.push(api.request('/users'));
-
         const results = await Promise.allSettled(requests);
-        if (role === 'GERENTE' && results[2]?.status === 'fulfilled') {
-            (Array.isArray(results[2].value) ? results[2].value : []).forEach(user => clientsById.set(user.id, user));
-            renderOwner(asset.clienteId);
-        }
 
         if (results[0].status === 'fulfilled') {
             renderTickets(Array.isArray(results[0].value) ? results[0].value : []);
@@ -244,7 +238,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             description.textContent = entry.description || 'Atualização técnica registrada.';
             const meta = document.createElement('span');
             meta.className = 'asset-history-meta';
-            const actor = entry.performedBy?.name || 'Equipe técnica';
+            const actor = entry.performedBy?.name || 'Técnico responsável';
             meta.textContent = [entry.ticketCode, STAGE_LABELS[entry.maintenanceStage] || humanize(entry.maintenanceStage), actor]
                 .filter(value => value && value !== 'Não informado')
                 .join(' • ');

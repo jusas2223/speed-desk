@@ -120,9 +120,6 @@ public class SoftwareTicketService {
     private void requireCanMaintainDetails(Ticket ticket) {
         AuthenticatedUser currentUser = authorizationService.currentUser();
 
-        if (currentUser.role() == UserRole.GERENTE) {
-            return;
-        }
         if (currentUser.role() == UserRole.CLIENTE
                 && ticket.getCliente() != null
                 && currentUser.id().equals(ticket.getCliente().getId())) {
@@ -135,7 +132,7 @@ public class SoftwareTicketService {
         }
 
         throw new ForbiddenOperationException(
-                "Somente o cliente proprietário, o técnico atribuído ou um gerente pode alterar os detalhes de software."
+                "Somente o cliente proprietário ou o técnico atribuído pode alterar os detalhes de software."
         );
     }
 }

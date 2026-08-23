@@ -3,6 +3,7 @@ package com.speeddesk.api.dto;
 import com.speeddesk.api.util.EmailNormalizer;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 public record UserProfileUpdateRequestDTO(
@@ -13,10 +14,18 @@ public record UserProfileUpdateRequestDTO(
         @NotBlank(message = "O e-mail é obrigatório")
         @Email(message = "O e-mail deve ser válido")
         @Size(max = 255, message = "O e-mail deve possuir no máximo 255 caracteres")
-        String email
+        String email,
+
+        @NotBlank(message = "O telefone com DDI é obrigatório")
+        @Pattern(
+                regexp = "^\\+?[1-9]\\d{9,14}$",
+                message = "Informe o telefone com DDI, usando apenas números"
+        )
+        String phone
 ) {
     public UserProfileUpdateRequestDTO {
         name = name == null ? null : name.trim();
         email = EmailNormalizer.normalize(email);
+        phone = phone == null ? null : phone.replaceAll("[^0-9+]", "");
     }
 }

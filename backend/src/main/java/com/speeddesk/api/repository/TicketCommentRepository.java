@@ -8,9 +8,11 @@ import java.util.UUID;
 
 public interface TicketCommentRepository extends JpaRepository<TicketComment, UUID> {
 
-    List<TicketComment> findAllByTicket_IdOrderByCreatedAtAscIdAsc(UUID ticketId);
+    List<TicketComment> findAllByTicket_IdOrderByCreatedAtAscSequenceNumberAsc(
+            UUID ticketId
+    );
 
-    List<TicketComment> findAllByTicket_IdAndInternalFalseOrderByCreatedAtAscIdAsc(
+    List<TicketComment> findAllByTicket_IdAndInternalFalseOrderByCreatedAtAscSequenceNumberAsc(
             UUID ticketId
     );
 }

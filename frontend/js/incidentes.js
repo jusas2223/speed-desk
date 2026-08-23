@@ -11,7 +11,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
     }
 
-    const manager = session.role === 'GERENTE';
+    const technician = session.role === 'TECNICO';
     const elements = {
         newButton: document.getElementById('newIncidentButton'),
         form: document.getElementById('incidentForm'),
@@ -39,7 +39,7 @@ document.addEventListener('DOMContentLoaded', () => {
         toast: document.getElementById('incidentToastRegion')
     };
     const state = { incidents: [], tickets: [], timer: null, realtimeTimer: null };
-    elements.newButton.hidden = !manager;
+    elements.newButton.hidden = !technician;
 
     function isoToLocalInput(value) {
         const date = value ? new Date(value) : new Date();
@@ -131,7 +131,7 @@ document.addEventListener('DOMContentLoaded', () => {
         service.textContent = incident.affectedService;
         copy.append(eyebrow, title, service);
         head.appendChild(copy);
-        if (manager) {
+        if (technician) {
             const edit = document.createElement('button');
             edit.type = 'button';
             edit.className = 'btn btn-secondary btn-compact';

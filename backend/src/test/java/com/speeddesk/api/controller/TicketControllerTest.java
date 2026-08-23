@@ -1,6 +1,7 @@
 package com.speeddesk.api.controller;
 
 import com.speeddesk.api.dto.TicketRequestDTO;
+import com.speeddesk.api.dto.TicketFinalizeRequestDTO;
 import com.speeddesk.api.dto.TicketResponseDTO;
 import com.speeddesk.api.dto.TicketStatusUpdateRequestDTO;
 import com.speeddesk.api.dto.SlaPauseRequestDTO;
@@ -22,6 +23,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.time.OffsetDateTime;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 
@@ -100,15 +102,19 @@ class TicketControllerTest {
     }
 
     @Test
-    void mapsAssignmentAndResolutionEndpoints() {
+    void mapsAssignmentAndPaymentEndpoints() {
         UUID ticketId = UUID.randomUUID();
         UUID technicianId = UUID.randomUUID();
         TicketResponseDTO ticket = response();
         when(ticketService.assumirTicket(ticketId, technicianId)).thenReturn(ticket);
-        when(ticketService.resolverTicket(ticketId)).thenReturn(ticket);
+        TicketFinalizeRequestDTO finalizeRequest =
+                new TicketFinalizeRequestDTO(new BigDecimal("150.00"));
+        when(ticketService.finalizeService(ticketId, finalizeRequest)).thenReturn(ticket);
+        when(ticketService.confirmPayment(ticketId)).thenReturn(ticket);
 
         assertSame(ticket, ticketController.assumirTicket(ticketId, technicianId).getBody());
-        assertSame(ticket, ticketController.resolverTicket(ticketId).getBody());
+        assertSame(ticket, ticketController.finalizeService(ticketId, finalizeRequest).getBody());
+        assertSame(ticket, ticketController.confirmPayment(ticketId).getBody());
     }
 
     @Test

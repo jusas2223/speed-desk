@@ -50,7 +50,7 @@ class CurrentAccountJwtValidatorTest {
 
     @Test
     void rejectsTokenAfterRoleChanges() {
-        User user = user(UserRole.GERENTE, true);
+        User user = user(UserRole.CLIENTE, true);
         when(userRepository.findById(user.getId())).thenReturn(Optional.of(user));
         Jwt staleJwt = jwt(user.getId(), user.getEmail(), UserRole.TECNICO);
 

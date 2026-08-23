@@ -12,6 +12,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
+import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
@@ -28,6 +29,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @DataJpaTest
+@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ActiveProfiles("test")
 class LocalDevDataSeederTest {
 
@@ -69,10 +71,10 @@ class LocalDevDataSeederTest {
 
         Map<String, User> usersByEmail = users.stream()
                 .collect(Collectors.toMap(User::getEmail, Function.identity()));
-        assertEquals(UserRole.GERENTE,
-                usersByEmail.get("gerente@speeddesk.local").getRole());
         assertEquals(UserRole.TECNICO,
                 usersByEmail.get("tecnico@speeddesk.local").getRole());
+        assertEquals(UserRole.TECNICO,
+                usersByEmail.get("tecnico2@speeddesk.local").getRole());
         assertEquals(UserRole.CLIENTE,
                 usersByEmail.get("cliente@speeddesk.local").getRole());
 
@@ -97,8 +99,8 @@ class LocalDevDataSeederTest {
                 organization.getId(),
                 usersByEmail.get("cliente@speeddesk.local").getOrganization().getId()
         );
-        assertNull(usersByEmail.get("gerente@speeddesk.local").getOrganization());
         assertNull(usersByEmail.get("tecnico@speeddesk.local").getOrganization());
+        assertNull(usersByEmail.get("tecnico2@speeddesk.local").getOrganization());
 
         users.forEach(user -> {
             assertNotEquals(LOCAL_PASSWORD, user.getPassword());
@@ -108,12 +110,6 @@ class LocalDevDataSeederTest {
 
     @Test
     void leavesExistingUsersUntouchedAndOnlyCompletesClientOrganization() {
-        User existingManager = saveExistingLocalUser(
-                "Gerente Personalizado",
-                "gerente@speeddesk.local",
-                "manager-existing-hash",
-                UserRole.GERENTE
-        );
         User existingTechnician = saveExistingLocalUser(
                 "Técnico Personalizado",
                 "tecnico@speeddesk.local",
@@ -141,14 +137,10 @@ class LocalDevDataSeederTest {
         assertEquals(1, organizationRepository.count());
         assertEquals(3, ticketCategoryRepository.count());
 
-        User manager = userRepository.findById(existingManager.getId()).orElseThrow();
         User technician = userRepository.findById(existingTechnician.getId()).orElseThrow();
         User client = userRepository.findById(existingClient.getId()).orElseThrow();
         User unrelated = userRepository.findById(unrelatedUser.getId()).orElseThrow();
 
-        assertEquals("Gerente Personalizado", manager.getName());
-        assertEquals("manager-existing-hash", manager.getPassword());
-        assertNull(manager.getOrganization());
         assertEquals("Técnico Personalizado", technician.getName());
         assertEquals("technician-existing-hash", technician.getPassword());
         assertNull(technician.getOrganization());

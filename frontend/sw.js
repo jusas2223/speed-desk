@@ -1,4 +1,4 @@
-const CACHE_NAME = 'speeddesk-static-v4';
+const CACHE_NAME = 'speeddesk-static-v6';
 const APP_SHELL = [
     './',
     './index.html',
@@ -7,12 +7,9 @@ const APP_SHELL = [
     './chamado.html',
     './assets.html',
     './ativo.html',
-    './usuarios.html',
-    './configuracoes.html',
     './perfil.html',
     './notificacoes.html',
     './incidentes.html',
-    './relatorios.html',
     './redefinir-senha.html',
     './assistente.html',
     './manifest.webmanifest',
@@ -32,12 +29,9 @@ const APP_SHELL = [
     './js/chamado.js',
     './js/assets.js',
     './js/ativo.js',
-    './js/usuarios.js',
-    './js/configuracoes.js',
     './js/perfil.js',
     './js/notificacoes.js',
     './js/incidentes.js',
-    './js/relatorios.js',
     './js/redefinir-senha.js',
     './js/assistente.js'
 ];
@@ -62,6 +56,7 @@ self.addEventListener('fetch', event => {
     if (request.method !== 'GET') return;
     const url = new URL(request.url);
     if (url.origin !== self.location.origin) return;
+    if (url.pathname.startsWith('/api/')) return;
 
     if (request.mode === 'navigate') {
         event.respondWith(

@@ -5,7 +5,9 @@ import com.speeddesk.api.entity.TicketPriority;
 import com.speeddesk.api.entity.SlaState;
 import com.speeddesk.api.entity.TicketStatus;
 import com.speeddesk.api.entity.TicketType;
+import com.speeddesk.api.entity.User;
 
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.OffsetDateTime;
@@ -28,6 +30,9 @@ public record TicketResponseDTO(
         OffsetDateTime dataVencimento,
         OffsetDateTime resolvedAt,
         OffsetDateTime closedAt,
+        BigDecimal valorFinal,
+        boolean pagamentoRealizado,
+        String clientPhone,
         boolean slaPaused,
         OffsetDateTime slaPausedAt,
         SlaState slaState,
@@ -40,6 +45,30 @@ public record TicketResponseDTO(
     }
 
     public static TicketResponseDTO from(Ticket ticket, Clock clock) {
+        return from(ticket, clock, null);
+    }
+
+    public static TicketResponseDTO from(
+            Ticket ticket,
+            Clock clock,
+            String clientPhone
+    ) {
+        return from(ticket, clock, clientPhone, true);
+    }
+
+    public static TicketResponseDTO forMarketplaceQueue(
+            Ticket ticket,
+            Clock clock
+    ) {
+        return from(ticket, clock, null, false);
+    }
+
+    private static TicketResponseDTO from(
+            Ticket ticket,
+            Clock clock,
+            String clientPhone,
+            boolean includeClientContact
+    ) {
         SlaProjection sla = projectSla(ticket, clock);
         return new TicketResponseDTO(
                 ticket.getId(),
@@ -51,7 +80,7 @@ public record TicketResponseDTO(
                 ticket.getCategory() == null
                         ? null
                         : TicketCategoryResponseDTO.from(ticket.getCategory()),
-                UserResponseDTO.from(ticket.getCliente()),
+                clientResponse(ticket.getCliente(), includeClientContact),
                 ticket.getTecnico() == null
                         ? null
                         : UserResponseDTO.from(ticket.getTecnico()),
@@ -63,12 +92,31 @@ public record TicketResponseDTO(
                 ticket.getDataVencimento(),
                 ticket.getResolvedAt(),
                 ticket.getClosedAt(),
+                ticket.getValorFinal(),
+                ticket.isPagamentoRealizado(),
+                clientPhone,
                 ticket.isSlaPaused(),
                 ticket.getSlaPausedAt(),
                 sla.state(),
                 sla.remainingSeconds(),
                 effectiveWarningMinutes(ticket),
                 ticket.getVersion()
+        );
+    }
+
+    private static UserResponseDTO clientResponse(
+            User client,
+            boolean includeContact
+    ) {
+        if (includeContact) return UserResponseDTO.from(client);
+        return new UserResponseDTO(
+                client.getId(),
+                client.getName(),
+                null,
+                client.getRole(),
+                null,
+                client.isActive(),
+                client.getCreatedAt()
         );
     }
 
@@ -101,6 +149,9 @@ public record TicketResponseDTO(
                 dataVencimento,
                 null,
                 null,
+                null,
+                false,
+                null,
                 false,
                 null,
                 SlaState.ON_TRACK,
@@ -119,7 +170,8 @@ public record TicketResponseDTO(
             );
         }
 
-        boolean completed = ticket.getStatus() == TicketStatus.RESOLVIDO
+        boolean completed = ticket.getStatus() == TicketStatus.AGUARDANDO_PAGAMENTO
+                || ticket.getStatus() == TicketStatus.RESOLVIDO
                 || ticket.getStatus() == TicketStatus.FECHADO;
         OffsetDateTime reference = OffsetDateTime.now(clock)
                 .withOffsetSameInstant(ZoneOffset.UTC);

@@ -96,7 +96,6 @@ class SoftwareTicketIntegrationTest {
     private User otherClient;
     private User assignedTechnician;
     private User otherTechnician;
-    private User manager;
     private Ticket softwareTicket;
     private Ticket generalTicket;
 
@@ -129,7 +128,6 @@ class SoftwareTicketIntegrationTest {
                 "software-other-tech@speeddesk.test",
                 UserRole.TECNICO
         );
-        manager = saveUser("Gerente", "software-manager@speeddesk.test", UserRole.GERENTE);
         softwareTicket = saveTicket(TicketType.SOFTWARE, assignedTechnician);
         generalTicket = saveTicket(TicketType.GERAL, null);
     }
@@ -170,11 +168,11 @@ class SoftwareTicketIntegrationTest {
                 .andExpect(jsonPath("$.softwareVersion").doesNotExist());
 
         mockMvc.perform(get("/api/tickets/{ticketId}/software", generalTicket.getId())
-                        .header(HttpHeaders.AUTHORIZATION, bearer(manager)))
+                        .header(HttpHeaders.AUTHORIZATION, bearer(owner)))
                 .andExpect(status().isBadRequest());
 
         mockMvc.perform(get("/api/tickets/{ticketId}/software", UUID.randomUUID())
-                        .header(HttpHeaders.AUTHORIZATION, bearer(manager)))
+                        .header(HttpHeaders.AUTHORIZATION, bearer(assignedTechnician)))
                 .andExpect(status().isNotFound());
     }
 
@@ -222,14 +220,14 @@ class SoftwareTicketIntegrationTest {
                 .andExpect(status().isForbidden());
 
         mockMvc.perform(put("/api/tickets/{ticketId}/software", softwareTicket.getId())
-                        .header(HttpHeaders.AUTHORIZATION, bearer(manager))
+                        .header(HttpHeaders.AUTHORIZATION, bearer(assignedTechnician))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(detailBody("1.0.0")))
                 .andExpect(status().isOk());
     }
 
     @Test
-    void onlyAssignedTechnicianOrManagerCanCreateStructuredLogs() throws Exception {
+    void onlyAssignedTechnicianCanCreateStructuredLogs() throws Exception {
         mockMvc.perform(post(
                         "/api/tickets/{ticketId}/software/logs",
                         softwareTicket.getId()
@@ -261,7 +259,7 @@ class SoftwareTicketIntegrationTest {
         mockMvc.perform(post(
                         "/api/tickets/{ticketId}/software/logs",
                         softwareTicket.getId()
-                ).header(HttpHeaders.AUTHORIZATION, bearer(manager))
+                ).header(HttpHeaders.AUTHORIZATION, bearer(assignedTechnician))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(logBody()))
                 .andExpect(status().isCreated());

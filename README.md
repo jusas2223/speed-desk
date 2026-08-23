@@ -1,285 +1,161 @@
 # Speed Desk
 
-Speed Desk é uma aplicação web de service desk para registrar ativos, abrir chamados e acompanhar o atendimento conforme o perfil do usuário. O projeto combina um frontend estático em JavaScript com uma API Spring Boot protegida por JWT.
+Speed Desk é um marketplace de assistência técnica que conecta clientes a técnicos independentes. Clientes registram equipamentos e abrem chamados; qualquer técnico pode consultar a fila de chamados novos, assumir um atendimento e combinar a execução presencial ou remota pelo chat interno ou WhatsApp.
+
+O navegador se comunica somente com a API Spring. O PostgreSQL/Supabase nunca é acessado diretamente pelo frontend.
 
 ## Estado atual
 
-O escopo funcional selecionado está concluído. Login, sessão web, autorização por perfil, usuários, configurações, ativos, chamados, hardware, software, incidentes, notificações, relatórios, tempo real, proteções da API, PWA e assistência inteligente estão integrados. O backend possui testes automatizados e o frontend foi validado em navegador com os perfis locais.
+O pivot de helpdesk corporativo para marketplace está implementado. O sistema opera exclusivamente com os perfis `CLIENTE` e `TECNICO` e inclui o ciclo de cobrança, confirmação de recebimento e bloqueio de novos chamados enquanto existir pagamento pendente.
 
-## Tecnologias
+## Stack
 
-- Java 26 e Spring Boot 4.1;
-- Spring Web MVC, Spring Data JPA, Spring Security e OAuth2 Resource Server;
-- JWT com HMAC SHA-256 e senhas BCrypt;
-- PostgreSQL no ambiente remoto oficial e H2 no perfil local `localdev`;
-- Maven Wrapper, JUnit 5, Mockito e MockMvc;
-- HTML5, CSS3 e JavaScript com ES Modules e Fetch API.
-- PWA com Web App Manifest e Service Worker;
-- Gemini API opcional consumida somente pelo backend Java, com assistência local quando não configurada.
+- Java 26, Spring Boot 4.1.1, Maven Wrapper e JPA/Hibernate;
+- HTML, CSS e JavaScript Vanilla com ES Modules;
+- PostgreSQL hospedado no Supabase no ambiente remoto;
+- H2 persistente no perfil `localdev`;
+- JWT HMAC SHA-256, BCrypt, rate limiting e idempotência persistida;
+- OpenAPI/Swagger, SSE, PWA e integração opcional com Gemini.
 
 ## Estrutura
 
 ```text
-speed-desk/
-├── backend/   API Spring Boot, persistência, segurança e testes
-├── frontend/  páginas HTML, estilos e módulos JavaScript
-└── docs/      schema PostgreSQL de referência e documentação de segurança
+backend/                  API Spring Boot
+frontend/                 aplicação web estática
+docs/schema.sql           referência do schema PostgreSQL
+docs/product-roadmap.md   fonte de verdade do produto
+docs/backend-security.md  autorização e cuidados operacionais
+docs/session-handoff.md   ponto de retomada da próxima sessão
+supabase/migrations/      migrations controladas do banco remoto
+start-local.ps1           inicialização do backend com H2
 ```
 
-A pasta `.speeddesk-local/` é criada durante o uso do H2 em arquivo e permanece fora do versionamento.
+## Perfis e regras do marketplace
 
-## Arquitetura
+| Perfil | Capacidades principais |
+|---|---|
+| `CLIENTE` | Mantém o próprio perfil e telefone, administra os próprios ativos, abre e acompanha os próprios chamados, conversa com o técnico, consulta o valor cobrado, fecha ou reabre o atendimento. Não pode abrir novo chamado se houver pagamento pendente. |
+| `TECNICO` | Consulta chamados novos sem responsável e os próprios atendimentos, assume um chamado em nome próprio, acessa telefone/WhatsApp e chat somente após o aceite, executa o fluxo técnico, informa o valor final e confirma o recebimento. |
 
-```text
-Frontend HTML/CSS/JavaScript
-        │ HTTP/JSON + Authorization: Bearer
-        ▼
-API Spring Boot
-        │ Spring Data JPA / JDBC
-        ▼
-H2 localdev ou PostgreSQL/Supabase
-```
+Não existe perfil administrativo na aplicação. Rotas legadas de usuários, organizações, relatórios e alteração de políticas permanecem bloqueadas pela configuração de segurança e não possuem telas no frontend.
 
-O navegador se comunica somente com a API. A API autentica o JWT, aplica as regras de autorização e acessa o banco de dados.
+## Fluxo de atendimento e pagamento
 
-## Perfis de usuário
+1. O cliente cria um chamado em `RECEBIDO`.
+2. O chamado aparece na fila de todos os técnicos sem revelar telefone, e-mail ou organização do cliente.
+3. Um técnico assume o chamado; ele passa para `EM_ATENDIMENTO` e libera os dados de contato, o link `wa.me` e o chat entre as duas partes.
+4. Ao concluir o serviço, o técnico informa `valorFinal`; o status passa para `AGUARDANDO_PAGAMENTO` e `pagamentoRealizado` permanece `false`.
+5. Enquanto a pendência existir, o backend recusa `POST /api/tickets` para esse cliente e o dashboard desabilita **Novo chamado**.
+6. Após receber diretamente do cliente, o técnico confirma o pagamento; `pagamentoRealizado` passa para `true` e o chamado para `RESOLVIDO`.
+7. O cliente pode fechar o chamado ou reabri-lo, o que limpa os dados da cobrança anterior.
 
-| Perfil | Comportamento atual |
-| --- | --- |
-| `CLIENTE` | Visualiza, filtra, abre e acompanha somente os próprios chamados; cria, consulta e edita somente os próprios ativos. Comenta publicamente, mantém os dados especializados dos próprios chamados de software e pode fechar ou reabrir o chamado nos estados permitidos. Pode estar vinculado administrativamente a uma organização, sem compartilhar dados com outros clientes. |
-| `TECNICO` | Consulta chamados e ativos de clientes, pode abrir chamados, comentar e assumir em seu próprio nome; status, SLA, manutenção de hardware e logs de software só podem ser operados quando ele for o técnico atribuído. Ativos permanecem somente para leitura. |
-| `GERENTE` | Gerencia usuários e políticas de SLA, consulta, cria e edita recursos para clientes, visualiza qualquer chamado existente e pode atribuir, operar, fechar, reabrir e comentar chamados conforme as regras de negócio, incluindo os fluxos especializados. |
+`valor_final` usa `NUMERIC(12,2)` no banco. Não existe gateway de pagamento ou custódia de valores nesta etapa; a confirmação registra o acerto feito diretamente entre cliente e técnico.
 
-## Funcionalidades implementadas
+## Endpoints principais
 
-- login com JWT e sessão armazenada no `sessionStorage`;
-- inclusão automática do Bearer Token nas chamadas protegidas;
-- expiração, logout e tratamento de respostas `401` e `403`;
-- senhas BCrypt, normalização de e-mail e migração controlada de senhas legadas;
-- autorização de recursos conforme `CLIENTE`, `TECNICO` e `GERENTE`;
-- tela exclusiva do gerente para listar, buscar, filtrar, criar, editar, ativar e desativar usuários com vínculo opcional de clientes a organizações;
-- bloqueio imediato de tokens quando a conta é desativada ou sua role é alterada;
-- perfil pessoal autenticado para consultar e atualizar nome e e-mail;
-- troca de senha mediante confirmação da senha atual;
-- recuperação manual de senha por token temporário emitido pelo gerente, sem envio por e-mail;
-- catálogo de ativos com fabricante, modelo, tipos canônicos, status, serial único sem diferença de maiúsculas, data de compra, garantia e fornecedor;
-- busca e filtros de ativos, consulta individual, edição sem troca de proprietário e histórico de chamados por equipamento;
-- projeção de garantia como `NAO_INFORMADA`, `VIGENTE`, `EXPIRA_EM_BREVE`, `EXPIRADA` ou `NAO_ELEGIVEL`, com alerta para vencimentos em até 30 dias;
-- cadastro e consulta de organizações administrativas no backend e no frontend do gerente;
-- cadastro e consulta de categorias ativas no backend e no frontend do gerente;
-- abertura de chamados dos tipos `GERAL`, `HARDWARE` e `SOFTWARE`, com categoria e ativo opcionais, prioridade e prazo calculado por SLA;
-- lista completa de chamados com busca e filtros combináveis por status, prioridade, tipo, categoria e responsável;
-- página de detalhes persistente por UUID, protegida conforme o proprietário e o perfil autenticado;
-- transições controladas entre os sete status canônicos, com fechamento e reabertura separados;
-- prazo de SLA projetado como `ON_TRACK`, `AT_RISK`, `BREACHED`, `PAUSED` ou `MET`, incluindo tempo restante;
-- políticas de duração e alerta por prioridade, configuráveis pelo gerente e copiadas para cada novo chamado;
-- pausa de SLA com motivo e retomada que desloca o vencimento pelo tempo efetivamente pausado;
-- comentários públicos e notas internas da equipe, ocultas de usuários `CLIENTE`;
-- atendimento de hardware com elegibilidade, cobertura de garantia e progressão ordenada por `RECEBIDO`, `EM_ANALISE`, `EM_REPARO`, `EM_TESTE` e `CONCLUIDO`;
-- registros de manutenção por chamado e histórico técnico consolidado por ativo, sem transformar esses dados em uma linha do tempo geral;
-- checklist pós-reparo obrigatório antes da conclusão do fluxo de hardware;
-- detalhes de software com versão, ambiente, plataforma, sistema operacional, reprodução e resultados esperado/atual;
-- logs técnicos estruturados de software nos níveis `DEBUG`, `INFO`, `WARN` e `ERROR`;
-- controle de concorrência otimista nas mutações de chamados, políticas e pausas de SLA;
-- painel operacional responsivo com busca, filtros, métricas calculadas com dados reais e distribuição por status e categoria;
-- shell compartilhado de navegação, temas claro e escuro, tela de login e identidade visual baseada em velocidade;
-- autoatribuição de chamado pelo técnico e atribuição pelo gerente;
-- resolução por técnico responsável ou gerente;
-- respostas de erro no formato `ProblemDetail` e validação de entrada;
-- perfil `localdev` com H2 persistente e dados locais de demonstração.
-- incidentes operacionais, notificações privadas, atualizações SSE e exportações CSV;
-- idempotência persistida, rate limiting configurável e documentação OpenAPI/Swagger;
-- PWA instalável com shell estático disponível offline, sem armazenar respostas privadas da API;
-- triagem inteligente na abertura de chamados e assistente contextual com autorização por ticket;
-- integração opcional com Gemini e fallback local explícito para redes restritas ou ambientes sem chave.
+Durante o desenvolvimento local, todos usam o prefixo `http://localhost:8080/api`.
 
-Os status canônicos são `RECEBIDO`, `EM_TRIAGEM`, `EM_ATENDIMENTO`, `AGUARDANDO_CLIENTE`, `AGUARDANDO_PECA`, `RESOLVIDO` e `FECHADO`. O fluxo normal permite `RECEBIDO → EM_TRIAGEM/EM_ATENDIMENTO`, `EM_TRIAGEM → EM_ATENDIMENTO/AGUARDANDO_CLIENTE`, `EM_ATENDIMENTO → AGUARDANDO_CLIENTE/AGUARDANDO_PECA/RESOLVIDO` e o retorno dos dois estados de espera para `EM_ATENDIMENTO`. Fechamento e reabertura usam operações próprias e não burlam essa matriz. As prioridades são `BAIXA`, `NORMAL`, `ALTA` e `CRITICA`. Os tipos de chamado são `GERAL`, `HARDWARE` e `SOFTWARE`; requests antigos sem tipo continuam sendo tratados como `GERAL`.
+| Método | Rota | Regra |
+|---|---|---|
+| `POST` | `/users/login` | Público. Autentica e devolve JWT. |
+| `GET`, `PUT` | `/account/profile` | Perfil atual; inclui telefone com DDI. |
+| `POST` | `/account/password/change` | Troca autenticada da própria senha. |
+| `GET` | `/tickets` | Cliente vê os próprios; técnico vê novos sem responsável e os próprios. |
+| `GET` | `/tickets/payment-pending` | Cliente consulta se está bloqueado por pendência. |
+| `POST` | `/tickets` | Somente cliente sem pagamento pendente. |
+| `GET` | `/tickets/{ticketId}` | Respeita propriedade, fila livre e atribuição. |
+| `PATCH` | `/tickets/{ticketId}/assumir/{tecnicoId}` | Técnico assume somente em nome próprio. |
+| `PATCH` | `/tickets/{ticketId}/status` | Técnico atribuído executa transições operacionais; não resolve diretamente. |
+| `POST` | `/tickets/{ticketId}/finalize` | Técnico atribuído informa `{ "valorFinal": 150.00 }` e inicia a cobrança. |
+| `POST` | `/tickets/{ticketId}/payment/confirm` | Técnico atribuído confirma o recebimento e resolve. |
+| `POST` | `/tickets/{ticketId}/close` | Cliente proprietário fecha após pagamento confirmado. |
+| `POST` | `/tickets/{ticketId}/reopen` | Cliente proprietário reabre e limpa a cobrança. |
+| `GET`, `POST` | `/tickets/{ticketId}/comments` | Chat liberado ao cliente e ao técnico atribuído. |
+| `POST`, `GET`, `PUT` | `/assets...` | Cliente cria/edita os próprios; técnico tem leitura contextual. |
+| `GET`, `PUT`, `POST` | `/tickets/{id}/hardware...` | Consulta autorizada e operações pelo técnico atribuído. |
+| `GET`, `PUT`, `POST` | `/tickets/{id}/software...` | Contexto do cliente/técnico e logs pelo técnico atribuído. |
+| `GET`, `POST`, `PUT` | `/incidents...` | Operação técnica. |
+| `GET`, `PATCH` | `/notifications...` | Notificações privadas do usuário autenticado. |
+| `GET` | `/realtime/stream` | Eventos SSE autenticados. |
 
-## Endpoints atuais
+## Executar localmente
 
-Todos os endpoints abaixo usam o prefixo `http://localhost:8080/api` durante o desenvolvimento local.
+Pré-requisitos: JDK 26 e Node.js.
 
-| Método | Rota | Acesso e finalidade |
-| --- | --- | --- |
-| `POST` | `/users/login` | Público. Autentica e devolve o JWT e os dados públicos do usuário. |
-| `GET` | `/users` | Somente `GERENTE`. Lista usuários em ordem alfabética sem expor senhas. |
-| `POST` | `/users` | Somente `GERENTE`. Cria usuário com senha codificada e organização opcional apenas para `CLIENTE`. |
-| `PUT` | `/users/{userId}` | Somente `GERENTE`. Edita nome, e-mail, role e vínculo compatível com organização. |
-| `PATCH` | `/users/{userId}/status` | Somente `GERENTE`. Ativa ou desativa uma conta com salvaguardas administrativas. |
-| `POST` | `/users/{userId}/password-reset` | Somente `GERENTE`. Emite uma credencial temporária de recuperação para entrega manual ao usuário. |
-| `GET` | `/account/profile` | Autenticado. Consulta os dados públicos da própria conta. |
-| `PUT` | `/account/profile` | Autenticado. Atualiza nome e e-mail da própria conta. |
-| `POST` | `/account/password/change` | Autenticado. Troca a senha depois de validar a senha atual. |
-| `POST` | `/account/password-reset/confirm` | Público. Consome uma única vez o token temporário e define uma nova senha. |
-| `GET` | `/organizations` | Somente `GERENTE`. Lista organizações por nome. |
-| `POST` | `/organizations` | Somente `GERENTE`. Cria uma organização administrativa. |
-| `GET` | `/ticket-categories` | Qualquer usuário autenticado. Lista categorias ativas por nome. |
-| `POST` | `/ticket-categories` | Somente `GERENTE`. Cria uma categoria para um tipo de chamado. |
-| `GET` | `/assets/cliente/{clienteId}` | Autenticado. Cliente acessa somente os próprios ativos; técnico e gerente podem consultar clientes. |
-| `GET` | `/assets` | Autenticado. Lista ativos no escopo do perfil e aceita filtros por cliente, tipo, status, garantia e busca textual. |
-| `POST` | `/assets` | Cliente ou gerente. Cria ativo vinculado a um usuário `CLIENTE`, respeitando o escopo de acesso. |
-| `GET` | `/assets/warranty-alerts` | Autenticado. Lista, no escopo autorizado, garantias que vencem em até 30 dias. |
-| `GET` | `/assets/{assetId}` | Autenticado. Consulta um ativo no escopo do perfil. |
-| `PUT` | `/assets/{assetId}` | Cliente proprietário ou gerente. Edita o ativo sem permitir a troca de proprietário. |
-| `GET` | `/assets/{assetId}/tickets` | Autenticado. Lista o histórico de chamados vinculados ao ativo autorizado. |
-| `GET` | `/assets/{assetId}/technical-history` | Autenticado. Consolida os registros técnicos de chamados de hardware vinculados ao ativo autorizado. |
-| `GET` | `/tickets` | Autenticado. Aceita filtros opcionais por cliente, status, prioridade, tipo, categoria, técnico, ausência de técnico e busca textual; o cliente permanece limitado aos próprios chamados. |
-| `GET` | `/tickets/{ticketId}` | Autenticado. Cliente consulta somente chamado próprio; técnico e gerente podem consultar chamados existentes. |
-| `POST` | `/tickets` | Autenticado. Abre chamado para um usuário `CLIENTE`, com tipo, categoria compatível e ativo do mesmo cliente opcionais. |
-| `PATCH` | `/tickets/{ticketId}/assumir/{tecnicoId}` | Técnico assume em nome próprio ou gerente atribui a um técnico. |
-| `PATCH` | `/tickets/{ticketId}/resolver` | Técnico atribuído ou gerente resolve chamado em atendimento. |
-| `PATCH` | `/tickets/{ticketId}/status` | Técnico atribuído ou gerente executa uma transição permitida. O SLA precisa estar ativo. |
-| `POST` | `/tickets/{ticketId}/close` | Cliente proprietário ou gerente fecha um chamado `RESOLVIDO`. |
-| `POST` | `/tickets/{ticketId}/reopen` | Cliente proprietário ou gerente reabre um chamado `RESOLVIDO` ou `FECHADO` e reinicia o prazo a partir do snapshot de SLA. |
-| `POST` | `/tickets/{ticketId}/sla/pause` | Técnico atribuído ou gerente pausa o SLA de chamado não concluído, com motivo obrigatório. |
-| `POST` | `/tickets/{ticketId}/sla/resume` | Técnico atribuído ou gerente retoma o SLA e acrescenta ao vencimento o período pausado. |
-| `GET` | `/tickets/{ticketId}/comments` | Autenticado e autorizado no chamado. Clientes recebem somente comentários públicos; a equipe recebe também notas internas. |
-| `POST` | `/tickets/{ticketId}/comments` | Autenticado e autorizado no chamado. Cliente cria apenas comentário público; técnico e gerente também podem criar nota interna. |
-| `GET` | `/tickets/{ticketId}/hardware` | Autenticado e autorizado no chamado `HARDWARE`. Consulta elegibilidade, garantia e etapa de manutenção. |
-| `PUT` | `/tickets/{ticketId}/hardware` | Técnico atribuído ou gerente. Atualiza os detalhes e avança uma etapa por vez. |
-| `GET` | `/tickets/{ticketId}/hardware/history` | Autenticado e autorizado. Lista o histórico técnico específico do atendimento de hardware. |
-| `POST` | `/tickets/{ticketId}/hardware/history` | Técnico atribuído ou gerente. Registra uma intervenção de manutenção. |
-| `GET` | `/tickets/{ticketId}/hardware/checklist` | Autenticado e autorizado. Consulta o checklist pós-reparo. |
-| `PUT` | `/tickets/{ticketId}/hardware/checklist` | Técnico atribuído ou gerente. Atualiza o checklist nas etapas `EM_TESTE` ou `CONCLUIDO`. |
-| `GET` | `/tickets/{ticketId}/software` | Autenticado e autorizado no chamado `SOFTWARE`. Consulta os detalhes para reprodução. |
-| `PUT` | `/tickets/{ticketId}/software` | Cliente proprietário, técnico atribuído ou gerente. Cria ou atualiza os detalhes de software. |
-| `GET` | `/tickets/{ticketId}/software/logs` | Autenticado e autorizado. Lista logs técnicos estruturados do chamado. |
-| `POST` | `/tickets/{ticketId}/software/logs` | Técnico atribuído ou gerente. Registra um log técnico estruturado. |
-| `GET` | `/sla-policies` | Qualquer usuário autenticado. Lista duração e alerta de SLA por prioridade. |
-| `PUT` | `/sla-policies/{priority}` | Somente `GERENTE`. Atualiza a política usada por chamados criados posteriormente. |
-| `GET` | `/incidents` | Técnico ou gerente. Lista incidentes operacionais com filtros. |
-| `GET` | `/incidents/{incidentId}` | Técnico ou gerente. Consulta um incidente e seus chamados vinculados. |
-| `POST` | `/incidents` | Somente `GERENTE`. Cria incidente operacional. |
-| `PUT` | `/incidents/{incidentId}` | Somente `GERENTE`. Atualiza status, severidade e vínculos. |
-| `GET` | `/notifications` | Autenticado. Lista somente as notificações do usuário do JWT. |
-| `GET` | `/notifications/summary` | Autenticado. Informa a quantidade não lida do usuário. |
-| `PATCH` | `/notifications/{notificationId}/read` | Autenticado. Marca uma notificação própria como lida. |
-| `POST` | `/notifications/read-all` | Autenticado. Marca todas as notificações próprias como lidas. |
-| `GET` | `/realtime/stream` | Autenticado. Entrega eventos SSE sem colocar o JWT na URL. |
-| `GET` | `/reports/tickets.csv` | Somente `GERENTE`. Exporta chamados em CSV UTF-8. |
-| `GET` | `/reports/assets.csv` | Somente `GERENTE`. Exporta ativos em CSV UTF-8. |
-| `GET` | `/reports/incidents.csv` | Somente `GERENTE`. Exporta incidentes em CSV UTF-8. |
-| `POST` | `/ai/triage` | Autenticado. Sugere título, tipo, prioridade e perguntas de triagem. |
-| `POST` | `/ai/assistant` | Autenticado. Gera orientação geral ou vinculada a chamado autorizado. |
-
-Transições inválidas, operações incompatíveis com o estado do SLA e disputas de atualização concorrente retornam `409 Conflict` em `ProblemDetail`. Uma política nova não recalcula chamados existentes: duração e alerta ficam registrados no chamado quando ele é criado.
-
-## Executar o backend com `localdev`
-
-O perfil `localdev` foi criado para desenvolvimento offline, incluindo o uso do projeto dentro da faculdade. Ele usa H2 persistente em arquivo, em modo de compatibilidade PostgreSQL, sem acessar o Supabase por JDBC.
-
-### PowerShell — forma recomendada
-
-Na raiz do repositório, execute:
+No primeiro PowerShell, na raiz do projeto:
 
 ```powershell
 .\start-local.ps1
 ```
 
-O inicializador localiza o JDK 26 instalado, ativa o perfil `localdev`, configura apenas valores locais e usa sempre o banco existente em `.speeddesk-local/`, independentemente do diretório atual do terminal. IntelliJ e outras IDEs são opcionais para este fluxo.
+O script seleciona o perfil `localdev`, usa o H2 persistente em `.speeddesk-local/`, configura CORS para a porta 5500 e inicia a API em `http://localhost:8080`.
 
-### IntelliJ IDEA — opcional
+Em outro PowerShell:
 
-1. Use o JDK 26 e abra uma configuração Spring Boot para `com.speeddesk.api.ApiApplication`.
-2. Defina `C:\Meus Projetos\speed-desk` como diretório de trabalho.
-3. Informe `localdev` no campo **Active profiles**.
-4. Configure estas variáveis de ambiente com valores apenas locais:
-
-```text
-SPEEDDESK_JWT_SECRET=localdev-only-secret-with-at-least-32-bytes
-SPEEDDESK_CORS_ALLOWED_ORIGINS=http://127.0.0.1:5500,http://localhost:5500
-SPEEDDESK_LOCAL_DB_PATH=C:/Meus Projetos/speed-desk/.speeddesk-local/speeddesk
+```powershell
+npx --yes serve frontend --listen 5500 --config serve.json
 ```
 
-5. Execute `ApiApplication`.
+Acesse [http://localhost:5500/](http://localhost:5500/).
 
-As variáveis de banco `SPEEDDESK_DB_*` não são necessárias no perfil `localdev`. O banco será salvo em `.speeddesk-local/` na raiz do projeto. O H2 Console permanece desabilitado.
-
-### Contas locais de demonstração
-
-O seeder verifica cada registro individualmente e cria apenas os dados locais ausentes:
+### Contas locais
 
 | Perfil | E-mail | Senha |
-| --- | --- | --- |
-| `GERENTE` | `gerente@speeddesk.local` | `SpeedDesk@123` |
-| `TECNICO` | `tecnico@speeddesk.local` | `SpeedDesk@123` |
+|---|---|---|
 | `CLIENTE` | `cliente@speeddesk.local` | `SpeedDesk@123` |
+| `TECNICO` | `tecnico@speeddesk.local` | `SpeedDesk@123` |
+| `TECNICO` | `tecnico2@speeddesk.local` | `SpeedDesk@123` |
 
-Quando ausentes, são criadas ativas a organização `Empresa Demonstração` e as categorias `Solicitação geral` (`GERAL`), `Falha de equipamento` (`HARDWARE`) e `Erro de software` (`SOFTWARE`). Registros existentes são preservados sem reativação. `cliente@speeddesk.local` só é vinculado à organização quando sua role atual é `CLIENTE` e ainda não possui vínculo. Dados, roles e senhas de usuários existentes não são sobrescritos.
+O seeder também preenche telefones fictícios com DDI; a segunda conta técnica permite validar concorrência, isolamento entre profissionais e liberação do WhatsApp.
 
-## Servir o frontend
+## Ambiente remoto
 
-O frontend usa ES Modules e deve ser servido por HTTP. Com o próprio JDK 26, execute na raiz do projeto:
+O perfil padrão usa PostgreSQL/Supabase por JDBC. Configure segredos fora do repositório:
 
-```powershell
-$env:JAVA_HOME="C:\Users\Pessoal\.jdks\openjdk-26.0.1"
-& "$env:JAVA_HOME\bin\jwebserver.exe" -p 5500 -d frontend
-```
+| Variável | Finalidade |
+|---|---|
+| `SPEEDDESK_DB_URL` | URL JDBC PostgreSQL com SSL obrigatório. |
+| `SPEEDDESK_DB_USERNAME` | Usuário restrito do backend. |
+| `SPEEDDESK_DB_PASSWORD` | Senha do banco. |
+| `SPEEDDESK_JWT_SECRET` | Segredo HMAC com ao menos 32 bytes. |
+| `SPEEDDESK_JWT_EXPIRATION_SECONDS` | Validade do JWT; padrão `3600`. |
+| `SPEEDDESK_CORS_ALLOWED_ORIGINS` | Origens web permitidas, separadas por vírgula. |
+| `SPEEDDESK_PASSWORD_RESET_EXPIRATION_MINUTES` | Validade interna do token; padrão `30`. |
+| `SPEEDDESK_RATE_LIMIT_ENABLED` | Ativa rate limiting; padrão `true`. |
+| `SPEEDDESK_AUTHENTICATED_REQUESTS_PER_MINUTE` | Limite autenticado; padrão `180`. |
+| `SPEEDDESK_PUBLIC_REQUESTS_PER_MINUTE` | Limite público; padrão `20`. |
+| `SPEEDDESK_AI_ENABLED` | Habilita provedor remoto; fallback local continua disponível. |
+| `SPEEDDESK_AI_API_KEY` | Chave Gemini mantida somente no backend. |
+| `SPEEDDESK_AI_MODEL` | Modelo configurável; padrão `gemini-2.5-flash-lite`. |
+| `SPEEDDESK_AI_BASE_URL` | Endpoint REST do provedor. |
+| `SPEEDDESK_AI_TIMEOUT_SECONDS` | Timeout remoto; padrão `20`. |
+| `SPEEDDESK_OPENAPI_ENABLED` | Expõe OpenAPI/Swagger; padrão `false` e habilitado automaticamente em `localdev`. |
 
-Depois, acesse `http://localhost:5500/`. Também é possível usar um servidor estático da IDE na porta 5500. A API local deve estar disponível em `http://localhost:8080`.
+Nunca coloque credenciais do Supabase, segredo JWT ou chave de IA no frontend ou no Git.
 
-## Variáveis de ambiente
+## Validação
 
-O perfil padrão usa PostgreSQL e exige configuração externa. Os exemplos abaixo são fictícios:
-
-| Variável | Finalidade | Exemplo fictício |
-| --- | --- | --- |
-| `SPEEDDESK_DB_URL` | URL JDBC do PostgreSQL com SSL obrigatório | `jdbc:postgresql://db.example.invalid:5432/postgres?sslmode=require` |
-| `SPEEDDESK_DB_USERNAME` | Usuário do banco | `speeddesk_app` |
-| `SPEEDDESK_DB_PASSWORD` | Senha do banco | `replace-with-a-secret` |
-| `SPEEDDESK_JWT_SECRET` | Chave HMAC com pelo menos 32 bytes | `replace-with-a-random-32-byte-minimum-secret` |
-| `SPEEDDESK_JWT_EXPIRATION_SECONDS` | Validade do token; padrão de 3600 segundos | `3600` |
-| `SPEEDDESK_CORS_ALLOWED_ORIGINS` | Origens permitidas, separadas por vírgula | `http://127.0.0.1:5500,http://localhost:5500` |
-| `SPEEDDESK_PASSWORD_RESET_EXPIRATION_MINUTES` | Validade da recuperação manual; padrão de 30 e intervalo aceito de 5 a 1440 minutos | `30` |
-| `SPEEDDESK_RATE_LIMIT_ENABLED` | Ativa o limite de requisições; padrão `true` | `true` |
-| `SPEEDDESK_AUTHENTICATED_REQUESTS_PER_MINUTE` | Limite por usuário autenticado; padrão 180 por minuto | `180` |
-| `SPEEDDESK_PUBLIC_REQUESTS_PER_MINUTE` | Limite por IP nas rotas públicas; padrão 20 por minuto | `20` |
-| `SPEEDDESK_AI_ENABLED` | Habilita tentativa de uso do provedor remoto; fallback local continua disponível | `true` |
-| `SPEEDDESK_AI_API_KEY` | Chave Gemini, mantida somente no backend; vazia usa modo local | `replace-with-provider-key` |
-| `SPEEDDESK_AI_MODEL` | Modelo Gemini estável configurável | `gemini-2.5-flash-lite` |
-| `SPEEDDESK_AI_BASE_URL` | Endpoint REST do provedor usado somente pelo backend | `https://generativelanguage.googleapis.com/v1beta` |
-| `SPEEDDESK_AI_TIMEOUT_SECONDS` | Timeout da chamada remota | `20` |
-
-Nenhuma credencial real deve ser adicionada aos arquivos do projeto.
-
-## Testes e validação
-
-Para executar os testes do backend no PowerShell:
+Backend, dentro de `backend/` com Java 26:
 
 ```powershell
-cd "C:\Meus Projetos\speed-desk\backend"
-$env:JAVA_HOME="C:\Users\Pessoal\.jdks\openjdk-26.0.1"
 .\mvnw.cmd test
 ```
 
-Para validar a sintaxe de todos os módulos JavaScript, execute na raiz:
+Frontend, na raiz:
 
 ```powershell
-Get-ChildItem .\frontend\js -Filter *.js | ForEach-Object {
-    node --check $_.FullName
-}
+$files = @(Get-ChildItem frontend/js -Filter *.js -File) + (Get-Item frontend/sw.js)
+$files | ForEach-Object { node --check $_.FullName }
+git diff --check
 ```
 
-Os testes automatizados usam H2 em memória e não tentam conectar ao Supabase.
+Com a API local ativa, OpenAPI fica em [http://localhost:8080/v3/api-docs](http://localhost:8080/v3/api-docs) e Swagger UI em [http://localhost:8080/swagger-ui.html](http://localhost:8080/swagger-ui.html). No perfil padrão esses endpoints permanecem desabilitados, salvo configuração explícita.
 
-## Bancos e ambientes
+## Banco de dados
 
-O H2 atende ao desenvolvimento offline, especialmente no ambiente de rede da faculdade. O PostgreSQL hospedado no Supabase continua sendo o banco remoto oficial do projeto e é usado pelo perfil padrão por meio das variáveis `SPEEDDESK_DB_*`.
+- O schema de referência está em `docs/schema.sql`.
+- Toda mudança estrutural remota deve ser uma migration em `supabase/migrations/`.
+- O frontend não possui credenciais e não usa a Data API do Supabase.
+- O backend usa `ddl-auto=validate` no PostgreSQL e `ddl-auto=update` somente no perfil H2 `localdev`.
 
-O projeto remoto `ProjetoSpeedDesk` foi sincronizado em 22 de agosto de 2026 por migrations controladas. Ele possui as 18 tabelas atuais, RLS habilitado e uma policy exclusiva para o role JDBC `speeddesk_app`; os roles da Data API não recebem acesso. O arquivo `docs/schema.sql` continua sendo a representação PostgreSQL de referência, e `docs/supabase-access.sql` documenta os grants e policies do backend sem conter senha.
-
-## Documentação da API e proteções operacionais
-
-Com o backend em execução, a especificação OpenAPI fica em `http://localhost:8080/v3/api-docs` e a interface Swagger UI em `http://localhost:8080/swagger-ui.html`. O botão **Authorize** aceita o JWT emitido pelo login.
-
-O frontend envia uma nova `Idempotency-Key` em operações autenticadas `POST`, `PUT` e `PATCH`. Em rotas críticas, o backend guarda somente os hashes da chave e da requisição por 24 horas; uma repetição idêntica devolve a resposta original sem executar a regra de negócio novamente. O rate limit devolve `429`, `Retry-After` e os cabeçalhos `X-RateLimit-*` quando o limite configurado é excedido.
-
-As decisões definitivas sobre separação de ambientes, publicação do frontend e implantação do backend continuam em aberto. Novas alterações estruturais devem ser aplicadas como migrations antes de iniciar o perfil padrão, que usa `spring.jpa.hibernate.ddl-auto=validate` e nunca modifica o schema automaticamente.
-
-## Roadmap
-
-- o escopo funcional escolhido está concluído;
-- permanecem abertas apenas as decisões de ambiente e publicação que o projeto conscientemente não fixou;
-- futuras alterações estruturais devem manter o schema remoto sincronizado por migrations controladas.
-
-O escopo completo, as exclusões e a ordem dos macroblocos estão em [`docs/product-roadmap.md`](docs/product-roadmap.md). O fluxo técnico consolidado do Codex está em [`docs/development-workflow.md`](docs/development-workflow.md). Detalhes de segurança e operação local estão em [`docs/backend-security.md`](docs/backend-security.md).
+Consulte `docs/product-roadmap.md` antes de ampliar o escopo e `docs/session-handoff.md` para o ponto exato de retomada.

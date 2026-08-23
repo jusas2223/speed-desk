@@ -78,7 +78,6 @@ class TicketCommentIntegrationTest {
     private User owner;
     private User otherClient;
     private User technician;
-    private User manager;
     private Ticket ticket;
 
     @BeforeEach
@@ -101,11 +100,6 @@ class TicketCommentIntegrationTest {
                 "Técnico",
                 "technician-comments@speeddesk.test",
                 UserRole.TECNICO
-        );
-        manager = saveUser(
-                "Gerente",
-                "manager-comments@speeddesk.test",
-                UserRole.GERENTE
         );
         ticket = saveTicket(owner);
     }
@@ -158,7 +152,7 @@ class TicketCommentIntegrationTest {
                 ZoneOffset.UTC
         );
         saveComment("Público mais recente", false, technician, baseTime.plusMinutes(2));
-        saveComment("Nota interna", true, manager, baseTime.plusMinutes(1));
+        saveComment("Nota interna", true, technician, baseTime.plusMinutes(1));
         saveComment("Público mais antigo", false, owner, baseTime);
 
         mockMvc.perform(get("/api/tickets/{ticketId}/comments", ticket.getId())
@@ -170,7 +164,7 @@ class TicketCommentIntegrationTest {
                 .andExpect(jsonPath("$[1].content").value("Público mais recente"));
 
         mockMvc.perform(get("/api/tickets/{ticketId}/comments", ticket.getId())
-                        .header(HttpHeaders.AUTHORIZATION, bearer(manager)))
+                        .header(HttpHeaders.AUTHORIZATION, bearer(technician)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(3))
                 .andExpect(jsonPath("$[0].content").value("Público mais antigo"))
@@ -206,7 +200,7 @@ class TicketCommentIntegrationTest {
 
         assertThat(ticketCommentRepository.count()).isEqualTo(2);
         assertThat(ticketCommentRepository
-                .findAllByTicket_IdOrderByCreatedAtAscIdAsc(ticket.getId()))
+                .findAllByTicket_IdOrderByCreatedAtAscSequenceNumberAsc(ticket.getId()))
                 .extracting(TicketComment::getContent)
                 .containsExactly(
                         "A impressora voltou a responder.",
@@ -219,11 +213,11 @@ class TicketCommentIntegrationTest {
         UUID missingTicketId = UUID.randomUUID();
 
         mockMvc.perform(get("/api/tickets/{ticketId}/comments", missingTicketId)
-                        .header(HttpHeaders.AUTHORIZATION, bearer(manager)))
+                        .header(HttpHeaders.AUTHORIZATION, bearer(technician)))
                 .andExpect(status().isNotFound());
 
         mockMvc.perform(post("/api/tickets/{ticketId}/comments", missingTicketId)
-                        .header(HttpHeaders.AUTHORIZATION, bearer(manager))
+                        .header(HttpHeaders.AUTHORIZATION, bearer(technician))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(commentBody("Comentário", false)))
                 .andExpect(status().isNotFound());
@@ -232,14 +226,14 @@ class TicketCommentIntegrationTest {
     @Test
     void validatesRequiredContentAndMaximumLength() throws Exception {
         mockMvc.perform(post("/api/tickets/{ticketId}/comments", ticket.getId())
-                        .header(HttpHeaders.AUTHORIZATION, bearer(manager))
+                        .header(HttpHeaders.AUTHORIZATION, bearer(technician))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(commentBody("   ", false)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errors.content").exists());
 
         mockMvc.perform(post("/api/tickets/{ticketId}/comments", ticket.getId())
-                        .header(HttpHeaders.AUTHORIZATION, bearer(manager))
+                        .header(HttpHeaders.AUTHORIZATION, bearer(technician))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(commentBody("x".repeat(4001), false)))
                 .andExpect(status().isBadRequest())
@@ -273,9 +267,10 @@ class TicketCommentIntegrationTest {
         return ticketRepository.saveAndFlush(Ticket.builder()
                 .titulo("Chamado com comentários")
                 .descricao("Descrição de teste")
-                .status(TicketStatus.RECEBIDO)
+                .status(TicketStatus.EM_ATENDIMENTO)
                 .prioridade(TicketPriority.NORMAL)
                 .cliente(client)
+                .tecnico(technician)
                 .dataVencimento(OffsetDateTime.now(ZoneOffset.UTC).plusHours(8))
                 .build());
     }

@@ -19,7 +19,10 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
+import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.UUID;
@@ -44,6 +47,7 @@ public class Ticket {
     private String descricao;
 
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(nullable = false, length = 50)
     @Builder.Default
     private TicketStatus status = TicketStatus.RECEBIDO;
@@ -109,6 +113,17 @@ public class Ticket {
 
     @Column(name = "fechado_em")
     private OffsetDateTime closedAt;
+
+    @Column(name = "valor_final", precision = 12, scale = 2)
+    private BigDecimal valorFinal;
+
+    @Column(
+            name = "pagamento_realizado",
+            nullable = false,
+            columnDefinition = "boolean default false"
+    )
+    @Builder.Default
+    private boolean pagamentoRealizado = false;
 
     @Version
     @Column(nullable = false, columnDefinition = "bigint default 0")

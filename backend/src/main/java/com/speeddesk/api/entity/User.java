@@ -19,6 +19,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.ColumnDefault;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -43,11 +45,15 @@ public class User {
     @Column(nullable = false, unique = true)
     private String email;
 
+    @Column(name = "telefone", length = 20)
+    private String phone;
+
     @Column(name = "senha", nullable = false)
     @JsonIgnore
     private String password;
 
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(nullable = false, length = 50)
     @Builder.Default
     private UserRole role = UserRole.CLIENTE;

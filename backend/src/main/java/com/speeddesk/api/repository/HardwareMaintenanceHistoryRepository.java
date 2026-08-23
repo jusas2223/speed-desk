@@ -9,10 +9,13 @@ import java.util.UUID;
 public interface HardwareMaintenanceHistoryRepository
         extends JpaRepository<HardwareMaintenanceHistory, UUID> {
 
-    List<HardwareMaintenanceHistory> findAllByTicket_IdOrderByCreatedAtAscIdAsc(
+    List<HardwareMaintenanceHistory>
+            findAllByTicket_IdOrderByCreatedAtAscSequenceNumberAsc(
             UUID ticketId
     );
 
     List<HardwareMaintenanceHistory>
-            findAllByTicket_Asset_IdOrderByCreatedAtDescIdDesc(UUID assetId);
+            findAllByTicket_Asset_IdOrderByCreatedAtDescSequenceNumberDesc(
+                    UUID assetId
+            );
 }

@@ -8,7 +8,9 @@ import com.speeddesk.api.entity.UserRole;
 import com.speeddesk.api.exception.InvalidUserRoleException;
 import com.speeddesk.api.exception.InactiveUserException;
 import com.speeddesk.api.repository.AssetRepository;
+import com.speeddesk.api.repository.TicketRepository;
 import com.speeddesk.api.repository.UserRepository;
+import com.speeddesk.api.security.AuthenticatedUser;
 import com.speeddesk.api.security.AuthorizationService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -35,6 +37,9 @@ class AssetServiceTest {
 
     @Mock
     private UserRepository userRepository;
+
+    @Mock
+    private TicketRepository ticketRepository;
 
     @Mock
     private AuthorizationService authorizationService;
@@ -123,7 +128,13 @@ class AssetServiceTest {
                 .cliente(client)
                 .build();
         when(authorizationService.clientScope(requestedId)).thenReturn(effectiveId);
-        when(assetRepository.findAllByCliente_Id(effectiveId)).thenReturn(List.of(asset));
+        when(authorizationService.currentUser()).thenReturn(new AuthenticatedUser(
+                effectiveId,
+                client.getEmail(),
+                UserRole.CLIENTE
+        ));
+        when(assetRepository.findAllByCliente_IdOrderByCreatedAtDesc(effectiveId))
+                .thenReturn(List.of(asset));
 
         List<AssetResponseDTO> result = assetService.listByClienteId(requestedId);
 

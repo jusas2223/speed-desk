@@ -2,8 +2,7 @@ import api from './api.js';
 
 const ROLE_LABELS = Object.freeze({
     CLIENTE: 'Cliente',
-    TECNICO: 'Técnico de suporte',
-    GERENTE: 'Gerente de operações'
+    TECNICO: 'Técnico independente'
 });
 
 const elements = {};
@@ -31,6 +30,7 @@ function cacheElements() {
     elements.profileForm = document.getElementById('profileForm');
     elements.name = document.getElementById('profileName');
     elements.email = document.getElementById('profileEmail');
+    elements.phone = document.getElementById('profilePhone');
     elements.profileFeedback = document.getElementById('profileFeedback');
     elements.profileSubmit = document.getElementById('profileSubmit');
 
@@ -65,6 +65,7 @@ function renderProfile() {
     elements.createdAt.textContent = formatDate(profile.createdAt);
     elements.name.value = profile.name;
     elements.email.value = profile.email;
+    elements.phone.value = profile.phone || '';
 }
 
 async function updateProfile(event) {
@@ -73,14 +74,23 @@ async function updateProfile(event) {
 
     const payload = {
         name: elements.name.value.trim(),
-        email: elements.email.value.trim()
+        email: elements.email.value.trim(),
+        phone: elements.phone.value.replace(/\D/g, '')
     };
-    if (!payload.name || !payload.email) {
-        setFeedback(elements.profileFeedback, 'Preencha nome e e-mail.', 'error');
+    if (!payload.name || !payload.email || !payload.phone) {
+        setFeedback(elements.profileFeedback, 'Preencha nome, e-mail e telefone.', 'error');
         return;
     }
     if (!elements.email.validity.valid) {
         setFeedback(elements.profileFeedback, 'Informe um e-mail válido.', 'error');
+        return;
+    }
+    if (!/^\d{10,15}$/.test(payload.phone)) {
+        setFeedback(
+            elements.profileFeedback,
+            'Informe o telefone com DDI, usando de 10 a 15 números.',
+            'error'
+        );
         return;
     }
 

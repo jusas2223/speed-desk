@@ -102,6 +102,11 @@
                     </div>
                 </header>
 
+                <div id="paymentPendingBanner" class="payment-pending-banner" role="alert" hidden>
+                    <strong>Pagamento pendente</strong>
+                    <span>Você possui pagamentos pendentes. Acerte com o técnico para liberar novos chamados.</span>
+                </div>
+
                 <section class="metrics-grid" aria-label="Resumo dos chamados">
                     <article class="metric-card">
                         <div class="metric-card-head">
@@ -284,28 +289,6 @@
                 <footer class="modal-actions">
                     <button type="button" class="btn btn-secondary" id="btnCancelModal">Cancelar</button>
                     <button type="submit" class="btn btn-primary" id="btnSubmitTicket">Salvar Chamado</button>
-                </footer>
-            </form>
-        </div>
-    </div>
-
-    <div class="modal-overlay" id="assignModal" role="dialog" aria-modal="true" aria-labelledby="assignTitle" aria-hidden="true" inert hidden>
-        <div class="modal-content">
-            <header class="modal-header">
-                <h2 id="assignTitle">Atribuir Técnico</h2>
-                <button class="modal-close" id="btnCloseAssignModal" type="button" aria-label="Fechar">&times;</button>
-            </header>
-            <form id="assignForm">
-                <input type="hidden" id="assignTicketId">
-                <div class="form-group">
-                    <label for="technicianSelect" class="form-label">Selecionar técnico</label>
-                    <select id="technicianSelect" class="form-control" required>
-                        <option value="">Carregando técnicos...</option>
-                    </select>
-                </div>
-                <footer class="modal-actions">
-                    <button type="button" class="btn btn-secondary" id="btnCancelAssignModal">Cancelar</button>
-                    <button type="submit" class="btn btn-primary" id="btnSubmitAssign" disabled>Confirmar</button>
                 </footer>
             </form>
         </div>

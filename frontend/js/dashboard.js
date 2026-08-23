@@ -13,6 +13,7 @@ const STATUS_LABELS = Object.freeze({
     EM_ATENDIMENTO: 'Em atendimento',
     AGUARDANDO_CLIENTE: 'Aguardando cliente',
     AGUARDANDO_PECA: 'Aguardando peça',
+    AGUARDANDO_PAGAMENTO: 'Aguardando pagamento',
     RESOLVIDO: 'Resolvido',
     FECHADO: 'Fechado'
 });
@@ -22,7 +23,7 @@ const STATUS_GROUPS = Object.freeze([
     { label: 'Resolvidos', statuses: ['RESOLVIDO', 'FECHADO'], color: 'var(--success)' },
     { label: 'Em atendimento', statuses: ['EM_ATENDIMENTO'], color: 'var(--brand-primary)' },
     { label: 'Abertos na fila', statuses: ['RECEBIDO', 'EM_TRIAGEM'], color: 'var(--info)' },
-    { label: 'Pendentes / Aguardando', statuses: ['AGUARDANDO_CLIENTE', 'AGUARDANDO_PECA'], color: 'var(--warning)' }
+    { label: 'Pendentes / Aguardando', statuses: ['AGUARDANDO_CLIENTE', 'AGUARDANDO_PECA', 'AGUARDANDO_PAGAMENTO'], color: 'var(--warning)' }
 ]);
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -35,6 +36,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const elements = {
         welcome: document.getElementById('welcomeMessage'),
         headerActions: document.getElementById('headerActions'),
+        openTicketButton: document.getElementById('btnOpenModal'),
+        paymentPendingBanner: document.getElementById('paymentPendingBanner'),
         search: document.getElementById('ticketSearch'),
         ticketList: document.getElementById('ticketList'),
         ticketCountLabel: document.getElementById('ticketCountLabel'),
@@ -56,7 +59,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const state = {
         tickets: [],
         activeFilter: 'TODOS',
-        query: ''
+        query: '',
+        paymentPending: false
     };
 
     elements.headerActions.hidden = role !== 'CLIENTE';
@@ -332,15 +336,16 @@ document.addEventListener('DOMContentLoaded', () => {
         if (ticket.status === 'RECEBIDO' && role === 'TECNICO') {
             actions.appendChild(createActionButton('Assumir', 'btn-primary', () => assumeTicket(ticket.id)));
         }
-        if (ticket.status === 'RECEBIDO' && role === 'GERENTE') {
-            actions.appendChild(createActionButton('Atribuir', 'btn-primary', async () => openAssignModal(ticket.id)));
-        }
         const technicianOwnsTicket = ticket.tecnico?.id === session.id;
-        if (
-            ticket.status === 'EM_ATENDIMENTO'
-            && (role === 'GERENTE' || (role === 'TECNICO' && technicianOwnsTicket))
-        ) {
-            actions.appendChild(createActionButton('Resolver', 'btn-success', () => resolveTicket(ticket.id)));
+        if (ticket.status === 'EM_ATENDIMENTO' && role === 'TECNICO' && technicianOwnsTicket) {
+            actions.appendChild(createActionButton('Finalizar serviço', 'btn-success', async () => {
+                window.location.href = detailHref;
+            }));
+        }
+        if (ticket.status === 'AGUARDANDO_PAGAMENTO' && role === 'TECNICO' && technicianOwnsTicket) {
+            actions.appendChild(createActionButton('Confirmar pagamento', 'btn-success', async () => {
+                window.location.href = detailHref;
+            }));
         }
 
         if (actions.childElementCount > 0) side.appendChild(actions);
@@ -538,13 +543,23 @@ document.addEventListener('DOMContentLoaded', () => {
         elements.welcome.textContent = state.tickets.length === 0
             ? `Olá, ${firstName}. A operação está pronta para receber chamados.`
             : `Olá, ${firstName}. ${openCount} chamado(s) ativo(s) em uma fila de ${state.tickets.length}.`;
+
+        if (role === 'CLIENTE') {
+            elements.paymentPendingBanner.hidden = !state.paymentPending;
+            elements.openTicketButton.disabled = state.paymentPending;
+            elements.openTicketButton.setAttribute('aria-disabled', String(state.paymentPending));
+        }
     }
 
     async function loadTickets() {
         elements.ticketList.innerHTML = '<div class="loading-state">Carregando chamados...</div>';
         try {
-            const response = await api.request('/tickets');
+            const ticketsRequest = api.request('/tickets');
+            const [response, pendingResponse] = role === 'CLIENTE'
+                ? await Promise.all([ticketsRequest, api.request('/tickets/payment-pending')])
+                : [await ticketsRequest, null];
             state.tickets = Array.isArray(response) ? response : [];
+            state.paymentPending = pendingResponse?.pending === true;
             renderDashboard();
         } catch (error) {
             console.error('Erro ao carregar chamados:', error);
@@ -578,110 +593,6 @@ document.addEventListener('DOMContentLoaded', () => {
             showToast(error.message || 'Falha ao assumir chamado.', 'error');
         }
     }
-
-    async function resolveTicket(ticketId) {
-        try {
-            await api.request(`/tickets/${ticketId}/status`, {
-                method: 'PATCH',
-                body: JSON.stringify({ status: 'RESOLVIDO' })
-            });
-            showToast('Chamado resolvido com sucesso.', 'success');
-            await loadTickets();
-        } catch (error) {
-            showToast(error.message || 'Falha ao resolver chamado.', 'error');
-        }
-    }
-
-    const assignModal = document.getElementById('assignModal');
-    const assignForm = document.getElementById('assignForm');
-    const assignTicketId = document.getElementById('assignTicketId');
-    const technicianSelect = document.getElementById('technicianSelect');
-    const submitAssignButton = document.getElementById('btnSubmitAssign');
-    let techniciansLoaded = false;
-
-    function setAssignButtonState() {
-        submitAssignButton.disabled = !technicianSelect.value;
-    }
-
-    async function openAssignModal(ticketId) {
-        if (role !== 'GERENTE') return;
-
-        assignTicketId.value = ticketId;
-        assignModal.hidden = false;
-        assignModal.removeAttribute('inert');
-        assignModal.setAttribute('aria-hidden', 'false');
-        assignModal.classList.add('active');
-        technicianSelect.focus();
-
-        if (techniciansLoaded) {
-            setAssignButtonState();
-            return;
-        }
-
-        technicianSelect.replaceChildren(new Option('Carregando técnicos...', ''));
-        technicianSelect.disabled = true;
-        setAssignButtonState();
-
-        try {
-            const users = await api.request('/users');
-            const technicians = Array.isArray(users)
-                ? users.filter(user => user.role === 'TECNICO' && user.active !== false)
-                : [];
-
-            const options = [new Option('Selecione um técnico', '')];
-            technicians.forEach(technician => {
-                options.push(new Option(`${technician.name} (${technician.email})`, technician.id));
-            });
-            technicianSelect.replaceChildren(...options);
-            techniciansLoaded = true;
-        } catch (error) {
-            technicianSelect.replaceChildren(new Option('Erro ao carregar técnicos', ''));
-            showToast(error.message || 'Falha ao carregar técnicos.', 'error');
-        } finally {
-            technicianSelect.disabled = false;
-            setAssignButtonState();
-        }
-    }
-
-    function closeAssignModal() {
-        assignModal.classList.remove('active');
-        assignModal.setAttribute('aria-hidden', 'true');
-        assignModal.setAttribute('inert', '');
-        assignModal.hidden = true;
-        assignForm.reset();
-        setAssignButtonState();
-    }
-
-    technicianSelect.addEventListener('change', setAssignButtonState);
-    document.getElementById('btnCloseAssignModal').addEventListener('click', closeAssignModal);
-    document.getElementById('btnCancelAssignModal').addEventListener('click', closeAssignModal);
-    assignModal.addEventListener('click', event => {
-        if (event.target === assignModal) closeAssignModal();
-    });
-
-    assignForm.addEventListener('submit', async event => {
-        event.preventDefault();
-        if (role !== 'GERENTE' || !technicianSelect.value) return;
-
-        submitAssignButton.disabled = true;
-        const defaultText = submitAssignButton.textContent;
-        submitAssignButton.textContent = 'Atribuindo...';
-
-        try {
-            await api.request(
-                `/tickets/${assignTicketId.value}/assumir/${technicianSelect.value}`,
-                { method: 'PATCH' }
-            );
-            closeAssignModal();
-            showToast('Técnico atribuído com sucesso.', 'success');
-            await loadTickets();
-        } catch (error) {
-            showToast(error.message || 'Falha ao atribuir técnico.', 'error');
-        } finally {
-            submitAssignButton.textContent = defaultText;
-            setAssignButtonState();
-        }
-    });
 
     const newTicketModal = document.getElementById('newTicketModal');
     const newTicketForm = document.getElementById('newTicketForm');
@@ -752,6 +663,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function openNewTicketModal() {
         if (role !== 'CLIENTE') return;
+        if (state.paymentPending) {
+            showToast('Regularize o pagamento pendente antes de abrir um novo chamado.', 'error');
+            return;
+        }
         newTicketModal.hidden = false;
         newTicketModal.removeAttribute('inert');
         newTicketModal.setAttribute('aria-hidden', 'false');
@@ -774,7 +689,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (categoriesLoaded) renderCategoryOptions();
     }
 
-    document.getElementById('btnOpenModal').addEventListener('click', openNewTicketModal);
+    elements.openTicketButton.addEventListener('click', openNewTicketModal);
     document.getElementById('btnCloseModal').addEventListener('click', closeNewTicketModal);
     document.getElementById('btnCancelModal').addEventListener('click', closeNewTicketModal);
     ticketTypeSelect.addEventListener('change', () => {
@@ -874,7 +789,6 @@ document.addEventListener('DOMContentLoaded', () => {
     document.addEventListener('keydown', event => {
         if (event.key !== 'Escape') return;
         if (newTicketModal.classList.contains('active')) closeNewTicketModal();
-        if (assignModal.classList.contains('active')) closeAssignModal();
     });
 
     loadTickets();

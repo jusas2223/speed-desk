@@ -1,10 +1,10 @@
 package com.speeddesk.api.controller;
 
 import com.speeddesk.api.dto.OperationMessageDTO;
+import com.speeddesk.api.dto.AccountProfileResponseDTO;
 import com.speeddesk.api.dto.PasswordChangeRequestDTO;
 import com.speeddesk.api.dto.PasswordResetConfirmRequestDTO;
 import com.speeddesk.api.dto.UserProfileUpdateRequestDTO;
-import com.speeddesk.api.dto.UserResponseDTO;
 import com.speeddesk.api.entity.UserRole;
 import com.speeddesk.api.service.AccountService;
 import org.junit.jupiter.api.Test;
@@ -34,16 +34,17 @@ class AccountControllerTest {
 
     @Test
     void returnsAndUpdatesCurrentProfile() {
-        UserResponseDTO profile = profile();
+        AccountProfileResponseDTO profile = profile();
         UserProfileUpdateRequestDTO request = new UserProfileUpdateRequestDTO(
                 "Nome atualizado",
-                "updated@speeddesk.test"
+                "updated@speeddesk.test",
+                "5511999998888"
         );
         when(accountService.getProfile()).thenReturn(profile);
         when(accountService.updateProfile(request)).thenReturn(profile);
 
-        ResponseEntity<UserResponseDTO> getResponse = accountController.getProfile();
-        ResponseEntity<UserResponseDTO> updateResponse =
+        ResponseEntity<AccountProfileResponseDTO> getResponse = accountController.getProfile();
+        ResponseEntity<AccountProfileResponseDTO> updateResponse =
                 accountController.updateProfile(request);
 
         assertEquals(HttpStatus.OK, getResponse.getStatusCode());
@@ -72,12 +73,15 @@ class AccountControllerTest {
         verify(accountService).resetPassword(reset);
     }
 
-    private UserResponseDTO profile() {
-        return new UserResponseDTO(
+    private AccountProfileResponseDTO profile() {
+        return new AccountProfileResponseDTO(
                 UUID.randomUUID(),
                 "Usuário",
                 "user@speeddesk.test",
+                "5511999998888",
                 UserRole.CLIENTE,
+                null,
+                true,
                 OffsetDateTime.parse("2026-08-17T12:00:00Z")
         );
     }

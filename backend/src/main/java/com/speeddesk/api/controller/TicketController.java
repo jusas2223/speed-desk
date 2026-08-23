@@ -1,6 +1,8 @@
 package com.speeddesk.api.controller;
 
+import com.speeddesk.api.dto.PaymentPendingResponseDTO;
 import com.speeddesk.api.dto.SlaPauseRequestDTO;
+import com.speeddesk.api.dto.TicketFinalizeRequestDTO;
 import com.speeddesk.api.dto.TicketRequestDTO;
 import com.speeddesk.api.dto.TicketResponseDTO;
 import com.speeddesk.api.dto.TicketStatusUpdateRequestDTO;
@@ -67,6 +69,11 @@ public class TicketController {
         return ResponseEntity.ok(ticketService.findById(ticketId));
     }
 
+    @GetMapping("/payment-pending")
+    public ResponseEntity<PaymentPendingResponseDTO> paymentPending() {
+        return ResponseEntity.ok(ticketService.paymentPending());
+    }
+
     @PatchMapping("/{ticketId}/assumir/{tecnicoId}")
     public ResponseEntity<TicketResponseDTO> assumirTicket(
             @PathVariable UUID ticketId,
@@ -75,17 +82,27 @@ public class TicketController {
         return ResponseEntity.ok(ticketService.assumirTicket(ticketId, tecnicoId));
     }
 
-    @PatchMapping("/{ticketId}/resolver")
-    public ResponseEntity<TicketResponseDTO> resolverTicket(@PathVariable UUID ticketId) {
-        return ResponseEntity.ok(ticketService.resolverTicket(ticketId));
-    }
-
     @PatchMapping("/{ticketId}/status")
     public ResponseEntity<TicketResponseDTO> updateStatus(
             @PathVariable UUID ticketId,
             @Valid @RequestBody TicketStatusUpdateRequestDTO request
     ) {
         return ResponseEntity.ok(ticketService.updateStatus(ticketId, request.status()));
+    }
+
+    @PostMapping("/{ticketId}/finalize")
+    public ResponseEntity<TicketResponseDTO> finalizeService(
+            @PathVariable UUID ticketId,
+            @Valid @RequestBody TicketFinalizeRequestDTO request
+    ) {
+        return ResponseEntity.ok(ticketService.finalizeService(ticketId, request));
+    }
+
+    @PostMapping("/{ticketId}/payment/confirm")
+    public ResponseEntity<TicketResponseDTO> confirmPayment(
+            @PathVariable UUID ticketId
+    ) {
+        return ResponseEntity.ok(ticketService.confirmPayment(ticketId));
     }
 
     @PostMapping("/{ticketId}/close")

@@ -65,7 +65,7 @@ class OperationalModulesIntegrationTest {
 
     private User client;
     private User technician;
-    private User manager;
+    private User operator;
     private Ticket ticket;
 
     @BeforeEach
@@ -81,7 +81,7 @@ class OperationalModulesIntegrationTest {
 
         client = saveUser("Cliente", "client-operations@speeddesk.test", UserRole.CLIENTE);
         technician = saveUser("Técnico", "technician-operations@speeddesk.test", UserRole.TECNICO);
-        manager = saveUser("Gerente", "manager-operations@speeddesk.test", UserRole.GERENTE);
+        operator = saveUser("Técnico operador", "operator-operations@speeddesk.test", UserRole.TECNICO);
         ticket = ticketRepository.saveAndFlush(Ticket.builder()
                 .titulo("Falha no serviço central")
                 .descricao("Descrição operacional")
@@ -93,10 +93,10 @@ class OperationalModulesIntegrationTest {
     }
 
     @Test
-    void managerCreatesAndUpdatesLinkedIncident() throws Exception {
+    void technicianCreatesAndUpdatesLinkedIncident() throws Exception {
         String createdBody = incidentBody("ABERTO", "CRITICA");
         String location = mockMvc.perform(post("/api/incidents")
-                        .header(HttpHeaders.AUTHORIZATION, bearer(manager))
+                        .header(HttpHeaders.AUTHORIZATION, bearer(operator))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(createdBody))
                 .andExpect(status().isCreated())
@@ -108,7 +108,7 @@ class OperationalModulesIntegrationTest {
         String incidentId = jsonMapper.readTree(location).get("id").asString();
 
         mockMvc.perform(put("/api/incidents/{incidentId}", incidentId)
-                        .header(HttpHeaders.AUTHORIZATION, bearer(manager))
+                        .header(HttpHeaders.AUTHORIZATION, bearer(operator))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(incidentBody("RESOLVIDO", "ALTA")))
                 .andExpect(status().isOk())
@@ -134,7 +134,7 @@ class OperationalModulesIntegrationTest {
                         .header(HttpHeaders.AUTHORIZATION, bearer(technician))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(incidentBody("ABERTO", "MEDIA")))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isCreated());
     }
 
     @Test
@@ -170,18 +170,10 @@ class OperationalModulesIntegrationTest {
     }
 
     @Test
-    void managerExportsUtf8CsvAndOtherProfilesCannotExport() throws Exception {
+    void reportsAreUnavailableWithoutAdministrativeProfile() throws Exception {
         mockMvc.perform(get("/api/reports/tickets.csv")
-                        .header(HttpHeaders.AUTHORIZATION, bearer(manager)))
-                .andExpect(status().isOk())
-                .andExpect(content().contentTypeCompatibleWith("text/csv"))
-                .andExpect(header().string(
-                        HttpHeaders.CONTENT_DISPOSITION,
-                        org.hamcrest.Matchers.containsString("speed-desk-chamados.csv")
-                ))
-                .andExpect(content().string(org.hamcrest.Matchers.containsString(
-                        "Falha no serviço central"
-                )));
+                        .header(HttpHeaders.AUTHORIZATION, bearer(operator)))
+                .andExpect(status().isForbidden());
 
         mockMvc.perform(get("/api/reports/tickets.csv")
                         .header(HttpHeaders.AUTHORIZATION, bearer(technician)))

@@ -22,8 +22,7 @@ const ICONS = Object.freeze({
 
 const ROLE_LABELS = Object.freeze({
     CLIENTE: 'Cliente',
-    TECNICO: 'Técnico de suporte',
-    GERENTE: 'Gerente de operações'
+    TECNICO: 'Técnico independente'
 });
 
 const TICKET_COUNT_STORAGE_KEY = 'speeddesk-ticket-count';
@@ -63,26 +62,6 @@ const MENU_ITEMS = Object.freeze({
         { label: 'Hardware', icon: 'hardware', href: 'chamados.html?ticketType=HARDWARE' },
         { label: 'Software', icon: 'software', href: 'chamados.html?ticketType=SOFTWARE' },
         { label: 'Incidentes', icon: 'incident', href: 'incidentes.html', page: 'incidentes.html' }
-    ],
-    GERENTE: [
-        { label: 'Painel', icon: 'panel', href: 'dashboard.html', page: 'dashboard.html' },
-        {
-            label: 'Chamados',
-            icon: 'ticket',
-            href: 'chamados.html',
-            pages: ['chamados.html', 'chamado.html'],
-            count: true
-        },
-        { label: 'Usuários', icon: 'users', href: 'usuarios.html', page: 'usuarios.html' },
-        {
-            label: 'Ativos',
-            icon: 'asset',
-            href: 'assets.html',
-            pages: ['assets.html', 'ativo.html']
-        },
-        { label: 'Incidentes', icon: 'incident', href: 'incidentes.html', page: 'incidentes.html' },
-        { label: 'Relatórios', icon: 'report', href: 'relatorios.html', page: 'relatorios.html' },
-        { label: 'Configurações', icon: 'settings', href: 'configuracoes.html', page: 'configuracoes.html' }
     ]
 });
 

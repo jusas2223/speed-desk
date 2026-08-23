@@ -10,7 +10,7 @@ Antes de analisar ou alterar o projeto, leia integralmente:
 
 ## Stack obrigatória
 
-- Backend: Java 26, Spring Boot 4.1, Maven e JPA/Hibernate.
+- Backend: Java 26, Spring Boot 4.1.1, Maven e JPA/Hibernate.
 - Frontend: HTML, CSS e JavaScript Vanilla com ES Modules.
 - Banco remoto: PostgreSQL no Supabase, acessado exclusivamente pelo backend Java via JDBC.
 - Desenvolvimento offline: perfil Spring `localdev` com H2 persistente.
@@ -24,7 +24,7 @@ Antes de analisar ou alterar o projeto, leia integralmente:
 - Nunca exponha ou versione credenciais, tokens, senhas JDBC, segredo JWT ou chave de IA.
 - Alterações estruturais do banco devem usar migrations controladas e manter `docs/schema.sql` sincronizado.
 - O frontend nunca recebe credenciais do Supabase nem acessa suas tabelas diretamente.
-- Mantenha autorização por `CLIENTE`, `TECNICO` e `GERENTE`, UUIDs e contratos canônicos documentados.
+- Mantenha autorização estritamente por `CLIENTE` e `TECNICO`, UUIDs e contratos canônicos documentados.
 - Não faça push sem solicitação explícita do usuário.
 
 ## Validação mínima
@@ -36,4 +36,4 @@ Antes de analisar ou alterar o projeto, leia integralmente:
 
 ## Estado para a próxima sessão
 
-O escopo funcional escolhido está concluído. A próxima atividade normal é executar o aceite manual por perfil, registrar problemas reproduzíveis e corrigir somente as divergências encontradas. Consulte sempre `docs/session-handoff.md` para os testes, commits, estado do Supabase e sequência de retomada mais recente.
+O pivot para marketplace está implementado, auditado e validado. As migrations correspondentes estão aplicadas no Supabase. A próxima atividade normal depende de uma decisão explícita de produto, como hospedagem/observabilidade ou uma evolução listada no roadmap. Consulte sempre `docs/session-handoff.md` para o estado mais recente.

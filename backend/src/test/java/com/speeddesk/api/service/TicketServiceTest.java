@@ -1,6 +1,7 @@
 package com.speeddesk.api.service;
 
 import com.speeddesk.api.dto.TicketRequestDTO;
+import com.speeddesk.api.dto.TicketFinalizeRequestDTO;
 import com.speeddesk.api.dto.TicketResponseDTO;
 import com.speeddesk.api.entity.Asset;
 import com.speeddesk.api.entity.Organization;
@@ -34,6 +35,7 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.time.Clock;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -82,8 +84,9 @@ class TicketServiceTest {
         when(authorizationService.currentUser()).thenReturn(new AuthenticatedUser(
                 UUID.randomUUID(),
                 "actor@speeddesk.local",
-                UserRole.GERENTE
+                UserRole.CLIENTE
         ));
+        when(authorizationService.canRead(any(Ticket.class))).thenReturn(true);
         when(slaPolicyService.snapshot(any(TicketPriority.class)))
                 .thenAnswer(invocation -> SlaPolicyService.defaults(
                         invocation.getArgument(0)
@@ -546,7 +549,7 @@ class TicketServiceTest {
     }
 
     @Test
-    void followsControlledStatusMachineAndCapturesResolutionTime() {
+    void followsControlledStatusMachineAndCapturesPaymentFlow() {
         User technician = technician(UUID.randomUUID());
         UUID ticketId = UUID.randomUUID();
         Ticket ticket = workflowTicket(TicketStatus.EM_ATENDIMENTO, technician);
@@ -561,12 +564,19 @@ class TicketServiceTest {
                 TicketStatus.EM_ATENDIMENTO,
                 ticketService.updateStatus(ticketId, TicketStatus.EM_ATENDIMENTO).status()
         );
-        TicketResponseDTO resolved = ticketService.resolverTicket(ticketId);
+        TicketResponseDTO awaitingPayment = ticketService.finalizeService(
+                ticketId,
+                new TicketFinalizeRequestDTO(new BigDecimal("150.00"))
+        );
+        TicketResponseDTO resolved = ticketService.confirmPayment(ticketId);
 
+        assertEquals(TicketStatus.AGUARDANDO_PAGAMENTO, awaitingPayment.status());
+        assertEquals(new BigDecimal("150.00"), awaitingPayment.valorFinal());
+        assertFalse(awaitingPayment.pagamentoRealizado());
         assertEquals(TicketStatus.RESOLVIDO, resolved.status());
+        assertTrue(resolved.pagamentoRealizado());
         assertEquals(OffsetDateTime.ofInstant(NOW, ZoneOffset.UTC), resolved.resolvedAt());
-        verify(authorizationService, org.mockito.Mockito.times(2)).requireCanOperate(ticket);
-        verify(authorizationService).requireCanResolve(ticket);
+        verify(authorizationService, org.mockito.Mockito.times(4)).requireCanOperate(ticket);
     }
 
     @Test
@@ -610,11 +620,11 @@ class TicketServiceTest {
 
     @Test
     void persistsRequiredReasonAndFreezesRemainingTimeWhenPaused() {
-        User manager = User.builder()
+        User technician = User.builder()
                 .id(UUID.randomUUID())
-                .name("Gerente")
-                .email("manager@speeddesk.test")
-                .role(UserRole.GERENTE)
+                .name("Técnico")
+                .email("technician-pause@speeddesk.test")
+                .role(UserRole.TECNICO)
                 .build();
         UUID ticketId = UUID.randomUUID();
         OffsetDateTime now = OffsetDateTime.ofInstant(NOW, ZoneOffset.UTC);
@@ -622,11 +632,11 @@ class TicketServiceTest {
         ticket.setDataVencimento(now.plusHours(4));
         when(ticketRepository.findById(ticketId)).thenReturn(Optional.of(ticket));
         when(authorizationService.currentUser()).thenReturn(new AuthenticatedUser(
-                manager.getId(),
-                manager.getEmail(),
-                UserRole.GERENTE
+                technician.getId(),
+                technician.getEmail(),
+                UserRole.TECNICO
         ));
-        when(userRepository.getReferenceById(manager.getId())).thenReturn(manager);
+        when(userRepository.getReferenceById(technician.getId())).thenReturn(technician);
         when(ticketRepository.save(ticket)).thenReturn(ticket);
         ArgumentCaptor<TicketSlaPause> captor = ArgumentCaptor.forClass(
                 TicketSlaPause.class
@@ -649,6 +659,7 @@ class TicketServiceTest {
         User technician = technician(UUID.randomUUID());
         UUID ticketId = UUID.randomUUID();
         Ticket ticket = workflowTicket(TicketStatus.RESOLVIDO, technician);
+        ticket.setPagamentoRealizado(true);
         ticket.setResolvedAt(OffsetDateTime.ofInstant(NOW, ZoneOffset.UTC).minusMinutes(1));
         ticket.setSlaDurationMinutes(600);
         ticket.setSlaWarningMinutes(120);

@@ -1,5 +1,7 @@
 package com.speeddesk.api.service;
 
+import com.speeddesk.api.dto.PaymentPendingResponseDTO;
+import com.speeddesk.api.dto.TicketFinalizeRequestDTO;
 import com.speeddesk.api.dto.TicketRequestDTO;
 import com.speeddesk.api.dto.TicketResponseDTO;
 import com.speeddesk.api.entity.Asset;
@@ -66,11 +68,17 @@ public class TicketService {
 
     @Transactional
     public TicketResponseDTO create(TicketRequestDTO request) {
+        if (authorizationService.currentUser().role() != UserRole.CLIENTE) {
+            throw new ForbiddenOperationException(
+                    "Somente clientes podem abrir novos chamados."
+            );
+        }
         UUID clientId = authorizationService.clientTarget(request.clienteId());
         User cliente = userRepository.findById(clientId)
                 .orElseThrow(() -> new ClientNotFoundException(clientId));
         requireRole(cliente, UserRole.CLIENTE);
         requireActive(cliente);
+        requireNoPendingPayment(clientId);
 
         Asset asset = request.assetId() == null
                 ? null
@@ -108,7 +116,7 @@ public class TicketService {
         TicketResponseDTO response = saveAndRespond(ticket);
         UUID actorId = authorizationService.currentUser().id();
         notificationService.notifyRole(
-                UserRole.GERENTE,
+                UserRole.TECNICO,
                 actorId,
                 NotificationType.TICKET_CREATED,
                 "Novo chamado recebido",
@@ -126,6 +134,18 @@ public class TicketService {
                 ticket.getId()
         );
         return response;
+    }
+
+    public PaymentPendingResponseDTO paymentPending() {
+        if (authorizationService.currentUser().role() != UserRole.CLIENTE) {
+            throw new ForbiddenOperationException(
+                    "A consulta de pendências é exclusiva do cliente."
+            );
+        }
+        return new PaymentPendingResponseDTO(ticketRepository
+                .existsPendingPaymentByClientId(
+                        authorizationService.currentUser().id()
+                ));
     }
 
     private TicketCategory resolveCategory(UUID categoryId, TicketType ticketType) {
@@ -190,6 +210,7 @@ public class TicketService {
         String normalizedQuery = normalizeQuery(query);
 
         return tickets.stream()
+                .filter(authorizationService::canRead)
                 .filter(ticket -> status == null || ticket.getStatus() == status)
                 .filter(ticket -> prioridade == null || ticket.getPrioridade() == prioridade)
                 .filter(ticket -> ticketType == null
@@ -252,23 +273,65 @@ public class TicketService {
     }
 
     @Transactional
-    public TicketResponseDTO resolverTicket(UUID ticketId) {
-        Ticket ticket = ticketRepository.findById(ticketId)
-                .orElseThrow(() -> new TicketNotFoundException(ticketId));
-        authorizationService.requireCanResolve(ticket);
-        applyTransition(ticket, TicketStatus.RESOLVIDO, OffsetDateTime.now(clock));
-        TicketResponseDTO response = saveAndRespond(ticket);
-        notifyTicketParticipants(ticket, "Chamado resolvido");
-        return response;
-    }
-
-    @Transactional
     public TicketResponseDTO updateStatus(UUID ticketId, TicketStatus targetStatus) {
         Ticket ticket = findTicket(ticketId);
         authorizationService.requireCanOperate(ticket);
         applyTransition(ticket, targetStatus, OffsetDateTime.now(clock));
         TicketResponseDTO response = saveAndRespond(ticket);
         notifyTicketParticipants(ticket, "Status do chamado atualizado");
+        return response;
+    }
+
+    @Transactional
+    public TicketResponseDTO finalizeService(
+            UUID ticketId,
+            TicketFinalizeRequestDTO request
+    ) {
+        Ticket ticket = findTicket(ticketId);
+        authorizationService.requireCanOperate(ticket);
+        if (ticket.getStatus() != TicketStatus.EM_ATENDIMENTO) {
+            throw new InvalidTicketStatusTransitionException(
+                    ticket.getStatus(),
+                    TicketStatus.AGUARDANDO_PAGAMENTO
+            );
+        }
+        if (ticket.isSlaPaused()) {
+            throw new InvalidSlaOperationException(
+                    "Retome o SLA antes de finalizar o serviço."
+            );
+        }
+
+        OffsetDateTime now = OffsetDateTime.now(clock);
+        ticket.setValorFinal(request.valorFinal());
+        ticket.setPagamentoRealizado(false);
+        ticket.setStatus(TicketStatus.AGUARDANDO_PAGAMENTO);
+        ticket.setResolvedAt(now);
+        ticket.setClosedAt(null);
+        TicketResponseDTO response = saveAndRespond(ticket);
+        notifyTicketParticipants(ticket, "Serviço finalizado; pagamento pendente");
+        return response;
+    }
+
+    @Transactional
+    public TicketResponseDTO confirmPayment(UUID ticketId) {
+        Ticket ticket = findTicket(ticketId);
+        authorizationService.requireCanOperate(ticket);
+        if (ticket.getStatus() != TicketStatus.AGUARDANDO_PAGAMENTO
+                || ticket.getValorFinal() == null
+                || ticket.isPagamentoRealizado()) {
+            throw new InvalidTicketStatusTransitionException(
+                    ticket.getStatus(),
+                    TicketStatus.RESOLVIDO
+            );
+        }
+
+        ticket.setPagamentoRealizado(true);
+        ticket.setStatus(TicketStatus.RESOLVIDO);
+        if (ticket.getResolvedAt() == null) {
+            ticket.setResolvedAt(OffsetDateTime.now(clock));
+        }
+        TicketResponseDTO response = saveAndRespond(ticket);
+        notifyTicketParticipants(ticket, "Pagamento confirmado; chamado resolvido");
         return response;
     }
 
@@ -280,6 +343,11 @@ public class TicketService {
             throw new InvalidTicketStatusTransitionException(
                     ticket.getStatus(),
                     TicketStatus.FECHADO
+            );
+        }
+        if (!ticket.isPagamentoRealizado()) {
+            throw new ForbiddenOperationException(
+                    "O chamado só pode ser fechado após a confirmação do pagamento."
             );
         }
 
@@ -318,6 +386,8 @@ public class TicketService {
                 : TicketStatus.RECEBIDO);
         ticket.setResolvedAt(null);
         ticket.setClosedAt(null);
+        ticket.setValorFinal(null);
+        ticket.setPagamentoRealizado(false);
         ticket.setSlaPaused(false);
         ticket.setSlaPausedAt(null);
         ticket.setDataVencimento(now.plusMinutes(ticket.getSlaDurationMinutes()));
@@ -331,7 +401,8 @@ public class TicketService {
         Ticket ticket = findTicket(ticketId);
         authorizationService.requireCanOperate(ticket);
         if (ticket.getStatus() == TicketStatus.RESOLVIDO
-                || ticket.getStatus() == TicketStatus.FECHADO) {
+                || ticket.getStatus() == TicketStatus.FECHADO
+                || ticket.getStatus() == TicketStatus.AGUARDANDO_PAGAMENTO) {
             throw new InvalidSlaOperationException(
                     "O SLA de um chamado concluido nao pode ser pausado."
             );
@@ -411,6 +482,9 @@ public class TicketService {
             );
         }
         if (targetStatus == TicketStatus.FECHADO
+                || targetStatus == TicketStatus.AGUARDANDO_PAGAMENTO
+                || targetStatus == TicketStatus.RESOLVIDO
+                || ticket.getStatus() == TicketStatus.AGUARDANDO_PAGAMENTO
                 || ticket.getStatus() == TicketStatus.RESOLVIDO
                 || ticket.getStatus() == TicketStatus.FECHADO
                 || !ALLOWED_TRANSITIONS
@@ -429,9 +503,6 @@ public class TicketService {
         }
 
         ticket.setStatus(targetStatus);
-        if (targetStatus == TicketStatus.RESOLVIDO) {
-            ticket.setResolvedAt(now);
-        }
     }
 
     private void ensureSlaSnapshot(Ticket ticket) {
@@ -454,7 +525,10 @@ public class TicketService {
     }
 
     private TicketResponseDTO response(Ticket ticket) {
-        return TicketResponseDTO.from(ticket, clock);
+        if (!canSeeClientContact(ticket)) {
+            return TicketResponseDTO.forMarketplaceQueue(ticket, clock);
+        }
+        return TicketResponseDTO.from(ticket, clock, ticket.getCliente().getPhone());
     }
 
     private TicketResponseDTO saveAndRespond(Ticket ticket) {
@@ -473,13 +547,34 @@ public class TicketService {
                     response
             );
         }
-        realtimeService.publishToRoleAfterCommit(
-                UserRole.GERENTE,
-                null,
-                "ticket-changed",
-                response
-        );
+        if (saved.getTecnico() == null) {
+            realtimeService.publishToRoleAfterCommit(
+                    UserRole.TECNICO,
+                    null,
+                    "ticket-changed",
+                    TicketResponseDTO.forMarketplaceQueue(saved, clock)
+            );
+        }
         return response;
+    }
+
+    private boolean canSeeClientContact(Ticket ticket) {
+        var currentUser = authorizationService.currentUser();
+        if (currentUser.role() == UserRole.CLIENTE) {
+            return ticket.getCliente() != null
+                    && currentUser.id().equals(ticket.getCliente().getId());
+        }
+        return currentUser.role() == UserRole.TECNICO
+                && ticket.getTecnico() != null
+                && currentUser.id().equals(ticket.getTecnico().getId());
+    }
+
+    private void requireNoPendingPayment(UUID clientId) {
+        if (ticketRepository.existsPendingPaymentByClientId(clientId)) {
+            throw new ForbiddenOperationException(
+                    "Você possui pagamentos pendentes. Acerte com o técnico para liberar novos chamados."
+            );
+        }
     }
 
     private void notifyTicketParticipants(Ticket ticket, String title) {
@@ -512,8 +607,7 @@ public class TicketService {
                 TicketStatus.EM_ATENDIMENTO,
                 Set.of(
                         TicketStatus.AGUARDANDO_CLIENTE,
-                        TicketStatus.AGUARDANDO_PECA,
-                        TicketStatus.RESOLVIDO
+                        TicketStatus.AGUARDANDO_PECA
                 )
         );
         transitions.put(

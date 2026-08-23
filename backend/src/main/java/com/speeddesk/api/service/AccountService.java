@@ -1,12 +1,12 @@
 package com.speeddesk.api.service;
 
 import com.speeddesk.api.config.AccountProperties;
+import com.speeddesk.api.dto.AccountProfileResponseDTO;
 import com.speeddesk.api.dto.OperationMessageDTO;
 import com.speeddesk.api.dto.PasswordChangeRequestDTO;
 import com.speeddesk.api.dto.PasswordResetConfirmRequestDTO;
 import com.speeddesk.api.dto.PasswordResetIssueResponseDTO;
 import com.speeddesk.api.dto.UserProfileUpdateRequestDTO;
-import com.speeddesk.api.dto.UserResponseDTO;
 import com.speeddesk.api.entity.PasswordResetToken;
 import com.speeddesk.api.entity.User;
 import com.speeddesk.api.exception.DuplicateEmailException;
@@ -52,12 +52,12 @@ public class AccountService {
     private final Clock clock;
     private final SecureRandom secureRandom = new SecureRandom();
 
-    public UserResponseDTO getProfile() {
-        return UserResponseDTO.from(currentAccount());
+    public AccountProfileResponseDTO getProfile() {
+        return AccountProfileResponseDTO.from(currentAccount());
     }
 
     @Transactional
-    public UserResponseDTO updateProfile(UserProfileUpdateRequestDTO request) {
+    public AccountProfileResponseDTO updateProfile(UserProfileUpdateRequestDTO request) {
         User user = currentAccount();
         String normalizedEmail = EmailNormalizer.normalize(request.email());
         if (userRepository.existsByEmailIgnoreCaseAndIdNot(normalizedEmail, user.getId())) {
@@ -66,7 +66,8 @@ public class AccountService {
 
         user.setName(request.name().trim());
         user.setEmail(normalizedEmail);
-        return UserResponseDTO.from(userRepository.save(user));
+        user.setPhone(normalizePhone(request.phone()));
+        return AccountProfileResponseDTO.from(userRepository.save(user));
     }
 
     @Transactional
@@ -204,6 +205,16 @@ public class AccountService {
 
     private OffsetDateTime now() {
         return OffsetDateTime.ofInstant(clock.instant(), ZoneOffset.UTC);
+    }
+
+    private String normalizePhone(String phone) {
+        String normalized = phone == null ? "" : phone.replaceAll("\\D", "");
+        if (normalized.length() < 10 || normalized.length() > 15) {
+            throw new InvalidRequestException(
+                    "Informe o telefone com DDI, usando entre 10 e 15 números."
+            );
+        }
+        return normalized;
     }
 
     private InvalidRequestException invalidResetToken() {

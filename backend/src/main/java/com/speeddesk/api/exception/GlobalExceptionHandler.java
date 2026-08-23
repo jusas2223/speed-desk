@@ -127,7 +127,7 @@ public class GlobalExceptionHandler {
         );
     }
 
-    @ExceptionHandler({LastActiveManagerException.class, UserRoleChangeConflictException.class})
+    @ExceptionHandler(UserRoleChangeConflictException.class)
     public ResponseEntity<ProblemDetail> handleBusinessConflict(
             RuntimeException exception,
             HttpServletRequest request

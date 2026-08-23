@@ -17,7 +17,7 @@ public class OpenApiConfig {
         return new OpenAPI()
                 .info(new Info()
                         .title("Speed Desk API")
-                        .description("API REST do portal de help desk e gestão de ativos.")
+                        .description("API REST do marketplace de assistência técnica.")
                         .version("1.0.0"))
                 .components(new Components().addSecuritySchemes(
                         schemeName,

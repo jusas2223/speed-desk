@@ -6,6 +6,7 @@ public enum TicketStatus {
     EM_ATENDIMENTO,
     AGUARDANDO_CLIENTE,
     AGUARDANDO_PECA,
+    AGUARDANDO_PAGAMENTO,
     RESOLVIDO,
     FECHADO
 }

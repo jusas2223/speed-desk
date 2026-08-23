@@ -28,13 +28,4 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     @Query("select user from User user where user.id = :id")
     Optional<User> findByIdForUpdate(@Param("id") UUID id);
 
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("""
-            select user
-              from User user
-             where user.role = :role
-               and user.active = true
-             order by user.id
-            """)
-    List<User> findActiveByRoleForUpdate(@Param("role") UserRole role);
 }

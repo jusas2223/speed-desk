@@ -2,10 +2,10 @@ package com.speeddesk.api.service;
 
 import com.speeddesk.api.config.AccountProperties;
 import com.speeddesk.api.dto.PasswordChangeRequestDTO;
+import com.speeddesk.api.dto.AccountProfileResponseDTO;
 import com.speeddesk.api.dto.PasswordResetConfirmRequestDTO;
 import com.speeddesk.api.dto.PasswordResetIssueResponseDTO;
 import com.speeddesk.api.dto.UserProfileUpdateRequestDTO;
-import com.speeddesk.api.dto.UserResponseDTO;
 import com.speeddesk.api.entity.PasswordResetToken;
 import com.speeddesk.api.entity.User;
 import com.speeddesk.api.entity.UserRole;
@@ -80,17 +80,19 @@ class AccountServiceTest {
         )).thenReturn(false);
         when(userRepository.save(user)).thenReturn(user);
 
-        UserResponseDTO current = accountService.getProfile();
-        UserResponseDTO updated = accountService.updateProfile(
+        AccountProfileResponseDTO current = accountService.getProfile();
+        AccountProfileResponseDTO updated = accountService.updateProfile(
                 new UserProfileUpdateRequestDTO(
                         "  Nome atualizado  ",
-                        " UPDATED@SPEEDDESK.TEST "
+                        " UPDATED@SPEEDDESK.TEST ",
+                        "+55 (11) 99999-8888"
                 )
         );
 
         assertEquals(user.getId(), current.id());
         assertEquals("Nome atualizado", updated.name());
         assertEquals("updated@speeddesk.test", updated.email());
+        assertEquals("5511999998888", updated.phone());
         assertEquals(UserRole.CLIENTE, updated.role());
         verify(userRepository).save(user);
     }

@@ -7,6 +7,7 @@ import com.speeddesk.api.dto.TicketResponseDTO;
 import com.speeddesk.api.entity.Asset;
 import com.speeddesk.api.entity.AssetStatus;
 import com.speeddesk.api.entity.AssetType;
+import com.speeddesk.api.entity.Ticket;
 import com.speeddesk.api.entity.User;
 import com.speeddesk.api.entity.UserRole;
 import com.speeddesk.api.entity.WarrantyState;
@@ -80,11 +81,7 @@ public class AssetService {
     }
 
     public List<AssetResponseDTO> listByClienteId(UUID clienteId) {
-        UUID effectiveClientId = authorizationService.clientScope(clienteId);
-        return assetRepository.findAllByCliente_Id(effectiveClientId)
-                .stream()
-                .map(this::response)
-                .toList();
+        return listAll(clienteId, null, null, null, null);
     }
 
     public List<AssetResponseDTO> listAll(
@@ -100,11 +97,16 @@ public class AssetService {
         WarrantyState warrantyFilter = parseNullableWarrantyState(warrantyState);
         String normalizedQuery = normalizeQuery(query);
 
-        List<Asset> assets = effectiveClientId == null
-                ? assetRepository.findAllByOrderByCreatedAtDesc()
-                : assetRepository.findAllByCliente_IdOrderByCreatedAtDesc(effectiveClientId);
+        AuthenticatedUser currentUser = authorizationService.currentUser();
+        List<Asset> assets = currentUser.role() == UserRole.TECNICO
+                ? assetRepository.findAllReadableByTechnician(currentUser.id())
+                : assetRepository.findAllByCliente_IdOrderByCreatedAtDesc(
+                        effectiveClientId
+                );
 
         return assets.stream()
+                .filter(asset -> effectiveClientId == null
+                        || asset.getCliente().getId().equals(effectiveClientId))
                 .filter(asset -> typeFilter == null || asset.getTipo() == typeFilter)
                 .filter(asset -> statusFilter == null || effectiveStatus(asset) == statusFilter)
                 .filter(asset -> warrantyFilter == null
@@ -157,7 +159,8 @@ public class AssetService {
         requireCanRead(asset);
         return ticketRepository.findAllByAsset_IdOrderByDataCriacaoDesc(assetId)
                 .stream()
-                .map(ticket -> TicketResponseDTO.from(ticket, effectiveClock()))
+                .filter(authorizationService::canRead)
+                .map(this::ticketResponse)
                 .toList();
     }
 
@@ -187,24 +190,50 @@ public class AssetService {
 
     private void requireCanRead(Asset asset) {
         AuthenticatedUser currentUser = authorizationService.currentUser();
-        if (currentUser.role() != UserRole.CLIENTE
-                || currentUser.id().equals(asset.getCliente().getId())) {
+        if (currentUser.role() == UserRole.CLIENTE
+                && currentUser.id().equals(asset.getCliente().getId())) {
+            return;
+        }
+        if (currentUser.role() == UserRole.TECNICO
+                && ticketRepository.existsReadableByAssetIdAndTechnicianId(
+                        asset.getId(),
+                        currentUser.id()
+                )) {
             return;
         }
         throw new ForbiddenOperationException(
-                "Clientes só podem acessar os próprios ativos."
+                "O ativo não está disponível no contexto dos seus chamados."
         );
     }
 
     private void requireCanEdit(Asset asset) {
         AuthenticatedUser currentUser = authorizationService.currentUser();
-        if (currentUser.role() == UserRole.GERENTE
-                || (currentUser.role() == UserRole.CLIENTE
-                && currentUser.id().equals(asset.getCliente().getId()))) {
+        if (currentUser.role() == UserRole.CLIENTE
+                && currentUser.id().equals(asset.getCliente().getId())) {
             return;
         }
         throw new ForbiddenOperationException(
-                "Somente o cliente proprietário ou um gerente pode editar o ativo."
+                "Somente o cliente proprietário pode editar o ativo."
+        );
+    }
+
+    private TicketResponseDTO ticketResponse(Ticket ticket) {
+        AuthenticatedUser currentUser = authorizationService.currentUser();
+        boolean clientOwner = currentUser.role() == UserRole.CLIENTE
+                && currentUser.id().equals(ticket.getCliente().getId());
+        boolean assignedTechnician = currentUser.role() == UserRole.TECNICO
+                && ticket.getTecnico() != null
+                && currentUser.id().equals(ticket.getTecnico().getId());
+        if (!clientOwner && !assignedTechnician) {
+            return TicketResponseDTO.forMarketplaceQueue(
+                    ticket,
+                    effectiveClock()
+            );
+        }
+        return TicketResponseDTO.from(
+                ticket,
+                effectiveClock(),
+                ticket.getCliente().getPhone()
         );
     }
 

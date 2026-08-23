@@ -98,12 +98,14 @@ class AccountIntegrationTest {
                         .content("""
                                 {
                                   "name":"  Cliente Atualizado  ",
-                                  "email":"  UPDATED@SPEEDDESK.TEST  "
+                                  "email":"  UPDATED@SPEEDDESK.TEST  ",
+                                  "phone":"+55 (11) 99999-8888"
                                 }
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.name").value("Cliente Atualizado"))
                 .andExpect(jsonPath("$.email").value("updated@speeddesk.test"))
+                .andExpect(jsonPath("$.phone").value("5511999998888"))
                 .andExpect(jsonPath("$.role").value("CLIENTE"));
     }
 
@@ -140,54 +142,7 @@ class AccountIntegrationTest {
     }
 
     @Test
-    void managerIssuesManualOneTimeResetAndPublicFlowConsumesIt() throws Exception {
-        User manager = saveUser("Gerente", "manager@speeddesk.test", UserRole.GERENTE);
-        User client = saveUser("Cliente", "client@speeddesk.test", UserRole.CLIENTE);
-
-        MvcResult result = mockMvc.perform(post(
-                                "/api/users/{userId}/password-reset",
-                                client.getId()
-                        )
-                        .header(HttpHeaders.AUTHORIZATION, bearer(manager)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.userId").value(client.getId().toString()))
-                .andExpect(jsonPath("$.token").isNotEmpty())
-                .andExpect(jsonPath("$.expiresAt").isNotEmpty())
-                .andReturn();
-
-        PasswordResetIssueResponseDTO issued = jsonMapper.readValue(
-                result.getResponse().getContentAsString(),
-                PasswordResetIssueResponseDTO.class
-        );
-        PasswordResetToken stored = passwordResetTokenRepository.findAll().getFirst();
-        assertNotEquals(issued.token(), stored.getTokenHash());
-        assertEquals(64, stored.getTokenHash().length());
-
-        String resetBody = """
-                {
-                  "token":"%s",
-                  "newPassword":"Reset-password-789"
-                }
-                """.formatted(issued.token());
-        mockMvc.perform(post("/api/account/password-reset/confirm")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(resetBody))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.message").value("Senha redefinida com sucesso."));
-
-        mockMvc.perform(post("/api/account/password-reset/confirm")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(resetBody))
-                .andExpect(status().isBadRequest())
-                .andExpect(content().contentTypeCompatibleWith(
-                        MediaType.APPLICATION_PROBLEM_JSON));
-
-        login("client@speeddesk.test", "Reset-password-789")
-                .andExpect(status().isOk());
-    }
-
-    @Test
-    void recoveryIssuanceIsManagerOnlyAndProfileRequiresAuthentication() throws Exception {
+    void recoveryIssuanceIsUnavailableAndProfileRequiresAuthentication() throws Exception {
         User client = saveUser("Cliente", "client@speeddesk.test", UserRole.CLIENTE);
         User target = saveUser("Alvo", "target@speeddesk.test", UserRole.CLIENTE);
 

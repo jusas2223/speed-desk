@@ -75,7 +75,7 @@ class AssetManagementIntegrationTest {
     private User owner;
     private User otherClient;
     private User technician;
-    private User manager;
+    private User otherTechnician;
 
     @BeforeEach
     void setUp() {
@@ -89,7 +89,11 @@ class AssetManagementIntegrationTest {
         owner = saveUser("Cliente", "owner@speeddesk.test", UserRole.CLIENTE);
         otherClient = saveUser("Outro", "other@speeddesk.test", UserRole.CLIENTE);
         technician = saveUser("Tecnico", "tech@speeddesk.test", UserRole.TECNICO);
-        manager = saveUser("Gerente", "manager@speeddesk.test", UserRole.GERENTE);
+        otherTechnician = saveUser(
+                "Outro tecnico",
+                "other-tech@speeddesk.test",
+                UserRole.TECNICO
+        );
     }
 
     @Test
@@ -126,14 +130,14 @@ class AssetManagementIntegrationTest {
                         .queryParam("status", "ativo")
                         .queryParam("warrantyState", "expira_em_breve")
                         .queryParam("query", "financeiro")
-                        .header(HttpHeaders.AUTHORIZATION, bearer(manager)))
+                        .header(HttpHeaders.AUTHORIZATION, bearer(owner)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(1))
                 .andExpect(jsonPath("$[0].fabricante").value("Dell"))
                 .andExpect(jsonPath("$[0].warrantyRemainingDays").value(10));
 
         mockMvc.perform(get("/api/assets/warranty-alerts")
-                        .header(HttpHeaders.AUTHORIZATION, bearer(technician)))
+                        .header(HttpHeaders.AUTHORIZATION, bearer(owner)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(1))
                 .andExpect(jsonPath("$[0].serial").value("FILTER-1"));
@@ -149,7 +153,7 @@ class AssetManagementIntegrationTest {
         );
 
         mockMvc.perform(post("/api/assets")
-                        .header(HttpHeaders.AUTHORIZATION, bearer(manager))
+                        .header(HttpHeaders.AUTHORIZATION, bearer(owner))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(detailedBody(
                                 "Outro",
@@ -164,7 +168,7 @@ class AssetManagementIntegrationTest {
                         MediaType.APPLICATION_PROBLEM_JSON));
 
         mockMvc.perform(post("/api/assets")
-                        .header(HttpHeaders.AUTHORIZATION, bearer(manager))
+                        .header(HttpHeaders.AUTHORIZATION, bearer(owner))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(detailedBody(
                                 "Datas invalidas",
@@ -203,6 +207,19 @@ class AssetManagementIntegrationTest {
 
         mockMvc.perform(get("/api/assets/{id}", asset.getId())
                         .header(HttpHeaders.AUTHORIZATION, bearer(technician)))
+                .andExpect(status().isForbidden());
+
+        ticketRepository.saveAndFlush(Ticket.builder()
+                .titulo("Contexto técnico")
+                .descricao("Chamado aberto para o ativo")
+                .status(TicketStatus.RECEBIDO)
+                .prioridade(TicketPriority.NORMAL)
+                .cliente(owner)
+                .asset(asset)
+                .build());
+
+        mockMvc.perform(get("/api/assets/{id}", asset.getId())
+                        .header(HttpHeaders.AUTHORIZATION, bearer(technician)))
                 .andExpect(status().isOk());
 
         mockMvc.perform(put("/api/assets/{id}", asset.getId())
@@ -226,8 +243,44 @@ class AssetManagementIntegrationTest {
                 .andExpect(status().isForbidden());
 
         mockMvc.perform(get("/api/assets/{id}", UUID.randomUUID())
-                        .header(HttpHeaders.AUTHORIZATION, bearer(manager)))
+                        .header(HttpHeaders.AUTHORIZATION, bearer(technician)))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void technicianListsOnlyAssetsFromReadableTicketContexts() throws Exception {
+        Asset openAsset = saveAsset("Notebook aberto", "CONTEXT-OPEN", owner);
+        Asset privateAsset = saveAsset("Servidor privado", "CONTEXT-PRIVATE", owner);
+        saveAsset("Monitor sem chamado", "CONTEXT-NONE", owner);
+
+        ticketRepository.saveAndFlush(Ticket.builder()
+                .titulo("Fila aberta")
+                .descricao("Visível a todos os técnicos")
+                .status(TicketStatus.RECEBIDO)
+                .prioridade(TicketPriority.NORMAL)
+                .cliente(owner)
+                .asset(openAsset)
+                .build());
+        ticketRepository.saveAndFlush(Ticket.builder()
+                .titulo("Atendimento privado")
+                .descricao("Visível somente ao responsável")
+                .status(TicketStatus.EM_ATENDIMENTO)
+                .prioridade(TicketPriority.NORMAL)
+                .cliente(owner)
+                .tecnico(otherTechnician)
+                .asset(privateAsset)
+                .build());
+
+        mockMvc.perform(get("/api/assets")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(technician)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].id").value(openAsset.getId().toString()));
+
+        mockMvc.perform(get("/api/assets")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(otherTechnician)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2));
     }
 
     @Test
@@ -241,12 +294,31 @@ class AssetManagementIntegrationTest {
                 .cliente(owner)
                 .asset(asset)
                 .build());
+        Ticket assignedToAnotherTechnician = ticketRepository.saveAndFlush(
+                Ticket.builder()
+                        .titulo("Atendimento privado")
+                        .descricao("Ja foi assumido por outro tecnico")
+                        .status(TicketStatus.EM_ATENDIMENTO)
+                        .prioridade(TicketPriority.NORMAL)
+                        .cliente(owner)
+                        .tecnico(otherTechnician)
+                        .asset(asset)
+                        .build()
+        );
 
         mockMvc.perform(get("/api/assets/{id}/tickets", asset.getId())
                         .header(HttpHeaders.AUTHORIZATION, bearer(owner)))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2));
+
+        mockMvc.perform(get("/api/assets/{id}/tickets", asset.getId())
+                        .header(HttpHeaders.AUTHORIZATION, bearer(technician)))
+                .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(1))
-                .andExpect(jsonPath("$[0].id").value(ticket.getId().toString()));
+                .andExpect(jsonPath("$[0].id").value(ticket.getId().toString()))
+                .andExpect(jsonPath("$[?(@.id == '%s')]".formatted(
+                        assignedToAnotherTechnician.getId()
+                )).isEmpty());
 
         mockMvc.perform(get("/api/assets/{id}/tickets", asset.getId())
                         .header(HttpHeaders.AUTHORIZATION, bearer(otherClient)))
@@ -260,7 +332,7 @@ class AssetManagementIntegrationTest {
             LocalDate warrantyEnd
     ) throws Exception {
         mockMvc.perform(post("/api/assets")
-                        .header(HttpHeaders.AUTHORIZATION, bearer(manager))
+                        .header(HttpHeaders.AUTHORIZATION, bearer(owner))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(detailedBody(
                                 model,

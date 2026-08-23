@@ -90,7 +90,6 @@ class HardwareIntegrationTest {
     private User otherClient;
     private User technician;
     private User otherTechnician;
-    private User manager;
     private Asset asset;
     private Ticket hardwareTicket;
 
@@ -122,11 +121,6 @@ class HardwareIntegrationTest {
                 "hardware-other-tech@speeddesk.test",
                 UserRole.TECNICO
         );
-        manager = saveUser(
-                "Gerente",
-                "hardware-manager@speeddesk.test",
-                UserRole.GERENTE
-        );
         asset = assetRepository.saveAndFlush(Asset.builder()
                 .nome("Notebook Latitude 5440")
                 .tipo(AssetType.NOTEBOOK)
@@ -146,7 +140,7 @@ class HardwareIntegrationTest {
 
         Ticket general = saveTicket(TicketType.GERAL, owner, technician, null);
         mockMvc.perform(get("/api/tickets/{id}/hardware", general.getId())
-                        .header(HttpHeaders.AUTHORIZATION, bearer(manager)))
+                        .header(HttpHeaders.AUTHORIZATION, bearer(technician)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.detail").value(
                         "Os dados de hardware só podem ser usados em chamados HARDWARE."
@@ -182,7 +176,7 @@ class HardwareIntegrationTest {
     }
 
     @Test
-    void allowsOnlyAssignedTechnicianOrManagerToMutateMaintenance() throws Exception {
+    void allowsOnlyAssignedTechnicianToMutateMaintenance() throws Exception {
         putDetails(hardwareTicket, owner, "RECEBIDO")
                 .andExpect(status().isForbidden());
         putDetails(hardwareTicket, otherTechnician, "RECEBIDO")
@@ -197,14 +191,14 @@ class HardwareIntegrationTest {
                 .andExpect(jsonPath("$.version").isNumber());
 
         mockMvc.perform(post("/api/tickets/{id}/hardware/history", hardwareTicket.getId())
-                        .header(HttpHeaders.AUTHORIZATION, bearer(manager))
+                        .header(HttpHeaders.AUTHORIZATION, bearer(technician))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"description\":\"  Inspeção visual concluída.  \"}"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.entryType").value("MANUTENCAO"))
                 .andExpect(jsonPath("$.maintenanceStage").value("RECEBIDO"))
                 .andExpect(jsonPath("$.description").value("Inspeção visual concluída."))
-                .andExpect(jsonPath("$.performedBy.id").value(manager.getId().toString()))
+                .andExpect(jsonPath("$.performedBy.id").value(technician.getId().toString()))
                 .andExpect(jsonPath("$.performedBy.password").doesNotExist());
     }
 
@@ -215,13 +209,13 @@ class HardwareIntegrationTest {
                 .andExpect(status().isOk());
         putDetails(hardwareTicket, technician, "EM_ANALISE")
                 .andExpect(status().isOk());
-        putDetails(hardwareTicket, manager, "EM_TESTE")
+        putDetails(hardwareTicket, technician, "EM_TESTE")
                 .andExpect(status().isBadRequest());
-        putDetails(hardwareTicket, manager, "EM_REPARO")
+        putDetails(hardwareTicket, technician, "EM_REPARO")
                 .andExpect(status().isOk());
         putDetails(hardwareTicket, technician, "EM_TESTE")
                 .andExpect(status().isOk());
-        putDetails(hardwareTicket, manager, "CONCLUIDO")
+        putDetails(hardwareTicket, technician, "CONCLUIDO")
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.detail").value(
                         "Conclua o checklist pós-reparo antes de finalizar a manutenção."
@@ -238,11 +232,11 @@ class HardwareIntegrationTest {
                 .andExpect(jsonPath("$.completedBy.id")
                         .value(technician.getId().toString()));
 
-        putDetails(hardwareTicket, manager, "CONCLUIDO")
+        putDetails(hardwareTicket, technician, "CONCLUIDO")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.maintenanceStage").value("CONCLUIDO"));
 
-        updateChecklist(hardwareTicket, manager, false)
+        updateChecklist(hardwareTicket, technician, false)
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.detail").value(
                         "O checklist não pode ficar incompleto após a conclusão da manutenção."
@@ -327,9 +321,13 @@ class HardwareIntegrationTest {
                 .andExpect(status().isForbidden());
 
         mockMvc.perform(get("/api/assets/{id}/technical-history", asset.getId())
-                        .header(HttpHeaders.AUTHORIZATION, bearer(otherTechnician)))
+                        .header(HttpHeaders.AUTHORIZATION, bearer(technician)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(2));
+
+        mockMvc.perform(get("/api/assets/{id}/technical-history", asset.getId())
+                        .header(HttpHeaders.AUTHORIZATION, bearer(otherTechnician)))
+                .andExpect(status().isForbidden());
     }
 
     @Test

@@ -7,6 +7,7 @@ const STATUS_LABELS = Object.freeze({
     EM_ATENDIMENTO: 'Em atendimento',
     AGUARDANDO_CLIENTE: 'Aguardando cliente',
     AGUARDANDO_PECA: 'Aguardando peça',
+    AGUARDANDO_PAGAMENTO: 'Aguardando pagamento',
     RESOLVIDO: 'Resolvido',
     FECHADO: 'Fechado'
 });
@@ -183,11 +184,7 @@ document.addEventListener('DOMContentLoaded', () => {
         },
         TECNICO: {
             title: 'Fila de Atendimento',
-            description: 'Consulte a fila operacional completa e localize rapidamente cada atendimento.'
-        },
-        GERENTE: {
-            title: 'Chamados',
-            description: 'Visão completa dos chamados, responsáveis, classificações e prazos da operação.'
+            description: 'Veja os novos chamados disponíveis e acompanhe os atendimentos assumidos por você.'
         }
     }[role];
 
@@ -272,23 +269,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
         renderTechnicianOptions();
-    }
-
-    async function loadManagerTechnicians() {
-        if (role !== 'GERENTE') return;
-        try {
-            const response = await api.request('/users');
-            if (Array.isArray(response)) {
-                response
-                    .filter(user => user.role === 'TECNICO' && user.active !== false)
-                    .forEach(technician => {
-                        state.technicians.set(technician.id, technician);
-                    });
-                renderTechnicianOptions();
-            }
-        } catch (error) {
-            console.error('Erro ao carregar responsáveis:', error);
-        }
     }
 
     function buildRequestParams() {
@@ -522,7 +502,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function initialize() {
         hydrateFiltersFromUrl();
-        await Promise.allSettled([loadCategories(), loadManagerTechnicians()]);
+        await loadCategories();
         renderTechnicianOptions();
         await loadTickets();
     }

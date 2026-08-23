@@ -47,28 +47,37 @@ public class AuthorizationService {
     }
 
     public void requireCanRead(Ticket ticket) {
-        AuthenticatedUser currentUser = currentUser();
-
-        if (currentUser.role() != UserRole.CLIENTE) {
-            return;
-        }
-
-        if (ticket.getCliente() != null
-                && currentUser.id().equals(ticket.getCliente().getId())) {
+        if (canRead(ticket)) {
             return;
         }
 
         throw new ForbiddenOperationException(
-                "Clientes só podem acessar os próprios chamados."
+                "O chamado não está disponível para este usuário."
         );
+    }
+
+    public boolean canRead(Ticket ticket) {
+        AuthenticatedUser currentUser = currentUser();
+
+        if (currentUser.role() == UserRole.CLIENTE) {
+            return ticket.getCliente() != null
+                    && currentUser.id().equals(ticket.getCliente().getId());
+        }
+
+        if (currentUser.role() == UserRole.TECNICO) {
+            if (ticket.getTecnico() != null) {
+                return currentUser.id().equals(ticket.getTecnico().getId());
+            }
+            return ticket.getStatus() == com.speeddesk.api.entity.TicketStatus.RECEBIDO
+                    || ticket.getStatus()
+                    == com.speeddesk.api.entity.TicketStatus.EM_TRIAGEM;
+        }
+
+        return false;
     }
 
     public void requireCanAssignTo(UUID technicianId) {
         AuthenticatedUser currentUser = currentUser();
-
-        if (currentUser.role() == UserRole.GERENTE) {
-            return;
-        }
 
         if (currentUser.role() == UserRole.TECNICO
                 && currentUser.id().equals(technicianId)) {
@@ -87,10 +96,6 @@ public class AuthorizationService {
     public void requireCanOperate(Ticket ticket) {
         AuthenticatedUser currentUser = currentUser();
 
-        if (currentUser.role() == UserRole.GERENTE) {
-            return;
-        }
-
         if (currentUser.role() == UserRole.TECNICO
                 && ticket.getTecnico() != null
                 && currentUser.id().equals(ticket.getTecnico().getId())) {
@@ -98,16 +103,12 @@ public class AuthorizationService {
         }
 
         throw new ForbiddenOperationException(
-                "Somente o técnico atribuído ou um gerente pode operar o chamado."
+                "Somente o técnico atribuído pode operar o chamado."
         );
     }
 
     public void requireCanCloseOrReopen(Ticket ticket) {
         AuthenticatedUser currentUser = currentUser();
-
-        if (currentUser.role() == UserRole.GERENTE) {
-            return;
-        }
 
         if (currentUser.role() == UserRole.CLIENTE
                 && ticket.getCliente() != null
@@ -116,7 +117,23 @@ public class AuthorizationService {
         }
 
         throw new ForbiddenOperationException(
-                "Somente o cliente proprietário ou um gerente pode fechar ou reabrir o chamado."
+                "Somente o cliente proprietário pode fechar ou reabrir o chamado."
+        );
+    }
+
+    public void requireCanCommunicate(Ticket ticket) {
+        AuthenticatedUser currentUser = currentUser();
+        boolean clientOwner = currentUser.role() == UserRole.CLIENTE
+                && ticket.getCliente() != null
+                && currentUser.id().equals(ticket.getCliente().getId());
+        boolean assignedTechnician = currentUser.role() == UserRole.TECNICO
+                && ticket.getTecnico() != null
+                && currentUser.id().equals(ticket.getTecnico().getId());
+        if (clientOwner || assignedTechnician) {
+            return;
+        }
+        throw new ForbiddenOperationException(
+                "O chat fica disponível após um técnico assumir o chamado."
         );
     }
 }

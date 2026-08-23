@@ -146,23 +146,8 @@ public class IncidentService {
                 "INCIDENT",
                 incident.getId()
         );
-        notificationService.notifyRole(
-                UserRole.GERENTE,
-                actorId,
-                type,
-                title,
-                message,
-                "INCIDENT",
-                incident.getId()
-        );
         realtimeService.publishToRoleAfterCommit(
                 UserRole.TECNICO,
-                actorId,
-                "incident-changed",
-                IncidentResponseDTO.from(incident)
-        );
-        realtimeService.publishToRoleAfterCommit(
-                UserRole.GERENTE,
                 actorId,
                 "incident-changed",
                 IncidentResponseDTO.from(incident)

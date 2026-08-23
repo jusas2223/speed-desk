@@ -1,211 +1,130 @@
-# Roadmap consolidado do Speed Desk
+# Speed Desk — escopo e roadmap do produto
 
-Este arquivo é a fonte de verdade do escopo escolhido. Ele separa o que já existe, o que ainda será construído e o que foi conscientemente descartado.
+Atualizado em 23 de agosto de 2026 após o aceite e a revisão de segurança do marketplace.
 
-## Estado atual
+Este documento é a fonte de verdade do escopo funcional. O Speed Desk não é mais um helpdesk corporativo interno: ele conecta clientes a técnicos independentes para atendimentos físicos ou remotos.
 
-### Implementado
+## Princípios aprovados
 
-- autenticação JWT, sessão web, BCrypt e autorização por `CLIENTE`, `TECNICO` e `GERENTE`;
-- perfil `localdev` com H2 e dados de demonstração idempotentes;
-- gestão administrativa de usuários com listagem, busca, filtros, criação, edição e ativação/desativação protegidas;
-- configurações pessoais com consulta e edição de perfil e troca autenticada de senha;
-- recuperação de senha por token temporário emitido pelo gerente para entrega manual;
-- vínculo opcional de clientes a organizações integrado ao frontend;
-- `A1–A6` gestão completa de ativos com datas e garantia, fabricante/modelo, tipo/status, edição, histórico de chamados e alertas;
-- abertura, lista completa, busca, filtros, detalhe protegido e atribuição de chamados;
-- `T4` transições controladas entre os sete estados canônicos;
-- `T5` fechamento e reabertura com autorização do proprietário ou gerente;
-- `T6` prazo e tempo restante de SLA expostos na lista, no painel e no detalhe;
-- `T7` cadastro, consulta e uso das categorias no escopo aprovado;
-- `C1` comentários públicos e `C2` notas internas com visibilidade por perfil;
-- `SLA1` indicadores `ON_TRACK`, `AT_RISK`, `BREACHED`, `PAUSED` e `MET`;
-- `SLA2` pausa controlada com motivo e retomada que preserva o tempo pausado;
-- políticas de SLA por prioridade, snapshots por chamado e concorrência otimista;
-- tipos `GERAL`, `HARDWARE` e `SOFTWARE`;
-- cadastro e consulta de organizações;
-- página administrativa de organizações e categorias;
-- seleção e exibição de tipo e categoria no frontend;
-- identidade visual completa com temas claro e escuro, fundo de velocidade e componentes responsivos;
-- shell compartilhado de navegação por perfil, opções futuras desabilitadas e telas integradas de login, painel, usuários, ativos e configurações;
-- área dedicada de chamados e consulta detalhada por UUID com autorização de proprietário;
-- `HW1/HW4/HW7/HW9` fluxo de hardware com elegibilidade, garantia, etapas sequenciais, histórico técnico por ativo e checklist pós-reparo;
-- `SW1–SW5/SW7` fluxo de software com versão, ambiente, plataforma/sistema operacional, reprodução, resultados e logs estruturados;
-- `INC1` incidentes operacionais com severidade, status, serviço afetado e vínculos opcionais a chamados;
-- `N1` notificações privadas por usuário, leitura individual/coletiva e eventos de chamados e incidentes;
-- `AN3` exportações CSV de chamados, ativos e incidentes exclusivas do gerente;
-- `RT1` atualizações autenticadas em tempo real por SSE para notificações, chamados, comentários e incidentes;
-- `SEC2` idempotência persistida em operações críticas, com replay seguro por usuário;
-- `SEC3` limite configurável de requisições públicas e autenticadas;
-- `API1` especificação OpenAPI e Swagger UI com autenticação Bearer;
-- `PWA1` instalação como aplicativo, cache seguro do shell estático e carregamento offline;
-- `AI1` triagem inteligente integrada à abertura do chamado;
-- `AI2` assistente de respostas geral ou contextual, com autorização por chamado;
-- testes automatizados do backend e integração frontend/backend validada localmente.
+- somente os perfis `CLIENTE` e `TECNICO` existem no domínio;
+- o cliente é proprietário de seus ativos, chamados e dados de contato;
+- chamados novos formam uma fila aberta visível a todos os técnicos;
+- o primeiro técnico que assumir se torna o único responsável operacional;
+- telefone, WhatsApp e chat são liberados ao técnico somente depois do aceite;
+- o pagamento é combinado diretamente entre as partes;
+- o técnico registra o valor cobrado e confirma o recebimento;
+- clientes com pagamento pendente não podem abrir novos chamados;
+- toda regra crítica é imposta pelo backend, mesmo quando o frontend antecipa o bloqueio;
+- o navegador nunca acessa Supabase diretamente.
 
-Não existem itens parcialmente implementados dentro do escopo aprovado. As decisões de ambiente permanecem abertas por escolha do usuário, e não como pendência funcional.
+## Entregue
 
-## Macroblocos na ordem recomendada
+### Identidade e acesso
 
-### 1. Estrutura visual e navegação do produto — concluído
+- login JWT, BCrypt, expiração, validação da conta atual e rate limiting;
+- sessão web em `sessionStorage`;
+- perfil próprio com nome, e-mail, telefone com DDI e troca de senha;
+- navegação e autorização limitadas aos dois perfis aprovados;
+- telas administrativas e permissões de administração central removidas.
 
-- shell compartilhado e navegação por perfil implementados;
-- navegação final organizada por perfil, sem links quebrados;
-- temas claro e escuro, responsividade, mensagens e estados de carregamento padronizados;
-- identidade visual do Google AI Studio adaptada ao frontend real do produto.
+### Marketplace de chamados
 
-### 2. Núcleo completo de chamados — concluído
+- criação de chamado exclusivamente pelo cliente proprietário;
+- tipos `GERAL`, `HARDWARE` e `SOFTWARE`, prioridade, categoria e ativo opcional;
+- fila do técnico composta por chamados `RECEBIDO`/`EM_TRIAGEM` sem responsável e chamados atribuídos a ele;
+- aceite concorrente em nome próprio e início automático em `EM_ATENDIMENTO`;
+- chamados de outro técnico não são legíveis nem operáveis;
+- telefone, e-mail e organização do cliente não aparecem na fila livre e só são projetados para o cliente ou o técnico atribuído;
+- link `https://wa.me/<numero>` e chat interno no detalhe após o aceite;
+- comentários públicos entre cliente e técnico e notas técnicas internas do responsável;
+- notificações privadas e atualização por SSE.
 
-- `T1` lista completa — concluído;
-- `T2` filtros e busca — concluído;
-- `T3` detalhes — concluído;
-- `T4` todas as transições permitidas — concluído;
-- `T5` fechar e reabrir — concluído;
-- `T6` exibição do SLA — concluído;
-- `T7` categorias — concluído no escopo aprovado;
-- `C1` comentários públicos — concluído;
-- `C2` notas internas — concluído;
-- `SLA1` risco de SLA — concluído;
-- `SLA2` pausa controlada — concluído.
+### Cobrança e inadimplência
 
-O bloco inclui política configurável por prioridade, snapshot por chamado, controle de concorrência e telas operacionais. Não inclui linha do tempo (`C3`) nem trilha de auditoria (`SEC1`).
+- `valorFinal` com duas casas decimais e valor positivo;
+- `pagamentoRealizado` não nulo, com padrão `false`;
+- status `AGUARDANDO_PAGAMENTO`;
+- finalização pelo técnico atribuído: `EM_ATENDIMENTO → AGUARDANDO_PAGAMENTO`;
+- confirmação do recebimento pelo mesmo técnico: `AGUARDANDO_PAGAMENTO → RESOLVIDO`;
+- valor cobrado visível ao cliente;
+- endpoint dedicado de consulta da pendência;
+- bloqueio transacional em `POST /api/tickets` quando existir cobrança pendente;
+- banner e botão de novo chamado desabilitado no dashboard do cliente;
+- fechamento pelo cliente somente após pagamento confirmado;
+- reabertura limpa valor e confirmação anteriores, iniciando novo ciclo de atendimento.
 
-### 3. Gestão de usuários e configurações — concluído
+### Ativos e fluxos técnicos preservados
 
-- `CFG1` configurações pessoais — concluído;
-- `CFG2` configurações do gerente — concluído;
-- `U1` tela de usuários — concluído;
-- `U2` criação pelo gerente — concluído;
-- `U3` edição — concluído;
-- `U4` ativar/desativar — concluído;
-- `U5` troca autenticada de senha — concluído;
-- `U6` recuperação manual de senha — concluído, sem e-mail conforme o escopo;
-- `ORG2` vínculo de usuários a organizações no frontend — concluído.
+- cadastro e edição dos próprios ativos pelo cliente;
+- leitura contextual pelo técnico;
+- garantia derivada, histórico técnico e vínculo de chamados;
+- fluxo de hardware com elegibilidade, cobertura, etapas, manutenção e checklist;
+- fluxo de software com ambiente, reprodução, resultados e logs estruturados;
+- SLA por prioridade, pausa/retomada pelo técnico atribuído e projeção estável;
+- incidentes e notificações operados por técnicos;
+- PWA, temas claro/escuro, triagem e assistente de IA via backend Java.
 
-### 4. Gestão completa de ativos — concluído
+## Estados canônicos do chamado
 
-- `A1` garantia e datas — concluído;
-- `A2` fabricante e modelo — concluído;
-- `A3` tipo e status — concluído;
-- `A4` edição — concluído sem permitir a troca de proprietário;
-- `A5` histórico de chamados por ativo — concluído;
-- `A6` alertas de garantia — concluído para vencimentos em até 30 dias.
+```text
+RECEBIDO
+  ├─ técnico assume → EM_ATENDIMENTO
+  └─ preparação técnica → EM_TRIAGEM → EM_ATENDIMENTO
 
-O catálogo usa tipos e status canônicos, serial único sem diferença entre maiúsculas e minúsculas, escopo por proprietário e projeção de garantia derivada. Técnicos possuem leitura; o cliente edita somente os próprios ativos e o gerente pode administrar o catálogo.
+EM_ATENDIMENTO
+  ├─ AGUARDANDO_CLIENTE → EM_ATENDIMENTO
+  ├─ AGUARDANDO_PECA → EM_ATENDIMENTO
+  └─ técnico informa valor → AGUARDANDO_PAGAMENTO
 
-### 5. Fluxos especializados de hardware e software — concluído
+AGUARDANDO_PAGAMENTO
+  └─ técnico confirma recebimento → RESOLVIDO
 
-Hardware:
+RESOLVIDO
+  ├─ cliente fecha → FECHADO
+  └─ cliente reabre → EM_ATENDIMENTO ou RECEBIDO
 
-- `HW1` garantia e elegibilidade — concluído;
-- `HW4` etapas de manutenção — concluído, com avanço sequencial;
-- `HW7` histórico técnico completo — concluído por chamado e consolidado por ativo;
-- `HW9` checklist pós-reparo — concluído e obrigatório antes da etapa final.
+FECHADO
+  └─ cliente reabre → EM_ATENDIMENTO ou RECEBIDO
+```
 
-Software:
+O endpoint genérico de status não pode saltar para `AGUARDANDO_PAGAMENTO`, `RESOLVIDO` ou `FECHADO`.
 
-- `SW1` versão — concluído;
-- `SW2` ambiente afetado — concluído;
-- `SW3` plataforma e sistema operacional — concluído;
-- `SW4` passos para reprodução — concluído;
-- `SW5` resultado esperado e atual — concluído;
-- `SW7` logs técnicos estruturados — concluído nos níveis `DEBUG`, `INFO`, `WARN` e `ERROR`.
+## Fora do escopo atual
 
-Os dados especializados aparecem apenas no tipo de chamado correspondente. O cliente proprietário pode manter os detalhes de software, enquanto ações operacionais de hardware e inclusão de logs exigem o técnico atribuído ou um gerente. O bloco não adiciona diagnóstico `HW2`, RMA, peças, logística, QR, correlação `SW6`, base de erros ou incidentes de software.
+Os itens abaixo não devem ser introduzidos sem pedido explícito:
 
-### 6. Operação, comunicação e relatórios — concluído
+- perfil administrativo ou administração central de técnicos/clientes;
+- atribuição de chamado a outro técnico;
+- gateway de pagamento, PIX gerado pela plataforma, split, escrow, estorno ou conciliação bancária;
+- comissão, assinatura, plano ou monetização automática do marketplace;
+- geolocalização, raio de atendimento, agenda e despacho automático;
+- avaliações, reputação, disputa, garantia comercial ou mediação;
+- acesso do frontend ao Supabase;
+- framework frontend;
+- envio automático de senha ou recuperação por e-mail;
+- relatórios administrativos e exportações CSV na interface;
+- exclusão de ativos, comentários, logs ou histórico técnico;
+- RMA, estoque de peças, logística, QR Code e base de erros conhecidos.
 
-- `INC1` gestão geral de incidentes — concluído;
-- `N1` notificações dentro do sistema — concluído;
-- `AN3` exportação de relatórios — concluído;
-- `RT1` atualizações em tempo real — concluído com SSE autenticado por Bearer Token.
+## Aceite do pivot concluído
 
-Incidentes são operacionais: técnicos consultam e gerentes criam ou atualizam. As notificações pertencem exclusivamente ao destinatário, não usam e-mail e apontam para o recurso relacionado. As exportações são geradas em UTF-8 pela API Spring, sem acesso do frontend ao banco.
+- fluxo completo validado com uma conta cliente e duas contas técnicas;
+- corrida de aceite confirmou um único vencedor e resposta de conflito ao concorrente;
+- dados de contato ausentes na fila livre, liberados ao responsável e ocultos do segundo técnico;
+- WhatsApp e chat liberados somente depois da atribuição;
+- cobrança decimal, banner de pendência, bloqueio de criação, confirmação e fechamento validados;
+- isolamento contextual de ativos e ordenação determinística dos históricos cobertos por regressão automatizada;
+- privilégios da Data API removidos e advisor de segurança do Supabase sem alertas.
 
-### 7. Segurança e documentação da API — concluído
+As próximas alterações devem se limitar a divergências reproduzíveis ou a evoluções aprovadas explicitamente.
 
-- `SEC2` idempotência em operações críticas — concluído;
-- `SEC3` limite de requisições — concluído;
-- `API1` OpenAPI e Swagger — concluído.
+## Evoluções futuras que exigem decisão de produto
 
-### 8. Experiência avançada — concluído
+- auto cadastro e verificação de identidade dos dois perfis;
+- disponibilidade e região de atuação do técnico;
+- pagamento integrado e modelo de receita;
+- reputação e avaliações;
+- recuperação de conta sem equipe administrativa;
+- hospedagem definitiva e observabilidade de produção.
 
-- `PWA1` aplicação web instalável — concluído;
-- `AI1` triagem de chamados com IA — concluído;
-- `AI2` assistente de respostas com IA — concluído.
-
-O shell estático da PWA pode ser carregado sem rede, mas respostas privadas da API nunca são armazenadas pelo Service Worker. A assistência usa Gemini exclusivamente pelo backend quando `SPEEDDESK_AI_API_KEY` está configurada; sem chave ou em falha do provedor, oferece fallback local identificado na resposta.
-
-### 9. Banco remoto e ambiente de entrega
-
-- migrations controladas alinharam o PostgreSQL/Supabase ao schema atual;
-- índices, constraints, RLS e acesso exclusivo pela API Spring foram validados;
-- manter em aberto as decisões de ambientes e hospedagem que ainda não foram aprovadas.
-
-## Arquitetura do frontend
-
-Nem toda funcionalidade deve virar um item de menu. A navegação planejada será:
-
-### Todos os perfis
-
-- **Painel**;
-- **Chamados**: lista, filtros, busca e detalhes;
-- **Notificações**;
-- **Meu perfil**: dados pessoais e troca de senha — implementado;
-- **Assistente IA** geral ou com contexto de um chamado autorizado — implementado.
-
-### Cliente
-
-- **Meus chamados**;
-- **Meus equipamentos**;
-- abertura de chamado geral, hardware ou software;
-- comentários públicos e acompanhamento de SLA — implementados.
-
-### Técnico
-
-- **Fila de atendimento**;
-- **Hardware**;
-- **Software**;
-- **Incidentes**;
-- notas internas — implementadas;
-- etapas técnicas de hardware e registros de software — implementados.
-
-### Gerente
-
-- **Usuários**;
-- **Ativos**;
-- **Organizações**;
-- **Categorias**;
-- **Incidentes**;
-- **Relatórios e exportações**;
-- **Configurações administrativas**.
-
-### Recursos internos, sem item de menu próprio
-
-- transições de status, fechamento e reabertura — implementados;
-- SLA, pausas e indicadores de risco — implementados;
-- idempotência e rate limiting;
-- tempo real;
-- instalação PWA;
-- OpenAPI/Swagger, acessível como documentação técnica;
-- campos especializados de hardware/software dentro do chamado e do ativo — implementados.
-
-## Itens conscientemente fora do escopo
-
-- paginação de chamados (`T8`);
-- refresh token/revogação e MFA (`AUTH-C`, `AUTH-D`);
-- linha do tempo e anexos (`C3`, `ATT1`);
-- painéis operacional e gerencial (`AN1`, `AN2`);
-- e-mail (`N2`) e trilha de auditoria (`SEC1`);
-- Actuator (`OBS1`);
-- hardware: `HW2`, `HW3`, `HW5`, `HW6`, `HW8`;
-- software: `SW6`, `SW8`, `SW9`;
-- multi-tenant e SLA/ativos por organização (`ORG3`, `ORG4`, `ORG5`);
-- Testcontainers, PostgreSQL local e acesso direto ao Supabase pelo frontend (`DB-B`, `DB-C`, `DB-D`);
-- opções de deploy já rejeitadas (`DEP1` a `DEP5`);
-- base de conhecimento (`KB1`, `KB2`);
-- omnichannel, telefonia, QR móvel, comunidade, realidade aumentada e manutenção preditiva.
-
-As decisões de ambiente que não foram explicitamente aprovadas ou rejeitadas continuam abertas.
-
-A conclusão dos macroblocos 4 e 5 não reabre nenhum item rejeitado: os registros especializados implementados se limitam ao atendimento aprovado e não introduzem timeline geral, auditoria, anexos, multi-tenant, diagnóstico guiado, RMA, peças, logística, QR, correlação, base de erros ou incidentes de software.
+Nenhuma dessas evoluções está implicitamente autorizada pelo pivot atual.

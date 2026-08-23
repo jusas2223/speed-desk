@@ -12,7 +12,6 @@ import com.speeddesk.api.exception.InactiveOrganizationException;
 import com.speeddesk.api.exception.InvalidRequestException;
 import com.speeddesk.api.exception.InvalidOrganizationAssignmentException;
 import com.speeddesk.api.exception.ForbiddenOperationException;
-import com.speeddesk.api.exception.LastActiveManagerException;
 import com.speeddesk.api.exception.OrganizationNotFoundException;
 import com.speeddesk.api.exception.UserNotFoundException;
 import com.speeddesk.api.exception.UserRoleChangeConflictException;
@@ -90,7 +89,6 @@ public class UserService {
             );
         }
         requireCompatibleRoleChange(user, request.role());
-        ensureManagerRemainsAvailable(user, request.role(), user.isActive());
 
         String normalizedEmail = EmailNormalizer.normalize(request.email());
         if (userRepository.existsByEmailIgnoreCaseAndIdNot(normalizedEmail, userId)) {
@@ -123,8 +121,6 @@ public class UserService {
                     "Você não pode desativar a própria conta."
             );
         }
-        ensureManagerRemainsAvailable(user, user.getRole(), active);
-
         user.setActive(active);
         return UserResponseDTO.from(userRepository.save(user));
     }
@@ -132,20 +128,6 @@ public class UserService {
     private User findUser(UUID userId) {
         return userRepository.findById(userId)
                 .orElseThrow(() -> new UserNotFoundException(userId));
-    }
-
-    private void ensureManagerRemainsAvailable(
-            User user,
-            UserRole resultingRole,
-            boolean resultingActive
-    ) {
-        boolean removesActiveManager = user.getRole() == UserRole.GERENTE
-                && user.isActive()
-                && (resultingRole != UserRole.GERENTE || !resultingActive);
-        if (removesActiveManager
-                && userRepository.findActiveByRoleForUpdate(UserRole.GERENTE).size() <= 1) {
-            throw new LastActiveManagerException();
-        }
     }
 
     private void requireCompatibleRoleChange(User user, UserRole resultingRole) {

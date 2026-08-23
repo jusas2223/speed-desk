@@ -48,7 +48,7 @@ public class AiService {
     public AiTriageResponseDTO triage(AiTriageRequestDTO request) {
         AiTriageResponseDTO local = localTriage(request);
         String prompt = """
-                Analise este pedido de help desk e devolva somente o JSON solicitado.
+                Analise este pedido de assistência técnica e devolva somente o JSON solicitado.
                 Título informado: %s
                 Descrição: %s
                 Use apenas os tipos GERAL, HARDWARE ou SOFTWARE e as prioridades BAIXA, NORMAL, ALTA ou CRITICA.

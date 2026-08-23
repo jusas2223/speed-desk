@@ -42,8 +42,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!session) return;
 
     const role = String(session.role || '').toUpperCase();
-    const canEdit = role === 'CLIENTE' || role === 'GERENTE';
-    const isManager = role === 'GERENTE';
+    const canEdit = role === 'CLIENTE';
     const clientsById = new Map();
     clientsById.set(session.id, {
         id: session.id,
@@ -101,7 +100,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     configurePageForRole();
     restoreFiltersFromUrl();
-    if (isManager) await loadClients();
     await loadAssets();
 
     function configurePageForRole() {
@@ -114,32 +112,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         elements.openModalButton.hidden = !canEdit;
-        elements.clientFilterGroup.hidden = !isManager;
-        elements.clientFilter.disabled = !isManager;
-        elements.ownerGroup.hidden = !isManager;
-        elements.owner.disabled = !isManager;
-    }
-
-    async function loadClients() {
-        try {
-            const response = await api.request('/users');
-            const clients = (Array.isArray(response) ? response : [])
-                .filter(user => String(user.role).toUpperCase() === 'CLIENTE')
-                .sort((a, b) => String(a.name).localeCompare(String(b.name), 'pt-BR'));
-
-            clients.forEach(client => clientsById.set(client.id, client));
-            populateClientSelect(elements.clientFilter, clients, true, false);
-            populateClientSelect(elements.owner, clients, false, true);
-
-            const clientFromUrl = new URLSearchParams(window.location.search).get('clienteId');
-            if (clientFromUrl && clientsById.has(clientFromUrl)) {
-                elements.clientFilter.value = clientFromUrl;
-            }
-        } catch (error) {
-            elements.clientFilter.disabled = true;
-            elements.owner.disabled = true;
-            showToast(error.message || 'Não foi possível carregar os clientes.', 'error');
-        }
+        elements.clientFilterGroup.hidden = true;
+        elements.clientFilter.disabled = true;
+        elements.ownerGroup.hidden = true;
+        elements.owner.disabled = true;
     }
 
     function populateClientSelect(select, clients, includeAll, activeOnly) {
@@ -174,7 +150,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             tipo: elements.typeFilter.value,
             status: elements.statusFilter.value,
             warrantyState: elements.warrantyFilter.value,
-            clienteId: isManager ? elements.clientFilter.value : ''
+            clienteId: ''
         };
     }
 
@@ -418,21 +394,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             elements.purchaseDate.value = asset.purchaseDate || '';
             elements.warrantyEndDate.value = asset.warrantyEndDate || '';
             elements.warrantyProvider.value = asset.warrantyProvider || '';
-            if (isManager) {
-                ensureOwnerOption(asset.clienteId);
-                elements.owner.value = asset.clienteId;
-                elements.owner.disabled = true;
-                elements.ownerHelper.textContent = 'O proprietário é imutável após o cadastro.';
-            }
         } else {
             elements.modalTitle.textContent = 'Novo ativo';
             elements.modalDescription.textContent = 'Cadastre os dados de inventário e garantia do equipamento.';
             elements.submit.textContent = 'Salvar ativo';
-            if (isManager) {
-                elements.owner.disabled = false;
-                elements.owner.value = '';
-                elements.ownerHelper.textContent = 'O proprietário não poderá ser trocado após o cadastro.';
-            }
         }
 
         elements.modal.hidden = false;
@@ -465,9 +430,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     function buildPayload() {
-        const ownerId = isManager
-            ? (editingAsset?.clienteId || elements.owner.value)
-            : session.id;
+        const ownerId = session.id;
         return {
             modelo: elements.model.value.trim(),
             fabricante: emptyToNull(elements.manufacturer.value),

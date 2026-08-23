@@ -41,14 +41,14 @@ public class TicketCommentService {
     @Transactional(readOnly = true)
     public List<TicketCommentResponseDTO> list(UUID ticketId) {
         Ticket ticket = requireTicket(ticketId);
-        authorizationService.requireCanRead(ticket);
+        authorizationService.requireCanCommunicate(ticket);
 
         AuthenticatedUser currentUser = authorizationService.currentUser();
         List<TicketComment> comments = currentUser.role() == UserRole.CLIENTE
                 ? ticketCommentRepository
-                        .findAllByTicket_IdAndInternalFalseOrderByCreatedAtAscIdAsc(ticketId)
+                        .findAllByTicket_IdAndInternalFalseOrderByCreatedAtAscSequenceNumberAsc(ticketId)
                 : ticketCommentRepository
-                        .findAllByTicket_IdOrderByCreatedAtAscIdAsc(ticketId);
+                        .findAllByTicket_IdOrderByCreatedAtAscSequenceNumberAsc(ticketId);
 
         return comments.stream()
                 .map(TicketCommentResponseDTO::from)
@@ -61,7 +61,7 @@ public class TicketCommentService {
             TicketCommentRequestDTO request
     ) {
         Ticket ticket = requireTicket(ticketId);
-        authorizationService.requireCanRead(ticket);
+        authorizationService.requireCanCommunicate(ticket);
 
         AuthenticatedUser currentUser = authorizationService.currentUser();
         if (currentUser.role() == UserRole.CLIENTE && request.internal()) {
@@ -102,17 +102,6 @@ public class TicketCommentService {
                 "TICKET",
                 ticket.getId()
         );
-        if (request.internal()) {
-            notificationService.notifyRole(
-                    UserRole.GERENTE,
-                    currentUser.id(),
-                    NotificationType.INTERNAL_NOTE_ADDED,
-                    "Nova nota interna",
-                    ticket.getTitulo(),
-                    "TICKET",
-                    ticket.getId()
-            );
-        }
         recipients.forEach(recipientId -> realtimeService.publishAfterCommit(
                 recipientId,
                 "comment-added",

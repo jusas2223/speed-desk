@@ -14,15 +14,21 @@ CREATE TABLE users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     nome VARCHAR(255) NOT NULL,
     email VARCHAR(255) NOT NULL,
+    telefone VARCHAR(20),
     senha VARCHAR(255) NOT NULL,
     role VARCHAR(50) NOT NULL
-        CHECK (role IN ('CLIENTE', 'TECNICO', 'GERENTE')),
+        CHECK (role IN ('CLIENTE', 'TECNICO')),
     organization_id UUID,
     ativo BOOLEAN NOT NULL DEFAULT TRUE,
     data_criacao TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_users_organization
         FOREIGN KEY (organization_id)
-        REFERENCES organizations (id) ON DELETE RESTRICT
+        REFERENCES organizations (id) ON DELETE RESTRICT,
+    CONSTRAINT chk_users_telefone
+        CHECK (
+            telefone IS NULL
+            OR telefone ~ '^[1-9][0-9]{9,14}$'
+        )
 );
 
 CREATE UNIQUE INDEX uq_users_email_ci
@@ -115,7 +121,7 @@ CREATE TABLE sla_policies (
         CHECK (alerta_minutos < duracao_minutos)
 );
 
--- Valores iniciais idempotentes. ON CONFLICT preserva alterações feitas pelo gerente.
+-- Valores iniciais idempotentes. ON CONFLICT preserva alterações operacionais existentes.
 INSERT INTO sla_policies (
     prioridade,
     duracao_minutos,
@@ -138,6 +144,7 @@ CREATE TABLE tickets (
             'EM_ATENDIMENTO',
             'AGUARDANDO_CLIENTE',
             'AGUARDANDO_PECA',
+            'AGUARDANDO_PAGAMENTO',
             'RESOLVIDO',
             'FECHADO'
         )),
@@ -160,6 +167,8 @@ CREATE TABLE tickets (
     sla_pausado_em TIMESTAMP WITH TIME ZONE,
     resolvido_em TIMESTAMP WITH TIME ZONE,
     fechado_em TIMESTAMP WITH TIME ZONE,
+    valor_final NUMERIC(12, 2),
+    pagamento_realizado BOOLEAN NOT NULL DEFAULT FALSE,
     version BIGINT NOT NULL DEFAULT 0
         CHECK (version >= 0),
     CONSTRAINT chk_tickets_sla_alerta_menor_duracao
@@ -172,6 +181,25 @@ CREATE TABLE tickets (
         CHECK (
             (sla_pausado = TRUE AND sla_pausado_em IS NOT NULL)
             OR (sla_pausado = FALSE AND sla_pausado_em IS NULL)
+        ),
+    CONSTRAINT chk_tickets_valor_final
+        CHECK (valor_final IS NULL OR valor_final > 0),
+    CONSTRAINT chk_tickets_aguardando_pagamento_consistente
+        CHECK (
+            status <> 'AGUARDANDO_PAGAMENTO'
+            OR (valor_final IS NOT NULL AND pagamento_realizado = FALSE)
+        ),
+    CONSTRAINT chk_tickets_cobranca_pendente_status
+        CHECK (
+            valor_final IS NULL
+            OR pagamento_realizado = TRUE
+            OR status = 'AGUARDANDO_PAGAMENTO'
+        ),
+    CONSTRAINT chk_tickets_pagamento_confirmado_status
+        CHECK (
+            valor_final IS NULL
+            OR pagamento_realizado = FALSE
+            OR status IN ('RESOLVIDO', 'FECHADO')
         ),
     CONSTRAINT fk_tickets_cliente
         FOREIGN KEY (cliente_id) REFERENCES users (id) ON DELETE RESTRICT,
@@ -215,6 +243,7 @@ CREATE TABLE ticket_sla_pauses (
 
 CREATE TABLE ticket_comments (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    sequence_number BIGINT GENERATED ALWAYS AS IDENTITY UNIQUE,
     ticket_id UUID NOT NULL,
     author_id UUID NOT NULL,
     content TEXT NOT NULL,
@@ -275,6 +304,7 @@ CREATE TABLE hardware_maintenance_history (
     description TEXT NOT NULL,
     performed_by UUID NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    sequence_number BIGINT GENERATED ALWAYS AS IDENTITY UNIQUE,
     CONSTRAINT chk_hardware_maintenance_history_description
         CHECK (CHAR_LENGTH(BTRIM(description)) BETWEEN 1 AND 4000),
     CONSTRAINT fk_hardware_maintenance_history_ticket
@@ -491,6 +521,11 @@ CREATE INDEX idx_tickets_asset_id
 CREATE INDEX idx_tickets_category_id
     ON tickets (category_id);
 
+CREATE INDEX idx_tickets_cliente_pagamento_pendente
+    ON tickets (cliente_id)
+    WHERE status = 'AGUARDANDO_PAGAMENTO'
+       OR (valor_final IS NOT NULL AND pagamento_realizado = FALSE);
+
 CREATE INDEX idx_ticket_sla_pauses_ticket_paused_at
     ON ticket_sla_pauses (ticket_id, pausado_em DESC);
 
@@ -505,14 +540,18 @@ CREATE INDEX idx_ticket_sla_pauses_retomado_por
     ON ticket_sla_pauses (retomado_por)
     WHERE retomado_por IS NOT NULL;
 
-CREATE INDEX idx_ticket_comments_ticket_created_at
-    ON ticket_comments (ticket_id, created_at, id);
+CREATE INDEX idx_ticket_comments_ticket_created_sequence
+    ON ticket_comments (ticket_id, created_at, sequence_number);
 
 CREATE INDEX idx_ticket_comments_author_id
     ON ticket_comments (author_id);
 
-CREATE INDEX idx_hardware_maintenance_history_ticket_created_at
-    ON hardware_maintenance_history (ticket_id, created_at DESC, id DESC);
+CREATE INDEX idx_hardware_maintenance_history_ticket_created_sequence
+    ON hardware_maintenance_history (
+        ticket_id,
+        created_at DESC,
+        sequence_number DESC
+    );
 
 CREATE INDEX idx_hardware_maintenance_history_performed_by
     ON hardware_maintenance_history (performed_by);
@@ -567,7 +606,7 @@ ALTER TABLE idempotency_records ENABLE ROW LEVEL SECURITY;
 
 -- O frontend acessa os dados somente pela API Spring. Os grants e a policy
 -- exclusiva do role JDBC speeddesk_app ficam em supabase-access.sql para que
--- nenhuma senha faça parte deste schema. anon e authenticated permanecem sem
--- policy; hashes de recuperação, notas internas, registros operacionais de
+-- nenhuma senha faça parte deste schema. anon e authenticated não recebem
+-- grants nem policies; hashes de recuperação, notas internas, registros operacionais de
 -- SLA, manutenção, incidentes, notificações, idempotência e logs técnicos não são expostos
 -- pela Data API.

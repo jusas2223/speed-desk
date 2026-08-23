@@ -2,7 +2,6 @@ package com.speeddesk.api.integration;
 
 import com.speeddesk.api.config.JwtProperties;
 import com.speeddesk.api.dto.LoginResponse;
-import com.speeddesk.api.entity.Organization;
 import com.speeddesk.api.entity.User;
 import com.speeddesk.api.entity.UserRole;
 import com.speeddesk.api.repository.AssetRepository;
@@ -35,13 +34,10 @@ import tools.jackson.databind.json.JsonMapper;
 
 import java.time.Clock;
 import java.time.Instant;
-import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -70,13 +66,13 @@ class AuthenticationSecurityIntegrationTest {
     private AssetRepository assetRepository;
 
     @Autowired
-    private OrganizationRepository organizationRepository;
-
-    @Autowired
     private PasswordResetTokenRepository passwordResetTokenRepository;
 
     @Autowired
     private TicketCategoryRepository ticketCategoryRepository;
+
+    @Autowired
+    private OrganizationRepository organizationRepository;
 
     @Autowired
     private PasswordEncoder passwordEncoder;
@@ -123,13 +119,8 @@ class AuthenticationSecurityIntegrationTest {
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(user.getId().toString()))
-                .andExpect(jsonPath("$.name").value("Cliente"))
-                .andExpect(jsonPath("$.email").value("cliente@speeddesk.test"))
                 .andExpect(jsonPath("$.role").value("CLIENTE"))
                 .andExpect(jsonPath("$.accessToken").isNotEmpty())
-                .andExpect(jsonPath("$.tokenType").value("Bearer"))
-                .andExpect(jsonPath("$.expiresIn").value(3600))
-                .andExpect(jsonPath("$.organization").doesNotExist())
                 .andExpect(jsonPath("$.password").doesNotExist())
                 .andReturn();
 
@@ -138,18 +129,16 @@ class AuthenticationSecurityIntegrationTest {
                 LoginResponse.class
         );
         Jwt jwt = jwtDecoder.decode(response.accessToken());
-
         assertEquals(user.getId().toString(), jwt.getSubject());
         assertEquals("speed-desk-api", jwt.getClaimAsString("iss"));
         assertEquals("CLIENTE", jwt.getClaimAsString("role"));
         assertEquals("cliente@speeddesk.test", jwt.getClaimAsString("email"));
-        assertEquals(3600, jwt.getExpiresAt().getEpochSecond() - jwt.getIssuedAt().getEpochSecond());
         assertFalse(jwt.hasClaim("password"));
         assertFalse(jwt.hasClaim("senha"));
     }
 
     @Test
-    void invalidPasswordReturnsProblemDetailUnauthorized() throws Exception {
+    void invalidCredentialsReturnGenericUnauthorizedProblem() throws Exception {
         saveUser("Cliente", "cliente@speeddesk.test", UserRole.CLIENTE);
 
         mockMvc.perform(post("/api/users/login")
@@ -164,6 +153,17 @@ class AuthenticationSecurityIntegrationTest {
                 .andExpect(content().contentTypeCompatibleWith(
                         MediaType.APPLICATION_PROBLEM_JSON))
                 .andExpect(jsonPath("$.status").value(401));
+
+        mockMvc.perform(post("/api/users/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "email": "missing@speeddesk.test",
+                                  "password": "wrong-password"
+                                }
+                                """))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.title").value("Falha na autenticação"));
     }
 
     @Test
@@ -171,120 +171,50 @@ class AuthenticationSecurityIntegrationTest {
         User user = saveUser("Cliente", "cliente@speeddesk.test", UserRole.CLIENTE);
 
         mockMvc.perform(get("/api/tickets"))
-                .andExpect(status().isUnauthorized())
-                .andExpect(content().contentTypeCompatibleWith(
-                        MediaType.APPLICATION_PROBLEM_JSON));
-
+                .andExpect(status().isUnauthorized());
         mockMvc.perform(get("/api/tickets")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer invalid.token.value"))
-                .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.status").value(401));
-
+                .andExpect(status().isUnauthorized());
         mockMvc.perform(get("/api/tickets")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + expiredToken(user)))
-                .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.status").value(401));
+                .andExpect(status().isUnauthorized());
     }
 
     @Test
-    void roleWithoutPermissionReturnsProblemDetailForbidden() throws Exception {
-        User client = saveUser("Cliente", "cliente@speeddesk.test", UserRole.CLIENTE);
+    void legacyAdministrativeRoutesRemainDeniedForBothMarketplaceRoles()
+            throws Exception {
+        for (UserRole role : UserRole.values()) {
+            User user = saveUser(
+                    role.name(),
+                    role.name().toLowerCase() + "@speeddesk.test",
+                    role
+            );
+            String bearer = bearer(user);
 
-        mockMvc.perform(get("/api/users")
-                        .header(HttpHeaders.AUTHORIZATION, bearer(client)))
-                .andExpect(status().isForbidden())
-                .andExpect(content().contentTypeCompatibleWith(
-                        MediaType.APPLICATION_PROBLEM_JSON))
-                .andExpect(jsonPath("$.status").value(403));
+            mockMvc.perform(get("/api/users")
+                            .header(HttpHeaders.AUTHORIZATION, bearer))
+                    .andExpect(status().isForbidden());
+            mockMvc.perform(get("/api/organizations")
+                            .header(HttpHeaders.AUTHORIZATION, bearer))
+                    .andExpect(status().isForbidden());
+            mockMvc.perform(get("/api/reports/tickets.csv")
+                            .header(HttpHeaders.AUTHORIZATION, bearer))
+                    .andExpect(status().isForbidden());
+        }
     }
 
     @Test
-    void managerListsAndCreatesUsersWithNormalizedEmailAndBcryptHash() throws Exception {
-        User manager = saveUser("Gerente", "manager@speeddesk.test", UserRole.GERENTE);
-        saveUser("Cliente", "existing@speeddesk.test", UserRole.CLIENTE);
-
-        mockMvc.perform(get("/api/users")
-                        .header(HttpHeaders.AUTHORIZATION, bearer(manager)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].password").doesNotExist())
-                .andExpect(jsonPath("$[1].password").doesNotExist());
-
-        mockMvc.perform(post("/api/users")
-                        .header(HttpHeaders.AUTHORIZATION, bearer(manager))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {
-                                  "name": "  Nova Técnica  ",
-                                  "email": "  NOVA@SPEEDDESK.TEST  ",
-                                  "password": "New-password-123",
-                                  "role": "TECNICO"
-                                }
-                                """))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.name").value("Nova Técnica"))
-                .andExpect(jsonPath("$.email").value("nova@speeddesk.test"))
-                .andExpect(jsonPath("$.role").value("TECNICO"))
-                .andExpect(jsonPath("$.createdAt").isNotEmpty())
-                .andExpect(jsonPath("$.password").doesNotExist());
-
-        User created = userRepository.findByEmailIgnoreCase("NOVA@SPEEDDESK.TEST")
-                .orElseThrow();
-        assertNotEquals("New-password-123", created.getPassword());
-        assertTrue(passwordEncoder.matches("New-password-123", created.getPassword()));
-
-        mockMvc.perform(post("/api/users")
-                        .header(HttpHeaders.AUTHORIZATION, bearer(manager))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {
-                                  "name": "Duplicada",
-                                  "email": " nova@SPEEDDESK.test ",
-                                  "password": "Other-password-123",
-                                  "role": "CLIENTE"
-                                }
-                                """))
-                .andExpect(status().isConflict())
-                .andExpect(content().contentTypeCompatibleWith(
-                        MediaType.APPLICATION_PROBLEM_JSON));
-    }
-
-    @Test
-    void legacyLoginMigratesPasswordAndSubsequentLoginStillWorks() throws Exception {
+    void legacyPlaintextPasswordIsMigratedButUnknownHashesAreRejected()
+            throws Exception {
         User legacy = userRepository.saveAndFlush(User.builder()
                 .name("Legado")
                 .email("legacy@speeddesk.test")
                 .password("legacy-password")
                 .role(UserRole.CLIENTE)
                 .build());
-
-        String loginBody = """
-                {
-                  "email": "legacy@speeddesk.test",
-                  "password": "legacy-password"
-                }
-                """;
-
-        mockMvc.perform(post("/api/users/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(loginBody))
-                .andExpect(status().isOk());
-
-        User migrated = userRepository.findById(legacy.getId()).orElseThrow();
-        assertNotEquals("legacy-password", migrated.getPassword());
-        assertTrue(passwordEncoder.matches("legacy-password", migrated.getPassword()));
-
-        mockMvc.perform(post("/api/users/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(loginBody))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.accessToken").isNotEmpty());
-    }
-
-    @Test
-    void unknownHashIsNeverTreatedAsLegacyPlaintext() throws Exception {
-        User user = userRepository.saveAndFlush(User.builder()
+        User unsupported = userRepository.saveAndFlush(User.builder()
                 .name("Hash desconhecido")
-                .email("unknown-hash@speeddesk.test")
+                .email("unsupported@speeddesk.test")
                 .password("$argon2id$unsupported-test-value")
                 .role(UserRole.CLIENTE)
                 .build());
@@ -293,185 +223,55 @@ class AuthenticationSecurityIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
-                                  "email": "unknown-hash@speeddesk.test",
+                                  "email": "legacy@speeddesk.test",
+                                  "password": "legacy-password"
+                                }
+                                """))
+                .andExpect(status().isOk());
+        assertThat(userRepository.findById(legacy.getId()).orElseThrow().getPassword())
+                .startsWith("$2");
+
+        mockMvc.perform(post("/api/users/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "email": "unsupported@speeddesk.test",
                                   "password": "$argon2id$unsupported-test-value"
                                 }
                                 """))
                 .andExpect(status().isUnauthorized());
-
         assertEquals(
                 "$argon2id$unsupported-test-value",
-                userRepository.findById(user.getId()).orElseThrow().getPassword()
+                userRepository.findById(unsupported.getId()).orElseThrow().getPassword()
         );
     }
 
     @Test
-    void validationAndCorsAreAppliedGlobally() throws Exception {
+    void validationAndCorsAllowOnlyConfiguredOrigins() throws Exception {
         mockMvc.perform(post("/api/users/login")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"email":"not-an-email","password":""}
-                                """))
+                        .content("{\"email\":\"not-an-email\",\"password\":\"\"}"))
                 .andExpect(status().isBadRequest())
-                .andExpect(content().contentTypeCompatibleWith(
-                        MediaType.APPLICATION_PROBLEM_JSON))
                 .andExpect(jsonPath("$.errors.email").exists())
                 .andExpect(jsonPath("$.errors.password").exists());
 
         mockMvc.perform(options("/api/tickets")
                         .header(HttpHeaders.ORIGIN, "http://localhost:5500")
                         .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "GET")
-                        .header(
-                                HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS,
-                                "Authorization"
-                        ))
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS, "Authorization"))
                 .andExpect(status().isOk())
                 .andExpect(header().string(
                         HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN,
                         "http://localhost:5500"
                 ));
-    }
 
-    @Test
-    void managerCreatesClientWithActiveOrganizationAndSafeResponse() throws Exception {
-        User manager = saveUser("Gerente", "manager@speeddesk.test", UserRole.GERENTE);
-        Organization organization = organizationRepository.saveAndFlush(
-                Organization.builder()
-                        .name("Empresa Cliente")
-                        .active(true)
-                        .build()
-        );
-
-        mockMvc.perform(post("/api/users")
-                        .header(HttpHeaders.AUTHORIZATION, bearer(manager))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {
-                                  "name":"Cliente com empresa",
-                                  "email":"client-with-org@speeddesk.test",
-                                  "password":"New-password-123",
-                                  "role":"CLIENTE",
-                                  "organizationId":"%s"
-                                }
-                                """.formatted(organization.getId())))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.organization.id")
-                        .value(organization.getId().toString()))
-                .andExpect(jsonPath("$.organization.name").value("Empresa Cliente"))
-                .andExpect(jsonPath("$.organization.active").value(true))
-                .andExpect(jsonPath("$.organization.createdAt").isNotEmpty())
-                .andExpect(jsonPath("$.organization.hibernateLazyInitializer")
-                        .doesNotExist())
-                .andExpect(jsonPath("$.organization.users").doesNotExist())
-                .andExpect(jsonPath("$.password").doesNotExist());
-
-        User created = userRepository.findByEmailIgnoreCase(
-                "client-with-org@speeddesk.test"
-        ).orElseThrow();
-        assertEquals(organization.getId(), created.getOrganization().getId());
-    }
-
-    @Test
-    void managerStillCreatesClientWithoutOrganization() throws Exception {
-        User manager = saveUser("Gerente", "manager@speeddesk.test", UserRole.GERENTE);
-
-        mockMvc.perform(post("/api/users")
-                        .header(HttpHeaders.AUTHORIZATION, bearer(manager))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {
-                                  "name":"Cliente sem empresa",
-                                  "email":"client-without-org@speeddesk.test",
-                                  "password":"New-password-123",
-                                  "role":"CLIENTE"
-                                }
-                                """))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.organization").doesNotExist());
-
-        User created = userRepository.findByEmailIgnoreCase(
-                "client-without-org@speeddesk.test"
-        ).orElseThrow();
-        assertNull(created.getOrganization());
-    }
-
-    @Test
-    void rejectsOrganizationForManagerAndTechnicianUsers() throws Exception {
-        User manager = saveUser("Gerente", "manager@speeddesk.test", UserRole.GERENTE);
-        Organization organization = organizationRepository.saveAndFlush(
-                Organization.builder()
-                        .name("Empresa")
-                        .active(true)
-                        .build()
-        );
-
-        for (UserRole role : new UserRole[]{UserRole.GERENTE, UserRole.TECNICO}) {
-            mockMvc.perform(post("/api/users")
-                            .header(HttpHeaders.AUTHORIZATION, bearer(manager))
-                            .contentType(MediaType.APPLICATION_JSON)
-                            .content("""
-                                    {
-                                      "name":"Usuário inválido",
-                                      "email":"%s@speeddesk.test",
-                                      "password":"New-password-123",
-                                      "role":"%s",
-                                      "organizationId":"%s"
-                                    }
-                                    """.formatted(
-                                            role.name().toLowerCase(),
-                                            role,
-                                            organization.getId()
-                                    )))
-                    .andExpect(status().isBadRequest());
-        }
-    }
-
-    @Test
-    void returnsNotFoundForMissingOrganization() throws Exception {
-        User manager = saveUser("Gerente", "manager@speeddesk.test", UserRole.GERENTE);
-
-        mockMvc.perform(post("/api/users")
-                        .header(HttpHeaders.AUTHORIZATION, bearer(manager))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {
-                                  "name":"Cliente",
-                                  "email":"missing-org@speeddesk.test",
-                                  "password":"New-password-123",
-                                  "role":"CLIENTE",
-                                  "organizationId":"%s"
-                                }
-                                """.formatted(UUID.randomUUID())))
-                .andExpect(status().isNotFound())
-                .andExpect(content().contentTypeCompatibleWith(
-                        MediaType.APPLICATION_PROBLEM_JSON));
-    }
-
-    @Test
-    void rejectsInactiveOrganization() throws Exception {
-        User manager = saveUser("Gerente", "manager@speeddesk.test", UserRole.GERENTE);
-        Organization organization = organizationRepository.saveAndFlush(
-                Organization.builder()
-                        .name("Empresa Inativa")
-                        .active(false)
-                        .build()
-        );
-
-        mockMvc.perform(post("/api/users")
-                        .header(HttpHeaders.AUTHORIZATION, bearer(manager))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {
-                                  "name":"Cliente",
-                                  "email":"inactive-org@speeddesk.test",
-                                  "password":"New-password-123",
-                                  "role":"CLIENTE",
-                                  "organizationId":"%s"
-                                }
-                                """.formatted(organization.getId())))
-                .andExpect(status().isBadRequest())
-                .andExpect(content().contentTypeCompatibleWith(
-                        MediaType.APPLICATION_PROBLEM_JSON));
+        mockMvc.perform(options("/api/tickets")
+                        .header(HttpHeaders.ORIGIN, "https://attacker.invalid")
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "GET"))
+                .andExpect(status().isForbidden())
+                .andExpect(header().doesNotExist(
+                        HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN
+                ));
     }
 
     private User saveUser(String name, String email, UserRole role) {

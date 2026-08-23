@@ -85,30 +85,15 @@ public class SecurityConfig {
                                 HttpMethod.POST,
                                 "/api/account/password-reset/confirm"
                         ).permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/users")
-                        .hasAuthority(authority(UserRole.GERENTE))
-                        .requestMatchers(HttpMethod.POST, "/api/users")
-                        .hasAuthority(authority(UserRole.GERENTE))
-                        .requestMatchers(HttpMethod.PUT, "/api/users/**")
-                        .hasAuthority(authority(UserRole.GERENTE))
-                        .requestMatchers(HttpMethod.PATCH, "/api/users/**")
-                        .hasAuthority(authority(UserRole.GERENTE))
                         .requestMatchers(
-                                HttpMethod.POST,
-                                "/api/users/*/password-reset"
-                        ).hasAuthority(authority(UserRole.GERENTE))
-                        .requestMatchers(
-                                HttpMethod.GET,
-                                "/api/organizations"
-                        ).hasAuthority(authority(UserRole.GERENTE))
-                        .requestMatchers(
-                                HttpMethod.POST,
-                                "/api/organizations"
-                        ).hasAuthority(authority(UserRole.GERENTE))
+                                "/api/users/**",
+                                "/api/organizations/**",
+                                "/api/reports/**"
+                        ).denyAll()
                         .requestMatchers(
                                 HttpMethod.POST,
                                 "/api/ticket-categories"
-                        ).hasAuthority(authority(UserRole.GERENTE))
+                        ).denyAll()
                         .requestMatchers(
                                 HttpMethod.GET,
                                 "/api/ticket-categories"
@@ -116,18 +101,13 @@ public class SecurityConfig {
                         .requestMatchers(
                                 HttpMethod.PUT,
                                 "/api/sla-policies/*"
-                        ).hasAuthority(authority(UserRole.GERENTE))
+                        ).denyAll()
                         .requestMatchers(HttpMethod.POST, "/api/incidents")
-                        .hasAuthority(authority(UserRole.GERENTE))
+                        .hasAuthority(authority(UserRole.TECNICO))
                         .requestMatchers(HttpMethod.PUT, "/api/incidents/*")
-                        .hasAuthority(authority(UserRole.GERENTE))
+                        .hasAuthority(authority(UserRole.TECNICO))
                         .requestMatchers(HttpMethod.GET, "/api/incidents/**")
-                        .hasAnyAuthority(
-                                authority(UserRole.TECNICO),
-                                authority(UserRole.GERENTE)
-                        )
-                        .requestMatchers("/api/reports/**")
-                        .hasAuthority(authority(UserRole.GERENTE))
+                        .hasAuthority(authority(UserRole.TECNICO))
                         .requestMatchers("/api/**").authenticated()
                         .anyRequest().denyAll())
                 .exceptionHandling(exceptions -> exceptions

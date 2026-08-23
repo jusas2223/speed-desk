@@ -6,6 +6,7 @@ const STATUS_LABELS = Object.freeze({
     EM_ATENDIMENTO: 'Em atendimento',
     AGUARDANDO_CLIENTE: 'Aguardando cliente',
     AGUARDANDO_PECA: 'Aguardando peça',
+    AGUARDANDO_PAGAMENTO: 'Aguardando pagamento',
     RESOLVIDO: 'Resolvido',
     FECHADO: 'Fechado'
 });
@@ -70,15 +71,16 @@ const SOFTWARE_LOG_LEVELS = Object.freeze(['DEBUG', 'INFO', 'WARN', 'ERROR']);
 const STATUS_TRANSITIONS = Object.freeze({
     RECEBIDO: ['EM_TRIAGEM', 'EM_ATENDIMENTO'],
     EM_TRIAGEM: ['EM_ATENDIMENTO', 'AGUARDANDO_CLIENTE'],
-    EM_ATENDIMENTO: ['AGUARDANDO_CLIENTE', 'AGUARDANDO_PECA', 'RESOLVIDO'],
+    EM_ATENDIMENTO: ['AGUARDANDO_CLIENTE', 'AGUARDANDO_PECA'],
     AGUARDANDO_CLIENTE: ['EM_ATENDIMENTO'],
     AGUARDANDO_PECA: ['EM_ATENDIMENTO'],
+    AGUARDANDO_PAGAMENTO: [],
     RESOLVIDO: [],
     FECHADO: []
 });
 
 const CLOSED_STATUSES = new Set(['RESOLVIDO', 'FECHADO']);
-const TEAM_ROLES = new Set(['GERENTE', 'TECNICO']);
+const TEAM_ROLES = new Set(['TECNICO']);
 const ASSIGNABLE_STATUSES = new Set(['RECEBIDO', 'EM_TRIAGEM']);
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -100,6 +102,16 @@ function formatDate(value) {
         dateStyle: 'long',
         timeStyle: 'short'
     }).format(date);
+}
+
+function formatCurrency(value) {
+    if (value === null || value === undefined || value === '') return 'Ainda não informado';
+    const amount = Number(value);
+    if (!Number.isFinite(amount)) return 'Valor indisponível';
+    return new Intl.NumberFormat('pt-BR', {
+        style: 'currency',
+        currency: 'BRL'
+    }).format(amount);
 }
 
 function formatSeconds(value) {
@@ -223,13 +235,22 @@ function createBadge(label, className) {
     return badge;
 }
 
-function createDetailField(label, value) {
+function createDetailField(label, value, href = '') {
     const wrapper = document.createElement('div');
     wrapper.className = 'detail-field';
     const term = document.createElement('dt');
     term.textContent = label;
     const description = document.createElement('dd');
-    description.textContent = value || 'Não informado';
+    if (href && value) {
+        const link = document.createElement('a');
+        link.href = href;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.textContent = value;
+        description.appendChild(link);
+    } else {
+        description.textContent = value || 'Não informado';
+    }
     wrapper.append(term, description);
     return wrapper;
 }
@@ -249,7 +270,7 @@ function createInfoCard(title, iconPath, fields) {
     header.append(icon, heading);
     const details = document.createElement('dl');
     details.className = 'detail-fields';
-    fields.forEach(field => details.appendChild(createDetailField(field.label, field.value)));
+    fields.forEach(field => details.appendChild(createDetailField(field.label, field.value, field.href)));
     article.append(header, details);
     return article;
 }
@@ -275,11 +296,6 @@ document.addEventListener('DOMContentLoaded', () => {
         comments: [],
         commentsLoading: true,
         commentsError: '',
-        technicians: [],
-        techniciansLoading: false,
-        techniciansLoaded: false,
-        techniciansError: '',
-        selectedTechnicianId: '',
         specialized: {
             loading: false,
             error: '',
@@ -332,7 +348,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function userCanOperate(ticket) {
-        return role === 'GERENTE' || (role === 'TECNICO' && ticket.tecnico?.id === session.id);
+        return role === 'TECNICO' && ticket.tecnico?.id === session.id;
+    }
+
+    function userCanCommunicate(ticket) {
+        return (role === 'CLIENTE' && ticket.cliente?.id === session.id)
+            || userCanOperate(ticket);
     }
 
     function createActionButton(label, tone, action) {
@@ -346,85 +367,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function ticketCanBeAssigned(ticket) {
         return !ticket.tecnico && ASSIGNABLE_STATUSES.has(ticket.status);
-    }
-
-    function createManagerAssignment(ticket) {
-        const panel = document.createElement('form');
-        panel.className = 'workflow-assignment';
-        panel.setAttribute('aria-label', 'Atribuir responsável técnico');
-        const label = document.createElement('label');
-        label.className = 'form-label';
-        label.htmlFor = 'workflowTechnicianSelect';
-        label.textContent = 'Responsável técnico';
-        const controls = document.createElement('div');
-        controls.className = 'workflow-assignment-controls';
-        const select = document.createElement('select');
-        select.id = 'workflowTechnicianSelect';
-        select.className = 'form-control';
-        select.required = true;
-        const submit = document.createElement('button');
-        submit.type = 'submit';
-        submit.className = 'btn btn-primary btn-compact';
-        submit.textContent = 'Atribuir';
-
-        if (state.techniciansLoading) {
-            select.replaceChildren(new Option('Carregando técnicos...', ''));
-            select.disabled = true;
-            submit.disabled = true;
-        } else if (state.techniciansError) {
-            select.replaceChildren(new Option('Falha ao carregar técnicos', ''));
-            select.disabled = true;
-            submit.type = 'button';
-            submit.className = 'btn btn-secondary btn-compact';
-            submit.textContent = 'Tentar novamente';
-            submit.addEventListener('click', loadTechnicians);
-        } else {
-            const options = [new Option('Selecione um técnico', '')];
-            state.technicians.forEach(technician => {
-                options.push(new Option(`${technician.name} · ${technician.email}`, technician.id));
-            });
-            select.replaceChildren(...options);
-            if (state.technicians.some(technician => technician.id === state.selectedTechnicianId)) {
-                select.value = state.selectedTechnicianId;
-            }
-            submit.disabled = !select.value;
-            select.disabled = state.technicians.length === 0;
-        }
-        select.addEventListener('change', () => {
-            state.selectedTechnicianId = select.value;
-            submit.disabled = !select.value;
-        });
-        controls.append(select, submit);
-        panel.append(label, controls);
-        if (!state.techniciansLoading && !state.techniciansError && state.techniciansLoaded && !state.technicians.length) {
-            const empty = document.createElement('p');
-            empty.className = 'workflow-assignment-status';
-            empty.textContent = 'Nenhum técnico ativo está disponível.';
-            panel.appendChild(empty);
-        }
-        if (state.techniciansError) {
-            const error = document.createElement('p');
-            error.className = 'workflow-assignment-status is-error';
-            error.textContent = state.techniciansError;
-            panel.appendChild(error);
-        }
-        panel.addEventListener('submit', event => {
-            event.preventDefault();
-            const technician = state.technicians.find(item => item.id === select.value);
-            if (!technician) {
-                select.focus();
-                return;
-            }
-            openActionModal({
-                kind: 'assign',
-                technicianId: technician.id,
-                title: 'Atribuir responsável',
-                description: `Confirme a atribuição deste chamado para ${technician.name}. O atendimento será iniciado automaticamente.`,
-                confirmLabel: 'Atribuir técnico',
-                successMessage: `Chamado atribuído para ${technician.name}.`
-            }, submit);
-        });
-        return panel;
     }
 
     function createWorkflowCard(ticket) {
@@ -442,7 +384,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const canOperate = userCanOperate(ticket);
         const canAssign = ticketCanBeAssigned(ticket);
 
-        let assignmentPanel = null;
         if (canAssign && role === 'TECNICO') {
             actions.appendChild(createActionButton('Assumir chamado', 'btn-primary', {
                 kind: 'assign',
@@ -453,27 +394,23 @@ document.addEventListener('DOMContentLoaded', () => {
                 successMessage: 'Chamado assumido com sucesso.'
             }));
         }
-        if (canAssign && role === 'GERENTE') {
-            assignmentPanel = createManagerAssignment(ticket);
-        }
-
         if (canOperate) {
             (STATUS_TRANSITIONS[ticket.status] || []).forEach(nextStatus => {
                 actions.appendChild(createActionButton(
                     `Mover para ${STATUS_LABELS[nextStatus]}`,
-                    nextStatus === 'RESOLVIDO' ? 'btn-success' : 'btn-secondary',
+                    'btn-secondary',
                     {
                         kind: 'status',
                         status: nextStatus,
                         title: 'Alterar status do chamado',
                         description: `Confirme a transição de ${STATUS_LABELS[ticket.status]} para ${STATUS_LABELS[nextStatus]}.`,
-                        confirmLabel: nextStatus === 'RESOLVIDO' ? 'Marcar como resolvido' : 'Alterar status'
+                        confirmLabel: 'Alterar status'
                     }
                 ));
             });
         }
 
-        const canCloseOrReopen = role === 'GERENTE' || role === 'CLIENTE';
+        const canCloseOrReopen = role === 'CLIENTE' && ticket.cliente?.id === session.id;
         if (ticket.status === 'RESOLVIDO' && canCloseOrReopen) {
             actions.appendChild(createActionButton('Fechar chamado', 'btn-success', {
                 kind: 'close',
@@ -498,7 +435,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }));
         }
 
-        if (canOperate && !CLOSED_STATUSES.has(ticket.status)) {
+        if (canOperate && !CLOSED_STATUSES.has(ticket.status) && ticket.status !== 'AGUARDANDO_PAGAMENTO') {
             if (ticket.slaPaused) {
                 actions.appendChild(createActionButton('Retomar SLA', 'btn-primary', {
                     kind: 'resume',
@@ -519,41 +456,130 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!actions.childElementCount) {
             const empty = document.createElement('p');
             empty.className = 'workflow-empty';
-            empty.textContent = role === 'TECNICO' && ticket.tecnico
-                ? 'Este chamado está atribuído a outro técnico.'
-                : (role === 'TECNICO' && !ticket.tecnico
-                    ? 'O chamado está sem responsável, mas não pode ser assumido neste status.'
-                    : 'Nenhuma ação está disponível neste status.');
+            if (canOperate) {
+                empty.textContent = ticket.status === 'AGUARDANDO_PAGAMENTO'
+                    ? 'Aguardando a confirmação do pagamento na seção de cobrança.'
+                    : 'Nenhuma ação de fluxo está disponível neste status.';
+            } else if (role === 'TECNICO' && ticket.tecnico) {
+                empty.textContent = 'Este chamado está atribuído a outro técnico.';
+            } else if (role === 'TECNICO' && !ticket.tecnico) {
+                empty.textContent = 'O chamado está sem responsável, mas não pode ser assumido neste status.';
+            } else {
+                empty.textContent = 'Nenhuma ação está disponível neste status.';
+            }
             actions.appendChild(empty);
         }
         card.append(heading);
-        if (assignmentPanel) card.appendChild(assignmentPanel);
         card.appendChild(actions);
         return card;
     }
 
-    async function loadTechnicians() {
-        if (role !== 'GERENTE') return;
-        state.techniciansLoading = true;
-        state.techniciansError = '';
-        if (state.ticket) renderTicket();
-        try {
-            const response = await api.request('/users');
-            state.technicians = Array.isArray(response)
-                ? response
-                    .filter(user => user.role === 'TECNICO' && user.active !== false)
-                    .sort((left, right) => String(left.name).localeCompare(String(right.name), 'pt-BR'))
-                : [];
-            state.techniciansLoaded = true;
-        } catch (error) {
-            console.error('Erro ao carregar técnicos:', error);
-            state.technicians = [];
-            state.techniciansLoaded = false;
-            state.techniciansError = error.message || 'Não foi possível carregar os técnicos ativos.';
-        } finally {
-            state.techniciansLoading = false;
-            if (state.ticket) renderTicket();
+    function createPaymentCard(ticket) {
+        const card = document.createElement('article');
+        card.className = 'detail-info-card payment-card';
+        const header = document.createElement('header');
+        header.className = 'detail-info-card-header';
+        const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        icon.setAttribute('class', 'icon');
+        icon.setAttribute('viewBox', '0 0 24 24');
+        icon.setAttribute('aria-hidden', 'true');
+        icon.innerHTML = '<rect x="2" y="5" width="20" height="14" rx="2"></rect><path d="M2 10h20M7 15h2"></path>';
+        const title = document.createElement('h2');
+        title.textContent = 'Cobrança do serviço';
+        header.append(icon, title);
+
+        const details = document.createElement('dl');
+        details.className = 'detail-fields';
+        details.append(
+            createDetailField('Valor cobrado', formatCurrency(ticket.valorFinal)),
+            createDetailField(
+                'Pagamento',
+                ticket.pagamentoRealizado
+                    ? 'Recebimento confirmado'
+                    : (ticket.valorFinal ? 'Aguardando confirmação do técnico' : 'Ainda não finalizado')
+            )
+        );
+        card.append(header, details);
+
+        if (userCanOperate(ticket) && ticket.status === 'EM_ATENDIMENTO') {
+            const form = document.createElement('form');
+            form.className = 'payment-form';
+            const label = document.createElement('label');
+            label.className = 'form-label';
+            label.htmlFor = 'ticketFinalAmount';
+            label.textContent = 'Valor final do atendimento (R$)';
+            const input = document.createElement('input');
+            input.id = 'ticketFinalAmount';
+            input.className = 'form-control';
+            input.type = 'text';
+            input.inputMode = 'decimal';
+            input.autocomplete = 'off';
+            input.placeholder = 'Ex.: 150,00';
+            input.required = true;
+            input.maxLength = 14;
+            const hint = document.createElement('p');
+            hint.className = 'form-helper';
+            hint.textContent = 'Ao finalizar, o chamado ficará aguardando o pagamento do cliente.';
+            const feedback = document.createElement('p');
+            feedback.className = 'feedback';
+            feedback.hidden = true;
+            const submit = document.createElement('button');
+            submit.type = 'submit';
+            submit.className = 'btn btn-success';
+            submit.textContent = 'Finalizar serviço e cobrar';
+            form.append(label, input, hint, feedback, submit);
+            form.addEventListener('submit', async event => {
+                event.preventDefault();
+                const rawAmount = input.value.trim();
+                const normalized = rawAmount.includes(',')
+                    ? rawAmount.replaceAll('.', '').replace(',', '.')
+                    : rawAmount;
+                const amount = Number(normalized);
+                if (!Number.isFinite(amount) || amount <= 0 || !/^\d+(?:\.\d{1,2})?$/.test(normalized)) {
+                    feedback.textContent = 'Informe um valor maior que zero, com no máximo duas casas decimais.';
+                    feedback.className = 'feedback error';
+                    feedback.hidden = false;
+                    input.focus();
+                    return;
+                }
+                submit.disabled = true;
+                feedback.hidden = true;
+                try {
+                    state.ticket = await api.request(`/tickets/${ticketId}/finalize`, {
+                        method: 'POST',
+                        body: JSON.stringify({ valorFinal: amount })
+                    });
+                    showToast('Serviço finalizado. O chamado está aguardando pagamento.', 'success');
+                    renderTicket();
+                } catch (error) {
+                    feedback.textContent = error.message || 'Não foi possível finalizar o serviço.';
+                    feedback.className = 'feedback error';
+                    feedback.hidden = false;
+                    submit.disabled = false;
+                }
+            });
+            card.appendChild(form);
         }
+
+        if (userCanOperate(ticket) && ticket.status === 'AGUARDANDO_PAGAMENTO' && !ticket.pagamentoRealizado) {
+            const button = createActionButton('Confirmar Pagamento do Cliente', 'btn-success', {
+                kind: 'confirmPayment',
+                title: 'Confirmar recebimento',
+                description: `Confirme que recebeu ${formatCurrency(ticket.valorFinal)} do cliente. O chamado será marcado como resolvido.`,
+                confirmLabel: 'Confirmar pagamento',
+                successMessage: 'Pagamento confirmado e chamado resolvido.'
+            });
+            button.classList.add('payment-confirm-button');
+            card.appendChild(button);
+        }
+
+        if (role === 'CLIENTE' && ticket.status === 'AGUARDANDO_PAGAMENTO') {
+            const notice = document.createElement('p');
+            notice.className = 'payment-notice';
+            notice.textContent = 'Acerte diretamente com o técnico responsável. Novos chamados serão liberados após a confirmação do recebimento.';
+            card.appendChild(notice);
+        }
+        return card;
     }
 
     function createCommentCard(comment, internal) {
@@ -626,7 +652,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const footer = document.createElement('div');
         footer.className = 'comment-composer-footer';
         const hint = document.createElement('span');
-        hint.textContent = internal ? 'Visível apenas para gerente e técnicos.' : 'Visível ao solicitante e à equipe.';
+        hint.textContent = internal ? 'Visível apenas ao técnico responsável.' : 'Visível ao cliente e ao técnico responsável.';
         const submit = document.createElement('button');
         submit.type = 'submit';
         submit.className = `btn btn-compact ${internal ? 'btn-secondary' : 'btn-primary'}`;
@@ -648,7 +674,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const description = document.createElement('p');
         description.textContent = isTeamMember
             ? 'Comentários públicos e notas internas permanecem separados.'
-            : 'Use este espaço para conversar com a equipe responsável.';
+            : 'Use este espaço para conversar com o técnico responsável.';
         heading.append(title, description);
         const channels = document.createElement('div');
         channels.className = `comment-channels ${isTeamMember ? 'has-internal' : ''}`;
@@ -662,7 +688,7 @@ document.addEventListener('DOMContentLoaded', () => {
             channels.appendChild(createCommentColumn({
                 internal: true,
                 title: 'Notas internas',
-                description: 'Contexto reservado para a equipe de atendimento.',
+                description: 'Contexto reservado para o técnico responsável.',
                 placeholder: 'Registre diagnóstico, hipótese ou orientação interna...'
             }));
         }
@@ -891,7 +917,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             const note = document.createElement('p');
             note.className = 'specialized-permission-note';
-            note.textContent = 'Somente o gerente ou o técnico responsável pode alterar estes dados.';
+            note.textContent = 'Somente o técnico responsável pode alterar estes dados.';
             form.appendChild(note);
         }
         return form;
@@ -993,7 +1019,7 @@ document.addEventListener('DOMContentLoaded', () => {
             note.className = 'specialized-permission-note';
             note.textContent = canOperate
                 ? 'O checklist será liberado quando a manutenção chegar à etapa Em teste.'
-                : 'O checklist pode ser alterado somente pelo responsável técnico ou gerente.';
+                : 'O checklist pode ser alterado somente pelo técnico responsável.';
             form.appendChild(note);
         }
         article.append(heading, form);
@@ -1037,7 +1063,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const description = document.createElement('p');
                 description.textContent = entry.description || '';
                 const actor = document.createElement('small');
-                actor.textContent = `Por ${entry.performedBy?.name || 'Equipe Speed Desk'}`;
+                actor.textContent = `Por ${entry.performedBy?.name || 'Técnico Speed Desk'}`;
                 content.append(meta, description, actor);
                 item.append(marker, content);
                 list.appendChild(item);
@@ -1234,7 +1260,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             const note = document.createElement('p');
             note.className = 'specialized-permission-note';
-            note.textContent = 'Somente o solicitante, o técnico responsável ou um gerente pode alterar estes dados.';
+            note.textContent = 'Somente o solicitante ou o técnico responsável pode alterar estes dados.';
             form.appendChild(note);
         }
         return form;
@@ -1357,7 +1383,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const details = state.specialized.software.details || { configured: false };
         const logs = state.specialized.software.logs || [];
         const isOwner = role === 'CLIENTE' && state.ticket.cliente?.id === session.id;
-        const canMaintainDetails = role === 'GERENTE' || isOwner || userCanOperate(state.ticket);
+        const canMaintainDetails = isOwner || userCanOperate(state.ticket);
         const canCreateLogs = userCanOperate(state.ticket);
         const status = document.createElement('div');
         status.className = 'software-context-status';
@@ -1478,7 +1504,8 @@ document.addEventListener('DOMContentLoaded', () => {
         main.append(hero, descriptionSection);
         const specializedSection = createSpecializedSection();
         if (specializedSection) main.appendChild(specializedSection);
-        main.append(datesSection, identificationSection, createCommentsSection());
+        main.append(datesSection, identificationSection);
+        if (userCanCommunicate(ticket)) main.appendChild(createCommentsSection());
 
         const aside = document.createElement('aside');
         aside.className = 'ticket-detail-aside';
@@ -1495,14 +1522,27 @@ document.addEventListener('DOMContentLoaded', () => {
         slaDescription.textContent = slaInfo.description;
         slaCard.append(slaLabel, slaTitle, slaDescription);
 
+        const clientFields = [
+            { label: 'Nome', value: ticket.cliente?.name }
+        ];
+        if (ticket.cliente?.email) {
+            clientFields.push({ label: 'E-mail', value: ticket.cliente.email });
+        }
+        if (ticket.clientPhone) {
+            const whatsappNumber = String(ticket.clientPhone).replace(/\D/g, '');
+            clientFields.push(
+                { label: 'Telefone', value: ticket.clientPhone },
+                {
+                    label: 'WhatsApp',
+                    value: 'Conversar pelo WhatsApp',
+                    href: `https://wa.me/${whatsappNumber}`
+                }
+            );
+        }
         const clientCard = createInfoCard(
             'Solicitante',
             '<path d="M20 21a8 8 0 0 0-16 0"></path><circle cx="12" cy="7" r="4"></circle>',
-            [
-                { label: 'Nome', value: ticket.cliente?.name },
-                { label: 'E-mail', value: ticket.cliente?.email },
-                { label: 'Organização', value: ticket.cliente?.organization?.name || 'Sem organização' }
-            ]
+            clientFields
         );
         const technicianCard = createInfoCard(
             'Responsável técnico',
@@ -1522,7 +1562,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 ]
                 : [{ label: 'Situação', value: 'Nenhum equipamento vinculado' }]
         );
-        aside.append(slaCard, createWorkflowCard(ticket), clientCard, technicianCard, assetCard);
+        aside.append(slaCard, createWorkflowCard(ticket), createPaymentCard(ticket), clientCard, technicianCard, assetCard);
         layout.append(main, aside);
         root.appendChild(layout);
     }
@@ -1625,6 +1665,7 @@ document.addEventListener('DOMContentLoaded', () => {
             assign: () => api.request(`/tickets/${ticketId}/assumir/${action.technicianId}`, {
                 method: 'PATCH'
             }),
+            confirmPayment: () => api.request(`/tickets/${ticketId}/payment/confirm`, { method: 'POST' }),
             close: () => api.request(`/tickets/${ticketId}/close`, { method: 'POST' }),
             reopen: () => api.request(`/tickets/${ticketId}/reopen`, { method: 'POST' }),
             pause: () => api.request(`/tickets/${ticketId}/sla/pause`, {
@@ -1643,19 +1684,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const updated = await execute();
             if (updated?.id) state.ticket = updated;
             else state.ticket = await api.request(`/tickets/${encodeURIComponent(ticketId)}`);
-            if (action.kind === 'assign') state.selectedTechnicianId = '';
             actionConfirm.disabled = false;
             actionConfirm.textContent = defaultLabel;
             closeActionModal();
             renderTicket();
-            if (
-                role === 'GERENTE'
-                && ticketCanBeAssigned(state.ticket)
-                && !state.techniciansLoaded
-                && !state.techniciansLoading
-            ) {
-                loadTechnicians();
-            }
             showToast(action.successMessage || 'Chamado atualizado com sucesso.', 'success');
         } catch (error) {
             if (error.status === 409) {
@@ -1709,11 +1741,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             state.ticket = ticket;
             state.specialized.loading = ticket.ticketType === 'HARDWARE' || ticket.ticketType === 'SOFTWARE';
-            const shouldLoadTechnicians = role === 'GERENTE' && ticketCanBeAssigned(ticket);
-            state.techniciansLoading = shouldLoadTechnicians;
             renderTicket();
-            const loaders = [loadComments()];
-            if (shouldLoadTechnicians) loaders.push(loadTechnicians());
+            const loaders = [];
+            if (userCanCommunicate(ticket)) loaders.push(loadComments());
             if (state.specialized.loading) loaders.push(loadSpecializedData());
             await Promise.allSettled(loaders);
         } catch (error) {

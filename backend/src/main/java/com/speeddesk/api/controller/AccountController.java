@@ -1,10 +1,10 @@
 package com.speeddesk.api.controller;
 
+import com.speeddesk.api.dto.AccountProfileResponseDTO;
 import com.speeddesk.api.dto.OperationMessageDTO;
 import com.speeddesk.api.dto.PasswordChangeRequestDTO;
 import com.speeddesk.api.dto.PasswordResetConfirmRequestDTO;
 import com.speeddesk.api.dto.UserProfileUpdateRequestDTO;
-import com.speeddesk.api.dto.UserResponseDTO;
 import com.speeddesk.api.service.AccountService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -24,12 +24,12 @@ public class AccountController {
     private final AccountService accountService;
 
     @GetMapping("/profile")
-    public ResponseEntity<UserResponseDTO> getProfile() {
+    public ResponseEntity<AccountProfileResponseDTO> getProfile() {
         return ResponseEntity.ok(accountService.getProfile());
     }
 
     @PutMapping("/profile")
-    public ResponseEntity<UserResponseDTO> updateProfile(
+    public ResponseEntity<AccountProfileResponseDTO> updateProfile(
             @Valid @RequestBody UserProfileUpdateRequestDTO request
     ) {
         return ResponseEntity.ok(accountService.updateProfile(request));

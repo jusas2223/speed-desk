@@ -15,7 +15,9 @@ import com.speeddesk.api.entity.HardwareTicketDetails;
 import com.speeddesk.api.entity.Ticket;
 import com.speeddesk.api.entity.TicketType;
 import com.speeddesk.api.entity.User;
+import com.speeddesk.api.entity.UserRole;
 import com.speeddesk.api.exception.AssetNotFoundException;
+import com.speeddesk.api.exception.ForbiddenOperationException;
 import com.speeddesk.api.exception.InvalidRequestException;
 import com.speeddesk.api.exception.TicketNotFoundException;
 import com.speeddesk.api.exception.UserNotFoundException;
@@ -25,6 +27,7 @@ import com.speeddesk.api.repository.HardwarePostRepairChecklistRepository;
 import com.speeddesk.api.repository.HardwareTicketDetailsRepository;
 import com.speeddesk.api.repository.TicketRepository;
 import com.speeddesk.api.repository.UserRepository;
+import com.speeddesk.api.security.AuthenticatedUser;
 import com.speeddesk.api.security.AuthorizationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -115,7 +118,7 @@ public class HardwareService {
         authorizationService.requireCanRead(ticket);
 
         return historyRepository
-                .findAllByTicket_IdOrderByCreatedAtAscIdAsc(ticketId)
+                .findAllByTicket_IdOrderByCreatedAtAscSequenceNumberAsc(ticketId)
                 .stream()
                 .map(HardwareHistoryResponseDTO::from)
                 .toList();
@@ -222,10 +225,22 @@ public class HardwareService {
     public List<HardwareHistoryResponseDTO> listAssetTechnicalHistory(UUID assetId) {
         Asset asset = assetRepository.findById(assetId)
                 .orElseThrow(() -> new AssetNotFoundException(assetId));
-        authorizationService.clientScope(asset.getCliente().getId());
+        AuthenticatedUser currentUser = authorizationService.currentUser();
+        boolean clientOwner = currentUser.role() == UserRole.CLIENTE
+                && currentUser.id().equals(asset.getCliente().getId());
+        boolean readableTechnicianContext = currentUser.role() == UserRole.TECNICO
+                && ticketRepository.existsReadableByAssetIdAndTechnicianId(
+                        assetId,
+                        currentUser.id()
+                );
+        if (!clientOwner && !readableTechnicianContext) {
+            throw new ForbiddenOperationException(
+                    "O histórico técnico não está disponível no contexto dos seus chamados."
+            );
+        }
 
         return historyRepository
-                .findAllByTicket_Asset_IdOrderByCreatedAtDescIdDesc(assetId)
+                .findAllByTicket_Asset_IdOrderByCreatedAtDescSequenceNumberDesc(assetId)
                 .stream()
                 .map(HardwareHistoryResponseDTO::from)
                 .toList();
