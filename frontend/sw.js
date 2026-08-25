@@ -1,4 +1,4 @@
-const CACHE_NAME = 'speeddesk-static-v6';
+const CACHE_NAME = 'speeddesk-static-v7';
 const APP_SHELL = [
     './',
     './index.html',
